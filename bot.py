@@ -5,7 +5,7 @@ import random
 import sys
 import os
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -18,7 +18,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 try:
-    from telegram import Update
+    from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
     from telegram.ext import (
         Application, CommandHandler, MessageHandler, CallbackQueryHandler,
         ContextTypes, filters
@@ -47,24 +47,37 @@ except ImportError as e:
 try:
     from database import (
         init_db, add_shlep, get_stats, get_top_users, 
-        get_user_stats
+        get_user_stats, get_chat_stats, get_chat_top_users,
+        create_chat_vote, get_chat_vote, update_chat_vote,
+        assign_chat_role, get_user_roles, get_chat_roles_stats
     )
     DATABASE_AVAILABLE = True
 except ImportError as e:
     logger.error(f"Ошибка импорта database: {e}")
     DATABASE_AVAILABLE = False
     def init_db(): logger.info("БД: заглушка init_db")
-    def add_shlep(user_id, username, damage=0): 
+    def add_shlep(user_id, username, damage=0, chat_id=None): 
         logger.info(f"БД: заглушка add_shlep для {user_id}")
         return (0, 0, 0)
     def get_stats(): return (0, None, 0, None, None)
     def get_top_users(limit=10): return []
     def get_user_stats(user_id): return (None, 0, None)
+    def get_chat_stats(chat_id): return None
+    def get_chat_top_users(chat_id, limit=10): return []
+    def create_chat_vote(*args, **kwargs): return None
+    def get_chat_vote(vote_id): return None
+    def update_chat_vote(vote_id, user_id, vote_type): return False
+    def assign_chat_role(*args, **kwargs): return False
+    def get_user_roles(chat_id, user_id): return []
+    def get_chat_roles_stats(chat_id): return {}
 
 try:
     from keyboard import (
         get_game_keyboard, get_inline_keyboard,
-        get_stats_keyboard, get_back_button
+        get_chat_vote_keyboard, get_chat_duel_keyboard,
+        get_chat_quick_actions, get_chat_roles_keyboard,
+        get_chat_notification_keyboard, get_chat_record_keyboard,
+        get_back_button, get_confirm_keyboard
     )
     KEYBOARD_AVAILABLE = True
 except ImportError as e:
@@ -72,8 +85,14 @@ except ImportError as e:
     KEYBOARD_AVAILABLE = False
     def get_game_keyboard(): return None
     def get_inline_keyboard(): return None
-    def get_stats_keyboard(): return None
+    def get_chat_vote_keyboard(*args, **kwargs): return None
+    def get_chat_duel_keyboard(*args, **kwargs): return None
+    def get_chat_quick_actions(): return None
+    def get_chat_roles_keyboard(): return None
+    def get_chat_notification_keyboard(*args, **kwargs): return None
+    def get_chat_record_keyboard(*args, **kwargs): return None
     def get_back_button(*args, **kwargs): return None
+    def get_confirm_keyboard(*args, **kwargs): return None
 
 try:
     from cache import cache
@@ -146,10 +165,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Смотреть статистику шлёпков `/stats`
 • Проверить свой уровень `/level`
 
-*Система уровней:*
-🎯 Уровень растёт с каждыми 10 шлёпками
-⚡ Урон увеличивается с уровнем
-🏆 Рекордный удар сохраняется
+*Для чатов:*
+📊 /chat_stats — статистика чата
+🏆 /chat_top — топ игроков чата
+🗳️ /vote — голосование за шлёпок
+⚔️ /duel — вызвать на дуэль
+👑 /roles — роли в чате
 
 *Для начала просто отправь:* `/shlep`
     """
@@ -202,17 +223,23 @@ async def shlep_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         total_shleps, user_count, current_max_damage = add_shlep(
             user.id, 
             user.username or user.first_name,
-            damage
+            damage,
+            chat.id if chat.type != "private" else None
         )
         
         if CACHE_AVAILABLE:
             await cache.delete("global_stats")
             await cache.delete(f"user_stats_{user.id}")
             await cache.delete("top_users_10")
+            if chat.type != "private":
+                await cache.delete(f"chat_stats_{chat.id}")
+                await cache.delete(f"chat_top_{chat.id}")
         
         record_message = ""
         if damage > current_max_damage:
             record_message = f"\n🏆 *НОВЫЙ РЕКОРД!* 🏆\n"
+            if chat.type != "private":
+                await send_chat_notification(chat.id, user, "record", damage)
         
         message_lines = [
             f"{reaction}",
@@ -227,14 +254,32 @@ async def shlep_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📈 *Общее количество:* {format_number(total_shleps)}"
         ]
         
+        if chat.type != "private":
+            roles = get_user_roles(chat.id, user.id)
+            if roles:
+                message_lines.append(f"\n👑 *Роли:* {', '.join(roles)}")
+        
         message_text = "\n".join(message_lines)
         
-        keyboard = get_inline_keyboard() if KEYBOARD_AVAILABLE and chat.type != "private" else None
+        keyboard = None
+        if chat.type != "private":
+            if KEYBOARD_AVAILABLE:
+                keyboard = get_chat_quick_actions()
+        else:
+            if KEYBOARD_AVAILABLE:
+                keyboard = get_inline_keyboard()
+        
         await update.message.reply_text(
             message_text,
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=keyboard
         )
+        
+        if chat.type != "private" and user_count % 50 == 0:
+            await update.message.reply_text(
+                f"🎉 *ЮБИЛЕЙ!* {user.first_name} достиг {user_count} шлёпков!",
+                parse_mode=ParseMode.MARKDOWN
+            )
         
     except Exception as e:
         logger.error(f"Ошибка команды /shlep: {e}")
@@ -245,6 +290,7 @@ async def shlep_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     user = update.effective_user
+    chat = update.effective_chat
     
     user_data = get_user_stats(user.id)
     if not user_data:
@@ -268,13 +314,17 @@ async def shlep_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_shleps, user_count, current_max_damage = add_shlep(
         user.id, 
         user.username or user.first_name,
-        damage
+        damage,
+        chat.id if chat.type != "private" else None
     )
     
     if CACHE_AVAILABLE:
         await cache.delete("global_stats")
         await cache.delete(f"user_stats_{user.id}")
         await cache.delete("top_users_10")
+        if chat.type != "private":
+            await cache.delete(f"chat_stats_{chat.id}")
+            await cache.delete(f"chat_top_{chat.id}")
     
     record_message = ""
     if damage > current_max_damage:
@@ -314,21 +364,17 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if cached_stats:
             total_shleps, last_shlep, max_damage, max_damage_user, max_damage_date = cached_stats
-            logger.debug("Используем кэшированную глобальную статистику")
         else:
             total_shleps, last_shlep, max_damage, max_damage_user, max_damage_date = get_stats()
             if CACHE_AVAILABLE:
                 await cache.set(cache_key, (total_shleps, last_shlep, max_damage, max_damage_user, max_damage_date))
-                logger.debug("Сохранили глобальную статистику в кэш")
         
         if cached_top:
             top_users = cached_top
-            logger.debug("Используем кэшированный топ пользователей")
         else:
             top_users = get_top_users(10)
             if CACHE_AVAILABLE:
                 await cache.set(cache_key_top, top_users)
-                logger.debug("Сохранили топ пользователей в кэш")
         
         stats_text = f"""
 📊 *СТАТИСТИКА ШЛЁПОВ*
@@ -376,9 +422,242 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Ошибка команды /stats: {e}")
         await update.message.reply_text("Ошибка загрузки статистики")
 
+async def chat_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        chat = update.effective_chat
+        
+        if chat.type == "private":
+            await update.message.reply_text("Эта команда работает только в группах!")
+            return
+        
+        cache_key = f"chat_stats_{chat.id}"
+        
+        if CACHE_AVAILABLE:
+            cached_stats = await cache.get(cache_key)
+        else:
+            cached_stats = None
+        
+        if cached_stats:
+            chat_stats = cached_stats
+        else:
+            chat_stats = get_chat_stats(chat.id)
+            if chat_stats and CACHE_AVAILABLE:
+                await cache.set(cache_key, chat_stats)
+        
+        if not chat_stats:
+            stats_text = f"""
+📊 *СТАТИСТИКА ЧАТА*
+
+В этом чате ещё не было шлёпков!
+Используй /shlep чтобы стать первым! 🎯
+"""
+        else:
+            stats_text = f"""
+📊 *СТАТИСТИКА ЧАТА* #{chat.id}
+
+👥 *Участников в статистике:* {chat_stats['total_users']}
+👊 *Всего шлёпков в чате:* {format_number(chat_stats['total_shleps'])}
+🏆 *Рекорд чата:* {chat_stats['max_damage']} урона
+👑 *Рекордсмен:* {chat_stats['max_damage_user'] or 'Нет'}
+📅 *Дата рекорда:* {chat_stats['max_damage_date'].strftime('%d.%m.%Y %H:%M') if chat_stats['max_damage_date'] else 'Нет'}
+"""
+            
+            if chat_stats.get('active_today', 0) > 0:
+                stats_text += f"\n🔥 *Активных сегодня:* {chat_stats['active_today']}"
+            
+            if chat_stats.get('last_activity'):
+                last_active = (datetime.now() - chat_stats['last_activity']).seconds // 60
+                stats_text += f"\n⏰ *Последняя активность:* {last_active} минут назад"
+        
+        await update.message.reply_text(
+            stats_text,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=get_inline_keyboard()
+        )
+    except Exception as e:
+        logger.error(f"Ошибка команды chat_stats: {e}")
+        await update.message.reply_text("Ошибка загрузки статистики чата")
+
+async def chat_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        chat = update.effective_chat
+        
+        if chat.type == "private":
+            await update.message.reply_text("Эта команда работает только в группах!")
+            return
+        
+        cache_key = f"chat_top_{chat.id}"
+        
+        if CACHE_AVAILABLE:
+            cached_top = await cache.get(cache_key)
+        else:
+            cached_top = None
+        
+        if cached_top:
+            chat_top = cached_top
+        else:
+            chat_top = get_chat_top_users(chat.id, limit=10)
+            if CACHE_AVAILABLE:
+                await cache.set(cache_key, chat_top)
+        
+        if not chat_top:
+            await update.message.reply_text(
+                "В этом чате пока никто не шлёпал Мишка! Будь первым!",
+                reply_markup=get_inline_keyboard()
+            )
+            return
+        
+        top_text = "🏆 *ТОП ШЛЁПАТЕЛЕЙ ЧАТА:*\n\n"
+        
+        for i, (username, count) in enumerate(chat_top, 1):
+            name = username or f"Игрок {i}"
+            level_info = calculate_level(count)
+            
+            medal = ""
+            if i == 1:
+                medal = "🥇 "
+            elif i == 2:
+                medal = "🥈 "
+            elif i == 3:
+                medal = "🥉 "
+            
+            top_text += f"{medal}{i}. {name}\n"
+            top_text += f"   📊 {format_number(count)} шлёпков | Ур. {level_info['level']}\n"
+            top_text += f"   ⚡ Урон: {level_info['min_damage']}-{level_info['max_damage']}\n\n"
+        
+        await update.message.reply_text(
+            top_text,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=get_inline_keyboard()
+        )
+    except Exception as e:
+        logger.error(f"Ошибка команды chat_top: {e}")
+        await update.message.reply_text("Ошибка загрузки топа чата")
+
+async def vote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        chat = update.effective_chat
+        user = update.effective_user
+        
+        if chat.type == "private":
+            await update.message.reply_text("Голосования доступны только в группах!")
+            return
+        
+        question = " ".join(context.args) if context.args else "Шлёпнуть Мишка?"
+        
+        vote_message = await update.message.reply_text(
+            f"🗳️ *ГОЛОСОВАНИЕ*\n\n{question}\n\nГолосование длится 5 минут!",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        
+        if DATABASE_AVAILABLE:
+            vote_id = create_chat_vote(
+                chat.id,
+                vote_message.message_id,
+                user.id,
+                user.first_name,
+                question
+            )
+            
+            if vote_id and KEYBOARD_AVAILABLE:
+                keyboard = get_chat_vote_keyboard(vote_id)
+                await vote_message.edit_reply_markup(reply_markup=keyboard)
+        
+    except Exception as e:
+        logger.error(f"Ошибка команды /vote: {e}")
+        await update.message.reply_text("Ошибка создания голосования")
+
+async def duel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        chat = update.effective_chat
+        user = update.effective_user
+        
+        if chat.type == "private":
+            await update.message.reply_text("Дуэли доступны только в группах!")
+            return
+        
+        if context.args:
+            target_mention = ' '.join(context.args)
+            
+            duel_text = f"""
+⚔️ *ВЫЗОВ НА ДУЭЛЬ!*
+
+{user.first_name} вызывает {target_mention} на дуэль шлёпков!
+
+📜 *Правила:*
+• У вас есть 5 минут
+• Кто сделает больше шлёпков - победил
+• Победитель получает роль "⚔️ Победитель дуэли" на 24 часа
+
+Для принятия вызова используй кнопку ниже!
+"""
+        else:
+            duel_text = """
+⚔️ *СИСТЕМА ДУЭЛЕЙ*
+
+Используй `/duel @username` чтобы вызвать кого-то на дуэль!
+
+📜 *Правила:*
+• Дуэль длится 5 минут
+• Побеждает тот, кто сделает больше шлёпков
+• Победитель получает специальную роль
+"""
+        
+        await update.message.reply_text(
+            duel_text,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=get_chat_duel_keyboard()
+        )
+    except Exception as e:
+        logger.error(f"Ошибка команды /duel: {e}")
+        await update.message.reply_text("Ошибка создания дуэли")
+
+async def roles_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        chat = update.effective_chat
+        user = update.effective_user
+        
+        if chat.type == "private":
+            await update.message.reply_text("Роли доступны только в группах!")
+            return
+        
+        user_roles = get_user_roles(chat.id, user.id)
+        chat_roles_stats = get_chat_roles_stats(chat.id)
+        
+        roles_text = f"""
+👑 *РОЛИ В ЧАТЕ*
+
+*Твои роли:*
+{', '.join(user_roles) if user_roles else 'Пока нет ролей'}
+
+*Статистика ролей в чате:*
+"""
+        
+        if chat_roles_stats:
+            for role_type, count in chat_roles_stats.items():
+                roles_text += f"• {role_type}: {count} чел.\n"
+        else:
+            roles_text += "В чате пока нет активных ролей"
+        
+        roles_text += "\n*Как получить роли:*"
+        roles_text += "\n• 👑 Король шлёпков — быть топ-1 в чате"
+        roles_text += "\n• 🎯 Самый меткий — нанести максимальный урон"
+        roles_text += "\n• ⚡ Спринтер — сделать 10+ шлёпков за 5 минут"
+        roles_text += "\n• 💪 Силач — нанести урон 40+ единиц"
+        
+        await update.message.reply_text(
+            roles_text,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=get_chat_roles_keyboard()
+        )
+    except Exception as e:
+        logger.error(f"Ошибка команды /roles: {e}")
+        await update.message.reply_text("Ошибка загрузки ролей")
+
 async def level_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
+        chat = update.effective_chat
         cache_key = f"user_stats_{user.id}"
         
         if CACHE_AVAILABLE:
@@ -388,7 +667,6 @@ async def level_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if cached_data:
             username, user_count, last_shlep = cached_data
-            logger.debug(f"Используем кэшированные данные для пользователя {user.id}")
         else:
             user_data = get_user_stats(user.id)
             if not user_data:
@@ -398,7 +676,6 @@ async def level_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             if CACHE_AVAILABLE and user_count > 0:
                 await cache.set(cache_key, (username, user_count, last_shlep))
-                logger.debug(f"Сохранили данные пользователя {user.id} в кэш")
         
         level_info = calculate_level(user_count)
         
@@ -420,6 +697,11 @@ async def level_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
    +0.5 к минимальному урону
    +0.5 к максимальному урону
 """
+        
+        if chat.type != "private":
+            user_roles = get_user_roles(chat.id, user.id)
+            if user_roles:
+                text += f"\n👑 *Твои роли в этом чате:* {', '.join(user_roles)}"
         
         if level_info['level'] >= 50:
             title = "👑 ЛЕГЕНДА ШЛЁПКОВ"
@@ -458,6 +740,13 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /stats — Статистика и рекорды
 /level — Твой уровень и сила
 /mishok — Информация о Мишке
+
+*Команды для чатов:*
+/chat_stats — Статистика чата
+/chat_top — Топ игроков чата
+/vote [вопрос] — Голосование (5 мин)
+/duel @username — Вызов на дуэль
+/roles — Роли в чате
 
 *В группах:* используй команды или inline-кнопки
 """
@@ -499,7 +788,14 @@ async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /stats — статистика и рекорды
 /level — уровень игрока
 
-*Или используй кнопки под сообщениями!*
+*Команды для чата:*
+/chat_stats — статистика этого чата
+/chat_top — топ игроков чата
+/vote — голосование за шлёпок
+/duel — вызвать на дуэль
+/roles — роли в чате
+
+*Используй кнопки под сообщениями!*
 """
                 await update.message.reply_text(
                     welcome_text,
@@ -507,11 +803,34 @@ async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode=ParseMode.MARKDOWN
                 )
 
+async def send_chat_notification(chat_id: int, user, notification_type: str, value=None):
+    """Отправка уведомлений в чат"""
+    try:
+        from telegram.constants import ParseMode
+        
+        notifications = {
+            "record": f"🏆 *НОВЫЙ РЕКОРД ЧАТА!*\n\n{user.first_name} установил новый рекорд: {value} единиц урона!",
+            "milestone": f"🎉 *ЮБИЛЕЙ!*\n\n{user.first_name} достиг {value} шлёпков!",
+            "role": f"👑 *НОВАЯ РОЛЬ!*\n\n{user.first_name} получил роль: {value}",
+            "duel": f"⚔️ *ДУЭЛЬ ЗАВЕРШЕНА!*\n\n{user.first_name} победил в дуэли!"
+        }
+        
+        message = notifications.get(notification_type)
+        if message:
+            # В реальном коде здесь был бы вызов API Telegram
+            # await context.bot.send_message(chat_id=chat_id, text=message, parse_mode=ParseMode.MARKDOWN)
+            pass
+            
+    except Exception as e:
+        logger.error(f"Ошибка отправки уведомления: {e}")
+
 async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
     data = query.data
+    chat = update.effective_chat
+    user = update.effective_user
     
     try:
         if data == "shlep_mishok":
@@ -522,11 +841,149 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await level_command(update, context)
         elif data == "mishok_info":
             await mishok_info_command(update, context)
+        elif data == "chat_stats":
+            await chat_stats_command(update, context)
+        elif data == "chat_top":
+            await chat_top_command(update, context)
+        elif data.startswith("vote_"):
+            await handle_vote_callback(update, context, data)
+        elif data.startswith("duel_"):
+            await handle_duel_callback(update, context, data)
+        elif data.startswith("role_"):
+            await handle_role_callback(update, context, data)
+        elif data.startswith("quick_"):
+            await handle_quick_callback(update, context, data)
+        elif data.startswith("back_"):
+            await handle_back_callback(update, context, data)
         else:
             await query.message.reply_text("Эта функция скоро будет доступна!")
     except Exception as e:
         logger.error(f"Ошибка в inline_handler: {e}")
         await query.message.reply_text("Ошибка обработки команды")
+
+async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, data: str):
+    query = update.callback_query
+    
+    if data.startswith("vote_yes_") or data.startswith("vote_no_"):
+        parts = data.split("_")
+        if len(parts) >= 3:
+            vote_id = int(parts[2])
+            vote_type = "yes" if parts[1] == "yes" else "no"
+            
+            if DATABASE_AVAILABLE:
+                success = update_chat_vote(vote_id, query.from_user.id, vote_type)
+                if success:
+                    await query.answer("Ваш голос учтён!")
+                else:
+                    await query.answer("Ошибка голосования")
+            else:
+                await query.answer("Голосование временно недоступно")
+    
+    elif data.startswith("vote_results_"):
+        parts = data.split("_")
+        if len(parts) >= 3:
+            vote_id = int(parts[2])
+            
+            if DATABASE_AVAILABLE:
+                vote_info = get_chat_vote(vote_id)
+                if vote_info:
+                    total_votes = vote_info[6] + vote_info[7]
+                    if total_votes > 0:
+                        yes_percent = (vote_info[6] / total_votes) * 100
+                        no_percent = (vote_info[7] / total_votes) * 100
+                        
+                        result_text = f"""
+📊 *РЕЗУЛЬТАТЫ ГОЛОСОВАНИЯ*
+
+{vote_info[5]}
+
+👍 *За:* {vote_info[6]} ({yes_percent:.1f}%)
+👎 *Против:* {vote_info[7]} ({no_percent:.1f}%)
+👥 *Всего голосов:* {total_votes}
+"""
+                        
+                        await query.message.edit_text(
+                            result_text,
+                            parse_mode=ParseMode.MARKDOWN
+                        )
+                    else:
+                        await query.answer("Пока нет голосов")
+                else:
+                    await query.answer("Голосование не найдено")
+            else:
+                await query.answer("Результаты временно недоступны")
+
+async def handle_duel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, data: str):
+    query = update.callback_query
+    
+    if data == "duel_start":
+        await duel_command(update, context)
+    elif data == "duel_list":
+        await query.message.reply_text("Список активных дуэлей скоро будет доступен!")
+    elif data == "duel_my":
+        await query.message.reply_text("Информация о ваших дуэлях скоро будет доступна!")
+    elif data.startswith("duel_accept_"):
+        await query.answer("Вызов принят! Дуэль началась!")
+    elif data.startswith("duel_decline_"):
+        await query.answer("Вызов отклонён")
+
+async def handle_role_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, data: str):
+    query = update.callback_query
+    
+    if data == "role_king":
+        await query.message.reply_text("👑 *Король шлёпков*\n\nЭта роль присваивается игроку, который занимает первое место в топе чата. Действует 24 часа.")
+    elif data == "role_accurate":
+        await query.message.reply_text("🎯 *Самый меткий*\n\nЭта роль присваивается за нанесение максимального урона в чате. Действует 24 часа.")
+    elif data == "role_sprinter":
+        await query.message.reply_text("⚡ *Спринтер*\n\nЭта роль присваивается за 10+ шлёпков за 5 минут. Действует 12 часов.")
+    elif data == "role_strong":
+        await query.message.reply_text("💪 *Силач*\n\nЭта роль присваивается за урон 40+ единиц. Действует 24 часа.")
+    elif data == "role_all":
+        await roles_command(update, context)
+    elif data == "role_my":
+        chat = update.effective_chat
+        user = update.effective_user
+        
+        user_roles = get_user_roles(chat.id, user.id)
+        if user_roles:
+            roles_text = f"👑 *Ваши роли в этом чате:*\n\n"
+            for role in user_roles:
+                roles_text += f"• {role}\n"
+        else:
+            roles_text = "У вас пока нет ролей в этом чате"
+        
+        await query.message.reply_text(roles_text, parse_mode=ParseMode.MARKDOWN)
+
+async def handle_quick_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, data: str):
+    query = update.callback_query
+    
+    if data == "quick_shlep":
+        await shlep_callback(update, context)
+    elif data == "quick_stats":
+        await chat_stats_command(update, context)
+    elif data == "quick_level":
+        await level_command(update, context)
+    elif data == "quick_daily_top":
+        await query.message.reply_text("Топ дня скоро будет доступен!")
+    elif data == "quick_vote":
+        await vote_command(update, context)
+    elif data == "quick_duel":
+        await duel_command(update, context)
+
+async def handle_back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, data: str):
+    query = update.callback_query
+    
+    if data == "back_main":
+        await start_command(update, context)
+    elif data == "back_chat":
+        chat = update.effective_chat
+        if chat.type != "private":
+            await query.message.edit_text(
+                "Главное меню чата",
+                reply_markup=get_chat_quick_actions()
+            )
+    elif data == "back_roles":
+        await roles_command(update, context)
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Update {update} вызвал ошибку: {context.error}")
@@ -541,7 +998,6 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 async def cache_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда для админов: статистика кэша"""
     try:
         if CACHE_AVAILABLE:
             stats = cache.get_stats()
@@ -562,7 +1018,6 @@ async def cache_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         logger.error(f"Ошибка команды cache_stats: {e}")
 
 async def clear_cache_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда для админов: очистка кэша"""
     try:
         if CACHE_AVAILABLE:
             await cache.clear()
