@@ -12,10 +12,10 @@ def get_connection():
         conn.close()
 
 def init_db():
-    """Инициализация базы данных"""
+    """Инициализация всех таблиц"""
     with get_connection() as conn:
         with conn.cursor() as cur:
-            # Таблица для глобальной статистики
+            # Существующие таблицы
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS global_stats (
                     id SERIAL PRIMARY KEY,
@@ -24,7 +24,6 @@ def init_db():
                 )
             """)
             
-            # Таблица для пользователей
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS user_stats (
                     user_id BIGINT PRIMARY KEY,
@@ -34,13 +33,45 @@ def init_db():
                 )
             """)
             
-            # Инициализируем глобальную статистику если пусто
+            # Таблица для достижений
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_achievements (
+                    user_id BIGINT,
+                    achievement_id INT,
+                    achieved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, achievement_id)
+                )
+            """)
+            
+            # Таблица для ежедневных задач
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_daily_tasks (
+                    user_id BIGINT,
+                    task_date DATE,
+                    task_id INT,
+                    progress INT DEFAULT 0,
+                    completed BOOLEAN DEFAULT FALSE,
+                    PRIMARY KEY (user_id, task_date, task_id)
+                )
+            """)
+            
+            # Таблица для очков (наград)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_points (
+                    user_id BIGINT PRIMARY KEY,
+                    points INT DEFAULT 0,
+                    last_updated TIMESTAMP
+                )
+            """)
+            
+            # Инициализируем глобальную статистику
             cur.execute("SELECT COUNT(*) FROM global_stats")
             if cur.fetchone()[0] == 0:
                 cur.execute("INSERT INTO global_stats (total_shleps) VALUES (0)")
             
             conn.commit()
 
+# Остальные функции остаются прежними
 def add_shlep(user_id: int, username: str):
     """Добавить шлёпок в статистику"""
     with get_connection() as conn:
@@ -91,3 +122,23 @@ def get_top_users(limit=10):
                 LIMIT %s
             """, (limit,))
             return cur.fetchall()
+
+def add_points(user_id: int, points: int):
+    """Добавить очки пользователю"""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            from datetime import datetime
+            now = datetime.now()
+            
+            cur.execute("""
+                INSERT INTO user_points (user_id, points, last_updated)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (user_id) 
+                DO UPDATE SET 
+                    points = user_points.points + EXCLUDED.points,
+                    last_updated = EXCLUDED.last_updated
+                RETURNING points
+            """, (user_id, points, now))
+            
+            conn.commit()
+            return cur.fetchone()[0]
