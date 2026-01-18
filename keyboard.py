@@ -14,9 +14,7 @@ def get_game_keyboard():
             KeyboardButton("🎯 Цели")
         ],
         [
-            KeyboardButton("⚡ Навыки"), 
-            KeyboardButton("🏆 Достижения"),
-            KeyboardButton("👴 О Мишке")
+            KeyboardButton("⚡ Навыки")
         ]
     ], resize_keyboard=True, input_field_placeholder="Выбери систему...")
 
@@ -45,19 +43,6 @@ def get_skills_keyboard():
         [
             InlineKeyboardButton("⚡ Улучшить навык...", callback_data="upgrade_skill_menu"),
             InlineKeyboardButton("📊 Мои навыки", callback_data="my_skills")
-        ],
-        [InlineKeyboardButton("◀️ Назад", callback_data="back_main")]
-    ])
-
-def get_achievements_keyboard():
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("📈 Мои достижения", callback_data="my_achievements"),
-            InlineKeyboardButton("🎯 Следующее", callback_data="next_achievement")
-        ],
-        [
-            InlineKeyboardButton("🏆 Прогресс", callback_data="achievements_progress"),
-            InlineKeyboardButton("📊 Статистика", callback_data="achievements_stats")
         ],
         [InlineKeyboardButton("◀️ Назад", callback_data="back_main")]
     ])
@@ -110,12 +95,4 @@ def get_upgrade_skill_keyboard(skill_id, can_upgrade=True, cost=0):
 def get_back_button(back_to: str = "main"):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("◀️ Назад", callback_data=f"back_{back_to}")]
-    ])
-
-def get_confirm_keyboard(action: str, yes_text="✅ Да", no_text="❌ Нет"):
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton(yes_text, callback_data=f"confirm_{action}"),
-            InlineKeyboardButton(no_text, callback_data=f"cancel_{action}")
-        ]
     ])
