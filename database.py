@@ -15,7 +15,6 @@ class FakeDatabase:
         self.global_stats = {'total_shleps': 0, 'last_shlep': None}
         self.user_stats = {}
         self.user_points = {}
-        self.user_achievements = {}
         self.user_xp = {}
         self.user_skills = {}
         self.detailed_stats = []
@@ -158,15 +157,6 @@ def init_db():
                     user_id BIGINT PRIMARY KEY,
                     points INT DEFAULT 0,
                     last_updated TIMESTAMP
-                )
-            """)
-            
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS user_achievements (
-                    user_id BIGINT,
-                    achievement_id INT,
-                    achieved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (user_id, achievement_id)
                 )
             """)
             
@@ -368,34 +358,3 @@ def get_user_stats(user_id: int):
                 WHERE user_id = %s
             """, (user_id,))
             return cur.fetchone()
-
-def get_connection_for_system():
-    return get_connection()
-
-def execute_query(query, params=None):
-    with get_connection() as conn:
-        if conn is None:
-            return None
-        
-        with conn.cursor() as cur:
-            cur.execute(query, params or ())
-            if query.strip().upper().startswith('SELECT'):
-                return cur.fetchall()
-            conn.commit()
-            return None
-
-def test_connection():
-    if not DATABASE_URL:
-        return True, "Используется заглушка БД"
-    
-    try:
-        with get_connection() as conn:
-            if conn is None:
-                return False, "БД не настроена"
-            
-            with conn.cursor() as cur:
-                cur.execute("SELECT 1")
-                result = cur.fetchone()
-                return True, "Соединение с БД успешно"
-    except Exception as e:
-        return False, f"Ошибка соединения: {e}"
