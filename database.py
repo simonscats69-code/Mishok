@@ -20,12 +20,9 @@ class FakeDatabase:
         self.user_xp = {}
         self.user_skills = {}
         self.detailed_stats = []
-        self.records = {}
         self.global_goals = [
-            {'id': 1, 'goal_name': 'Миллионный шлёпок 🎯', 'target_value': 1000000, 'current_value': 0, 'is_active': True},
-            {'id': 2, 'goal_name': 'Неделя активности 📈', 'target_value': 50000, 'current_value': 0, 'is_active': True}
+            {'id': 1, 'goal_name': 'Миллионный шлёпок 🎯', 'target_value': 1000000, 'current_value': 0, 'is_active': True}
         ]
-        self.user_daily_tasks = {}
     
     def add_shlep(self, user_id: int, username: str):
         now = datetime.now()
@@ -212,15 +209,6 @@ def init_db():
             """)
             
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS records (
-                    record_type VARCHAR(50) PRIMARY KEY,
-                    user_id BIGINT,
-                    value FLOAT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            
-            cur.execute("""
                 CREATE TABLE IF NOT EXISTS global_goals (
                     id SERIAL PRIMARY KEY,
                     goal_name VARCHAR(100),
@@ -234,58 +222,6 @@ def init_db():
                 )
             """)
             
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS active_events (
-                    event_type VARCHAR(50) PRIMARY KEY,
-                    multiplier FLOAT,
-                    start_time TIMESTAMP,
-                    end_time TIMESTAMP,
-                    description TEXT
-                )
-            """)
-            
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS user_daily_tasks (
-                    user_id BIGINT,
-                    task_date DATE,
-                    task_id INT,
-                    progress INT DEFAULT 0,
-                    completed BOOLEAN DEFAULT FALSE,
-                    PRIMARY KEY (user_id, task_date, task_id)
-                )
-            """)
-            
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS shlep_sessions (
-                    id SERIAL PRIMARY KEY,
-                    user_id BIGINT,
-                    start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    end_time TIMESTAMP,
-                    shlep_count INT DEFAULT 0,
-                    avg_speed FLOAT
-                )
-            """)
-            
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS level_ups (
-                    id SERIAL PRIMARY KEY,
-                    user_id BIGINT,
-                    level INT,
-                    reward INT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS goal_completions (
-                    id SERIAL PRIMARY KEY,
-                    goal_id INT,
-                    completed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    reward_type VARCHAR(50),
-                    reward_value INT
-                )
-            """)
-            
             cur.execute("SELECT COUNT(*) FROM global_stats")
             if cur.fetchone()[0] == 0:
                 cur.execute("INSERT INTO global_stats (total_shleps) VALUES (0)")
@@ -296,8 +232,7 @@ def init_db():
                     INSERT INTO global_goals 
                     (goal_name, target_value, current_value, reward_type, reward_value, is_active)
                     VALUES 
-                    ('Миллионный шлёпок 🎯', 1000000, 0, 'points', 10000, TRUE),
-                    ('Неделя активности 📈', 50000, 0, 'multiplier', 150, TRUE)
+                    ('Миллионный шлёпок 🎯', 1000000, 0, 'points', 10000, TRUE)
                 """)
             
             conn.commit()
