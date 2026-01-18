@@ -17,6 +17,8 @@ def init_db():
     """Инициализация всех таблиц"""
     with get_connection() as conn:
         with conn.cursor() as cur:
+            # ===== ОСНОВНЫЕ ТАБЛИЦЫ =====
+            
             # Глобальная статистика
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS global_stats (
@@ -45,7 +47,8 @@ def init_db():
                 )
             """)
             
-            # Таблица для достижений
+            # ===== СИСТЕМА ДОСТИЖЕНИЙ =====
+            
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS user_achievements (
                     user_id BIGINT,
@@ -55,7 +58,124 @@ def init_db():
                 )
             """)
             
-            # Инициализируем глобальную статистику если пусто
+            # ===== СИСТЕМА УРОВНЕЙ =====
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_xp (
+                    user_id BIGINT PRIMARY KEY,
+                    xp BIGINT DEFAULT 0,
+                    last_updated TIMESTAMP
+                )
+            """)
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS xp_history (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT,
+                    xp_amount INT,
+                    reason VARCHAR(100),
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS level_ups (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT,
+                    level INT,
+                    reward INT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # ===== СИСТЕМА НАВЫКОВ =====
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_skills (
+                    user_id BIGINT,
+                    skill_id VARCHAR(50),
+                    level INT DEFAULT 0,
+                    PRIMARY KEY (user_id, skill_id)
+                )
+            """)
+            
+            # ===== ДЕТАЛЬНАЯ СТАТИСТИКА =====
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS detailed_stats (
+                    user_id BIGINT,
+                    stat_date DATE,
+                    hour INT,
+                    shlep_count INT DEFAULT 0,
+                    PRIMARY KEY (user_id, stat_date, hour)
+                )
+            """)
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS shlep_sessions (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT,
+                    start_time TIMESTAMP,
+                    end_time TIMESTAMP,
+                    shlep_count INT,
+                    avg_speed FLOAT,
+                    max_combo INT
+                )
+            """)
+            
+            # ===== РЕКОРДЫ =====
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS records (
+                    record_type VARCHAR(50) PRIMARY KEY,
+                    user_id BIGINT,
+                    value FLOAT,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # ===== ГЛОБАЛЬНЫЕ ЦЕЛИ =====
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS global_goals (
+                    id SERIAL PRIMARY KEY,
+                    goal_name VARCHAR(100),
+                    target_value BIGINT,
+                    current_value BIGINT DEFAULT 0,
+                    reward_type VARCHAR(50),
+                    reward_value INT,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    start_date DATE,
+                    end_date DATE
+                )
+            """)
+            
+            # ===== СОБЫТИЯ =====
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS active_events (
+                    event_type VARCHAR(50) PRIMARY KEY,
+                    multiplier FLOAT,
+                    start_time TIMESTAMP,
+                    end_time TIMESTAMP,
+                    description TEXT
+                )
+            """)
+            
+            # ===== ЕЖЕДНЕВНЫЕ ЗАДАНИЯ =====
+            
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS user_daily_tasks (
+                    user_id BIGINT,
+                    task_date DATE,
+                    task_id INT,
+                    progress INT DEFAULT 0,
+                    completed BOOLEAN DEFAULT FALSE,
+                    PRIMARY KEY (user_id, task_date, task_id)
+                )
+            """)
+            
+            # Инициализируем глобальную статистику
             cur.execute("SELECT COUNT(*) FROM global_stats")
             if cur.fetchone()[0] == 0:
                 cur.execute("INSERT INTO global_stats (total_shleps) VALUES (0)")
