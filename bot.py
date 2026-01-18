@@ -4,9 +4,8 @@ import logging
 import random
 import sys
 import os
+import asyncio
 from datetime import datetime
-
-os.environ['NUMPY_EXPERIMENTAL_ARRAY_FUNCTION'] = '0'
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -35,8 +34,7 @@ except ImportError as e:
 
 try:
     from config import (
-        BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO, STICKERS,
-        ACHIEVEMENTS
+        BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO, ACHIEVEMENTS
     )
     CONFIG_AVAILABLE = True
 except ImportError as e:
@@ -45,7 +43,6 @@ except ImportError as e:
     BOT_TOKEN = os.getenv("BOT_TOKEN", "")
     MISHOK_REACTIONS = ["Ой, больно! 😠", "Эй, не шлёпай! 👴💢"]
     MISHOK_INTRO = "👴 *Мишок Лысый* - бот для шлёпков"
-    STICKERS = {}
     ACHIEVEMENTS = {}
 
 try:
@@ -73,7 +70,7 @@ try:
     from keyboard import (
         get_game_keyboard, get_inline_keyboard, get_skills_keyboard,
         get_achievements_keyboard, get_stats_keyboard, get_goals_keyboard,
-        get_upgrade_skill_keyboard, get_back_button, get_confirm_keyboard
+        get_upgrade_skill_keyboard, get_back_button
     )
     KEYBOARD_AVAILABLE = True
 except ImportError as e:
@@ -87,7 +84,6 @@ except ImportError as e:
     def get_goals_keyboard(): return None
     def get_upgrade_skill_keyboard(*args, **kwargs): return None
     def get_back_button(*args, **kwargs): return None
-    def get_confirm_keyboard(*args, **kwargs): return None
 
 SYSTEMS = {}
 
@@ -122,13 +118,12 @@ except Exception as e:
     logger.warning(f"Система достижений не загружена: {e}")
 
 try:
-    from utils import get_moscow_time, generate_animation
+    from utils import get_moscow_time
     UTILS_AVAILABLE = True
 except ImportError:
     logger.warning("Утилиты не загружены")
     UTILS_AVAILABLE = False
     def get_moscow_time(): return datetime.now()
-    def generate_animation(): return "✨"
 
 if not TELEGRAM_AVAILABLE:
     logger.error("Библиотека python-telegram-bot не установлена!")
@@ -239,8 +234,11 @@ async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_c
         if 'achievements' in SYSTEMS:
             try:
                 new_achievements = SYSTEMS['achievements'].check_achievements(user.id, user_count)
+                if new_achievements is None:
+                    new_achievements = []
             except Exception as e:
                 logger.error(f"Ошибка системы достижений: {e}")
+                new_achievements = []
         
         if 'stats' in SYSTEMS:
             try:
@@ -297,13 +295,6 @@ async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_c
                 message_lines.append(f"\n🎉 {ach['emoji']} *{ach['name']}*")
                 add_points(user.id, ach.get('reward_points', 10))
         
-        if random.random() < 0.1 and UTILS_AVAILABLE:
-            try:
-                animation = generate_animation()
-                message_lines.append(f"\n{animation}")
-            except:
-                pass
-        
         message_text = "\n".join(message_lines)
         
         if is_callback:
@@ -318,16 +309,6 @@ async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_c
                 parse_mode=ParseMode.MARKDOWN,
                 reply_markup=keyboard
             )
-        
-        if STICKERS and random.random() < 0.7:
-            try:
-                sticker_key = random.choice(list(STICKERS.keys()))
-                if is_callback:
-                    await update.callback_query.message.reply_sticker(STICKERS[sticker_key])
-                else:
-                    await update.message.reply_sticker(STICKERS[sticker_key])
-            except Exception as e:
-                logger.error(f"Ошибка отправки стикера: {e}")
         
         if skill_effects.get('extra_shlep'):
             await asyncio.sleep(1)
@@ -612,7 +593,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /level — Твой уровень и прогресс
 /detailed_stats — Детальная статистика
 /goals — Глобальные цели
-/upgrade — Улучшение навыков
+/upgrade — Улучшение навыки
 /achievements — Достижения
 
 *В группах:* используй команды или inline-кнопки
@@ -1092,7 +1073,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     if not BOT_TOKEN:
-        logger.error("BOT_TOKEN не найден! Проверь .env файл.")
+        logger.error("BOT_TOKEN не найден!")
         return
     
     application = Application.builder().token(BOT_TOKEN).build()
@@ -1116,27 +1097,7 @@ def main():
     
     application.add_error_handler(error_handler)
     
-    logger.info("=" * 50)
-    logger.info("ЗАПУСК БОТА 'МИШОК ЛЫСЫЙ'")
-    logger.info("=" * 50)
-    
-    logger.info(f"Загружено систем: {len(SYSTEMS)} из 4")
-    if SYSTEMS:
-        logger.info(f"Системы: {', '.join(SYSTEMS.keys())}")
-    else:
-        logger.warning("Ни одна система не загружена, бот работает в базовом режиме")
-    
-    if CONFIG_AVAILABLE:
-        logger.info(f"Конфигурация: {len(MISHOK_REACTIONS)} реакций, {len(STICKERS)} стикеров")
-    else:
-        logger.warning("Конфигурация не загружена")
-    
-    if DATABASE_AVAILABLE:
-        logger.info("База данных доступна")
-    else:
-        logger.warning("База данных недоступна, используется заглушка")
-    
-    logger.info("Бот готов к работе...")
+    logger.info(f"Запуск бота. Систем: {len(SYSTEMS)}")
     
     try:
         application.run_polling(
@@ -1144,8 +1105,4 @@ def main():
             drop_pending_updates=True
         )
     except Exception as e:
-        logger.error(f"КРИТИЧЕСКАЯ ОШИБКА: {e}")
-        logger.error("Бот остановлен")
-
-if __name__ == "__main__":
-    main()
+        logger.error(f"Ошибка: {e}")
