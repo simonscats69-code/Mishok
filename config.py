@@ -3,19 +3,23 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Основные настройки бота
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
-# Настройки кэша
 CACHE_ENABLED = os.getenv("CACHE_ENABLED", "true").lower() == "true"
-CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "300"))  # 5 минут по умолчанию
-CACHE_CLEANUP_INTERVAL = int(os.getenv("CACHE_CLEANUP_INTERVAL", "60"))  # 60 секунд
+CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "300"))
+CACHE_CLEANUP_INTERVAL = int(os.getenv("CACHE_CLEANUP_INTERVAL", "60"))
 
-# Оптимизация
-MAX_CACHE_SIZE = int(os.getenv("MAX_CACHE_SIZE", "1000"))  # Максимальное количество записей в кэше
+MAX_CACHE_SIZE = int(os.getenv("MAX_CACHE_SIZE", "1000"))
 LOG_CACHE_STATS = os.getenv("LOG_CACHE_STATS", "true").lower() == "true"
+
+CHAT_VOTE_DURATION = int(os.getenv("CHAT_VOTE_DURATION", "300"))
+CHAT_DUEL_DURATION = int(os.getenv("CHAT_DUEL_DURATION", "300"))
+CHAT_ROLE_DURATION = int(os.getenv("CHAT_ROLE_DURATION", "86400"))
+
+CHAT_RECORD_CHECK_INTERVAL = int(os.getenv("CHAT_RECORD_CHECK_INTERVAL", "300"))
+CHAT_NOTIFICATIONS_ENABLED = os.getenv("CHAT_NOTIFICATIONS_ENABLED", "true").lower() == "true"
 
 MISHOK_REACTIONS = [
     "Ой, больно! Ну зачем ты это сделал? 😠",
@@ -84,6 +88,19 @@ MISHOK_INTRO = """
 /stats — Статистика и топ
 /level — Твой уровень и сила
 /mishok — О Мишке
+
+*Команды для чатов:*
+📊 /chat_stats — Статистика чата
+🏆 /chat_top — Топ игроков чата
+🗳️ /vote [вопрос] — Голосование (5 мин)
+⚔️ /duel @username — Вызов на дуэль
+👑 /roles — Роли в чате
+
+*Роли в чатах:*
+👑 Король шлёпков — топ-1 в чате
+🎯 Самый меткий — максимальный урон
+⚡ Спринтер — 10+ шлёпков за 5 мин
+💪 Силач — урон 40+ единиц
 
 *Оптимизация:*
 ⚡ Используется кэширование для быстрой работы
