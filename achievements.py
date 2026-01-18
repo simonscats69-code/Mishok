@@ -55,6 +55,37 @@ class AchievementSystem:
                 
                 return achievements
     
+    def get_achievements_progress(self, user_id: int):
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT COALESCE(shlep_count, 0) 
+                    FROM user_stats 
+                    WHERE user_id = %s
+                """, (user_id,))
+                result = cur.fetchone()
+                current_count = result[0] if result else 0
+                
+                cur.execute("""
+                    SELECT achievement_id FROM user_achievements 
+                    WHERE user_id = %s
+                """, (user_id,))
+                achieved_ids = {row[0] for row in cur.fetchall()}
+                
+                progress = []
+                for threshold in sorted(self.achievements.keys()):
+                    is_achieved = threshold in achieved_ids
+                    progress.append({
+                        **self.achievements[threshold],
+                        'threshold': threshold,
+                        'achieved': is_achieved,
+                        'current': current_count,
+                        'progress_percent': min(100, (current_count / threshold * 100)) if threshold > 0 else 100,
+                        'remaining': max(0, threshold - current_count) if not is_achieved else 0
+                    })
+                
+                return progress
+    
     def get_next_achievement(self, current_count: int):
         for threshold in sorted(self.achievements.keys()):
             if threshold > current_count:
