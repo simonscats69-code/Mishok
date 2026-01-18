@@ -64,7 +64,7 @@ def main():
     global application
     
     try:
-        from bot import main as bot_main, BOT_TOKEN as bot_token
+        from bot import BOT_TOKEN as bot_token
     except ImportError as e:
         logger.error(f"Ошибка импорта бота: {e}")
         exit(1)
@@ -74,8 +74,7 @@ def main():
         
         from bot import (
             start_command, shlep_command, stats_command, mishok_info_command,
-            help_command, level_command, detailed_stats_command, goals_command,
-            upgrade_command, inline_handler,
+            help_command, level_command, inline_handler,
             button_handler, group_welcome, error_handler
         )
         
@@ -89,9 +88,6 @@ def main():
         application.add_handler(CommandHandler("mishok", mishok_info_command))
         application.add_handler(CommandHandler("help", help_command))
         application.add_handler(CommandHandler("level", level_command))
-        application.add_handler(CommandHandler("detailed_stats", detailed_stats_command))
-        application.add_handler(CommandHandler("goals", goals_command))
-        application.add_handler(CommandHandler("upgrade", upgrade_command))
         
         application.add_handler(CallbackQueryHandler(inline_handler))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
