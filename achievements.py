@@ -6,10 +6,8 @@ class AchievementSystem:
         self.achievements = ACHIEVEMENTS
     
     def check_achievements(self, user_id: int, current_count: int):
-        """Проверить и выдать достижения"""
         with get_connection() as conn:
             with conn.cursor() as cur:
-                # Получаем уже полученные достижения
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS user_achievements (
                         user_id BIGINT,
@@ -25,11 +23,9 @@ class AchievementSystem:
                 """, (user_id,))
                 achieved = {row[0] for row in cur.fetchall()}
                 
-                # Проверяем новые достижения
                 new_achievements = []
                 for threshold, achievement in self.achievements.items():
                     if threshold <= current_count and threshold not in achieved:
-                        # Сохраняем достижение
                         cur.execute("""
                             INSERT INTO user_achievements (user_id, achievement_id)
                             VALUES (%s, %s)
@@ -40,7 +36,6 @@ class AchievementSystem:
                 return new_achievements
     
     def get_user_achievements(self, user_id: int):
-        """Получить все достижения пользователя"""
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -61,7 +56,6 @@ class AchievementSystem:
                 return achievements
     
     def get_next_achievement(self, current_count: int):
-        """Получить следующее достижение"""
         for threshold in sorted(self.achievements.keys()):
             if threshold > current_count:
                 return {
