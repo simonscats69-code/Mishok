@@ -11,7 +11,6 @@ except ImportError:
     PSYCOPG2_AVAILABLE = False
 
 class FakeDatabase:
-    """Заглушка базы данных для работы без PostgreSQL"""
     def __init__(self):
         self.global_stats = {'total_shleps': 0, 'last_shlep': None}
         self.user_stats = {}
@@ -127,13 +126,13 @@ def get_connection():
         finally:
             conn.close()
     except Exception as e:
-        print(f"❌ Ошибка подключения к БД: {e}")
+        print(f"Ошибка подключения к БД: {e}")
         yield None
 
 def init_db():
     with get_connection() as conn:
         if conn is None:
-            print("⚠️ БД не инициализирована (нет соединения)")
+            print("БД не инициализирована")
             return
         
         with conn.cursor() as cur:
@@ -236,7 +235,7 @@ def init_db():
                 """)
             
             conn.commit()
-            print("✅ База данных инициализирована")
+            print("База данных инициализирована")
 
 def add_shlep(user_id: int, username: str):
     if not DATABASE_URL:
@@ -387,16 +386,16 @@ def execute_query(query, params=None):
 
 def test_connection():
     if not DATABASE_URL:
-        return True, "✅ Используется заглушка БД (без PostgreSQL)"
+        return True, "Используется заглушка БД"
     
     try:
         with get_connection() as conn:
             if conn is None:
-                return False, "БД не настроена (используется заглушка)"
+                return False, "БД не настроена"
             
             with conn.cursor() as cur:
                 cur.execute("SELECT 1")
                 result = cur.fetchone()
-                return True, "✅ Соединение с БД успешно"
+                return True, "Соединение с БД успешно"
     except Exception as e:
-        return False, f"❌ Ошибка соединения: {e}"
+        return False, f"Ошибка соединения: {e}"
