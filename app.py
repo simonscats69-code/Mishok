@@ -75,7 +75,7 @@ def main():
         from bot import (
             start_command, shlep_command, stats_command, mishok_info_command,
             help_command, level_command, detailed_stats_command, goals_command,
-            upgrade_command, achievements_command, inline_handler,
+            upgrade_command, inline_handler,
             button_handler, group_welcome, error_handler
         )
         
@@ -92,7 +92,6 @@ def main():
         application.add_handler(CommandHandler("detailed_stats", detailed_stats_command))
         application.add_handler(CommandHandler("goals", goals_command))
         application.add_handler(CommandHandler("upgrade", upgrade_command))
-        application.add_handler(CommandHandler("achievements", achievements_command))
         
         application.add_handler(CallbackQueryHandler(inline_handler))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
