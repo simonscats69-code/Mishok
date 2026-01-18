@@ -6,9 +6,12 @@ from config import DATABASE_URL
 
 try:
     import psycopg2
+    from psycopg2.pool import SimpleConnectionPool
     PSYCOPG2_AVAILABLE = True
+    CONNECTION_POOL = None
 except ImportError:
     PSYCOPG2_AVAILABLE = False
+    CONNECTION_POOL = None
 
 class FakeDatabase:
     def __init__(self):
@@ -43,6 +46,20 @@ class FakeDatabase:
         return self.global_stats['total_shleps'], self.user_stats[user_id]['shlep_count'], self.global_stats['max_damage']
 
 fake_db = FakeDatabase()
+
+def init_connection_pool():
+    """Инициализация пула соединений для PostgreSQL"""
+    global CONNECTION_POOL
+    if PSYCOPG2_AVAILABLE and DATABASE_URL:
+        try:
+            CONNECTION_POOL = SimpleConnectionPool(
+                1, 10,  # minconn, maxconn
+                dsn=DATABASE_URL
+            )
+            print("Пул соединений PostgreSQL инициализирован")
+        except Exception as e:
+            print(f"Ошибка инициализации пула соединений: {e}")
+            CONNECTION_POOL = None
 
 @contextmanager
 def get_connection():
@@ -126,16 +143,25 @@ def get_connection():
         return
     
     try:
-        conn = psycopg2.connect(DATABASE_URL)
-        try:
-            yield conn
-        finally:
-            conn.close()
+        if CONNECTION_POOL:
+            conn = CONNECTION_POOL.getconn()
+            try:
+                yield conn
+            finally:
+                CONNECTION_POOL.putconn(conn)
+        else:
+            conn = psycopg2.connect(DATABASE_URL)
+            try:
+                yield conn
+            finally:
+                conn.close()
     except Exception as e:
         print(f"Ошибка подключения к БД: {e}")
         yield None
 
 def init_db():
+    init_connection_pool()  # Инициализируем пул соединений
+    
     with get_connection() as conn:
         if conn is None:
             print("БД не инициализирована")
@@ -163,12 +189,22 @@ def init_db():
                 )
             """)
             
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_stats_shlep_count 
+                ON user_stats(shlep_count DESC)
+            """)
+            
+            cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_stats_user_id 
+                ON user_stats(user_id)
+            """)
+            
             cur.execute("SELECT COUNT(*) FROM global_stats")
             if cur.fetchone()[0] == 0:
                 cur.execute("INSERT INTO global_stats (total_shleps) VALUES (0)")
             
             conn.commit()
-            print("База данных инициализирована")
+            print("База данных инициализирована с индексами")
 
 def add_shlep(user_id: int, username: str, damage: int = 0):
     if not DATABASE_URL:
@@ -295,3 +331,10 @@ def get_user_stats(user_id: int):
             """, (user_id, f"Игрок_{user_id}"))
             conn.commit()
             return (f"Игрок_{user_id}", 0, None)
+
+def close_connection_pool():
+    """Закрытие пула соединений при завершении работы"""
+    global CONNECTION_POOL
+    if CONNECTION_POOL:
+        CONNECTION_POOL.closeall()
+        print("Пул соединений PostgreSQL закрыт")
