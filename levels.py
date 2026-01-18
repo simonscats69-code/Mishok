@@ -9,11 +9,9 @@ class LevelSystem:
         self.xp_multiplier = 1.5
     
     def calculate_xp_for_level(self, level: int) -> int:
-        """Рассчитать XP для достижения уровня"""
         return int(self.base_xp * (self.xp_multiplier ** (level - 1)))
     
     def calculate_level(self, xp: int) -> tuple:
-        """Рассчитать текущий уровень и прогресс"""
         level = 1
         xp_needed = self.calculate_xp_for_level(level)
         xp_remaining = xp
@@ -36,17 +34,14 @@ class LevelSystem:
         }
     
     def calculate_total_xp_for_level(self, level: int) -> int:
-        """Общий XP для достижения уровня с 1"""
         total = 0
         for lvl in range(1, level):
             total += self.calculate_xp_for_level(lvl)
         return total
     
     def add_xp(self, user_id: int, xp_amount: int, reason: str = "shlep"):
-        """Добавить XP пользователю"""
         with get_connection() as conn:
             with conn.cursor() as cur:
-                # Получаем текущий XP
                 cur.execute("""
                     INSERT INTO user_xp (user_id, xp, last_updated)
                     VALUES (%s, %s, NOW())
@@ -59,22 +54,18 @@ class LevelSystem:
                 
                 new_xp = cur.fetchone()[0]
                 
-                # Записываем в историю
                 cur.execute("""
                     INSERT INTO xp_history (user_id, xp_amount, reason, timestamp)
                     VALUES (%s, %s, %s, NOW())
                 """, (user_id, xp_amount, reason))
                 
-                # Проверяем повышение уровня
                 old_level = self.get_user_level(user_id)
                 new_level_info = self.calculate_level(new_xp)
                 
                 if new_level_info['level'] > old_level:
-                    # Награда за повышение уровня
                     level_up_reward = new_level_info['level'] * 50
                     add_points(user_id, level_up_reward)
                     
-                    # Сохраняем событие повышения
                     cur.execute("""
                         INSERT INTO level_ups (user_id, level, reward, timestamp)
                         VALUES (%s, %s, %s, NOW())
@@ -84,7 +75,6 @@ class LevelSystem:
                 return new_level_info
     
     def get_user_level(self, user_id: int) -> int:
-        """Получить уровень пользователя"""
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT xp FROM user_xp WHERE user_id = %s", (user_id,))
@@ -96,7 +86,6 @@ class LevelSystem:
                 return 1
     
     def get_level_progress(self, user_id: int):
-        """Получить полную информацию о прогрессе"""
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT xp FROM user_xp WHERE user_id = %s", (user_id,))
@@ -105,7 +94,6 @@ class LevelSystem:
                 return self.calculate_level(xp)
 
 class MishokLevelSystem:
-    """Система уровней Мишка"""
     def __init__(self):
         self.levels = {
             1: {"name": "Нежный Мишок", "resistance": 0.0, "reactions": "base"},
@@ -116,7 +104,6 @@ class MishokLevelSystem:
         }
     
     def get_mishok_level(self, total_shleps: int):
-        """Получить уровень Мишка на основе общего количества шлёпков"""
         current_level = 1
         current_stats = self.levels[1]
         
@@ -142,7 +129,6 @@ class MishokLevelSystem:
         }
 
 class SkillsSystem:
-    """Система навыков"""
     def __init__(self):
         self.skills = {
             'accurate_slap': {
@@ -157,30 +143,20 @@ class SkillsSystem:
                 'description': 'Шанс сделать дополнительный шлёпок',
                 'max_level': 5,
                 'cost_per_level': [100, 250, 500, 1000, 2000],
-                'effect_per_level': [0.05, 0.1, 0.15, 0.2, 0.25]  # 5-25% шанс
+                'effect_per_level': [0.05, 0.1, 0.15, 0.2, 0.25]
             },
             'critical_slap': {
                 'name': 'Критический удар',
                 'description': 'Шанс на критический удар (2x XP)',
                 'max_level': 5,
                 'cost_per_level': [200, 500, 1000, 2000, 5000],
-                'effect_per_level': [0.05, 0.1, 0.15, 0.2, 0.25]  # 5-25% шанс
+                'effect_per_level': [0.05, 0.1, 0.15, 0.2, 0.25]
             }
         }
     
     def get_user_skills(self, user_id: int):
-        """Получить навыки пользователя"""
         with get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("""
-                    CREATE TABLE IF NOT EXISTS user_skills (
-                        user_id BIGINT,
-                        skill_id VARCHAR(50),
-                        level INT DEFAULT 0,
-                        PRIMARY KEY (user_id, skill_id)
-                    )
-                """)
-                
                 skills_data = {}
                 for skill_id, skill_info in self.skills.items():
                     cur.execute("""
@@ -202,7 +178,6 @@ class SkillsSystem:
                 return skills_data
     
     def upgrade_skill(self, user_id: int, skill_id: str):
-        """Улучшить навык"""
         if skill_id not in self.skills:
             return False, "Навык не найден"
         
@@ -210,11 +185,11 @@ class SkillsSystem:
         
         with get_connection() as conn:
             with conn.cursor() as cur:
-                # Получаем текущий уровень
                 cur.execute("""
-                    SELECT level, points FROM user_skills 
-                    LEFT JOIN user_points ON user_skills.user_id = user_points.user_id
-                    WHERE user_skills.user_id = %s AND skill_id = %s
+                    SELECT us.level, up.points 
+                    FROM user_skills us
+                    LEFT JOIN user_points up ON us.user_id = up.user_id
+                    WHERE us.user_id = %s AND us.skill_id = %s
                 """, (user_id, skill_id))
                 
                 result = cur.fetchone()
@@ -233,14 +208,12 @@ class SkillsSystem:
                 if points < cost:
                     return False, f"Недостаточно очков. Нужно: {cost}"
                 
-                # Снимаем очки
                 cur.execute("""
                     UPDATE user_points 
                     SET points = points - %s 
                     WHERE user_id = %s
                 """, (cost, user_id))
                 
-                # Улучшаем навык
                 if current_level == 0:
                     cur.execute("""
                         INSERT INTO user_skills (user_id, skill_id, level)
