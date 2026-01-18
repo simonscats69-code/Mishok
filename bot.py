@@ -75,6 +75,19 @@ except ImportError as e:
     def get_stats_keyboard(): return None
     def get_back_button(*args, **kwargs): return None
 
+try:
+    from cache import cache
+    CACHE_AVAILABLE = True
+    logger.info("Кэш система загружена")
+except ImportError as e:
+    logger.warning(f"Кэш система не загружена: {e}")
+    CACHE_AVAILABLE = False
+    class StubCache:
+        async def get(self, key): return None
+        async def set(self, key, value): pass
+        async def delete(self, key): return False
+    cache = StubCache()
+
 if not TELEGRAM_AVAILABLE:
     logger.error("Библиотека python-telegram-bot не установлена!")
     sys.exit(1)
@@ -192,6 +205,11 @@ async def shlep_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             damage
         )
         
+        if CACHE_AVAILABLE:
+            await cache.delete("global_stats")
+            await cache.delete(f"user_stats_{user.id}")
+            await cache.delete("top_users_10")
+        
         record_message = ""
         if damage > current_max_damage:
             record_message = f"\n🏆 *НОВЫЙ РЕКОРД!* 🏆\n"
@@ -253,6 +271,11 @@ async def shlep_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         damage
     )
     
+    if CACHE_AVAILABLE:
+        await cache.delete("global_stats")
+        await cache.delete(f"user_stats_{user.id}")
+        await cache.delete("top_users_10")
+    
     record_message = ""
     if damage > current_max_damage:
         record_message = f"\n🏆 *НОВЫЙ РЕКОРД!* 🏆\n"
@@ -279,8 +302,33 @@ async def shlep_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        total_shleps, last_shlep, max_damage, max_damage_user, max_damage_date = get_stats()
-        top_users = get_top_users(10)
+        cache_key = "global_stats"
+        cache_key_top = "top_users_10"
+        
+        if CACHE_AVAILABLE:
+            cached_stats = await cache.get(cache_key)
+            cached_top = await cache.get(cache_key_top)
+        else:
+            cached_stats = None
+            cached_top = None
+        
+        if cached_stats:
+            total_shleps, last_shlep, max_damage, max_damage_user, max_damage_date = cached_stats
+            logger.debug("Используем кэшированную глобальную статистику")
+        else:
+            total_shleps, last_shlep, max_damage, max_damage_user, max_damage_date = get_stats()
+            if CACHE_AVAILABLE:
+                await cache.set(cache_key, (total_shleps, last_shlep, max_damage, max_damage_user, max_damage_date))
+                logger.debug("Сохранили глобальную статистику в кэш")
+        
+        if cached_top:
+            top_users = cached_top
+            logger.debug("Используем кэшированный топ пользователей")
+        else:
+            top_users = get_top_users(10)
+            if CACHE_AVAILABLE:
+                await cache.set(cache_key_top, top_users)
+                logger.debug("Сохранили топ пользователей в кэш")
         
         stats_text = f"""
 📊 *СТАТИСТИКА ШЛЁПОВ*
@@ -317,6 +365,9 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             stats_text += "\n🏆 *Пока никто не шлёпал Мишка*"
         
+        if CACHE_AVAILABLE:
+            stats_text += f"\n_📊 Кэш: {cache.get_hit_rate():.1f}% попаданий_"
+        
         await update.message.reply_text(
             stats_text,
             parse_mode=ParseMode.MARKDOWN
@@ -328,12 +379,26 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def level_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
+        cache_key = f"user_stats_{user.id}"
         
-        user_data = get_user_stats(user.id)
-        if not user_data:
-            username, user_count, last_shlep = (None, 0, None)
+        if CACHE_AVAILABLE:
+            cached_data = await cache.get(cache_key)
         else:
-            username, user_count, last_shlep = user_data
+            cached_data = None
+        
+        if cached_data:
+            username, user_count, last_shlep = cached_data
+            logger.debug(f"Используем кэшированные данные для пользователя {user.id}")
+        else:
+            user_data = get_user_stats(user.id)
+            if not user_data:
+                username, user_count, last_shlep = (None, 0, None)
+            else:
+                username, user_count, last_shlep = user_data
+            
+            if CACHE_AVAILABLE and user_count > 0:
+                await cache.set(cache_key, (username, user_count, last_shlep))
+                logger.debug(f"Сохранили данные пользователя {user.id} в кэш")
         
         level_info = calculate_level(user_count)
         
@@ -474,3 +539,37 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         except:
             pass
+
+async def cache_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда для админов: статистика кэша"""
+    try:
+        if CACHE_AVAILABLE:
+            stats = cache.get_stats()
+            text = f"""
+📊 *СТАТИСТИКА КЭША*
+
+• Всего записей: {stats['total_entries']}
+• Попаданий: {stats['hits']}
+• Промахов: {stats['misses']}
+• Процент попаданий: {stats['hit_rate']:.1f}%
+• TTL: {stats['ttl_seconds']} сек
+"""
+        else:
+            text = "❌ Кэш система не загружена"
+        
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    except Exception as e:
+        logger.error(f"Ошибка команды cache_stats: {e}")
+
+async def clear_cache_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда для админов: очистка кэша"""
+    try:
+        if CACHE_AVAILABLE:
+            await cache.clear()
+            text = "✅ Кэш очищен"
+        else:
+            text = "❌ Кэш система не загружена"
+        
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    except Exception as e:
+        logger.error(f"Ошибка команды clear_cache: {e}")
