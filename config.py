@@ -3,9 +3,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Основные настройки бота
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
+
+# Настройки кэша
+CACHE_ENABLED = os.getenv("CACHE_ENABLED", "true").lower() == "true"
+CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "300"))  # 5 минут по умолчанию
+CACHE_CLEANUP_INTERVAL = int(os.getenv("CACHE_CLEANUP_INTERVAL", "60"))  # 60 секунд
+
+# Оптимизация
+MAX_CACHE_SIZE = int(os.getenv("MAX_CACHE_SIZE", "1000"))  # Максимальное количество записей в кэше
+LOG_CACHE_STATS = os.getenv("LOG_CACHE_STATS", "true").lower() == "true"
 
 MISHOK_REACTIONS = [
     "Ой, больно! Ну зачем ты это сделал? 😠",
@@ -74,6 +84,10 @@ MISHOK_INTRO = """
 /stats — Статистика и топ
 /level — Твой уровень и сила
 /mishok — О Мишке
+
+*Оптимизация:*
+⚡ Используется кэширование для быстрой работы
+📊 Статистика кэша доступна админам
 
 *Для групп:* 
 Добавь бота в чат и используй команды или кнопки под сообщениями.
