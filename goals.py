@@ -8,7 +8,6 @@ class GlobalGoalsSystem:
         self.init_default_goals()
     
     def init_default_goals(self):
-        """Инициализировать стандартные цели"""
         self.active_goals = [
             {
                 'id': 1,
@@ -23,7 +22,7 @@ class GlobalGoalsSystem:
                 'name': 'Неделя активности 📈',
                 'target': 50000,
                 'current': 0,
-                'reward': {'type': 'multiplier', 'value': 1.5, 'duration': 24},  # 24 часа
+                'reward': {'type': 'multiplier', 'value': 1.5, 'duration': 24},
                 'description': '50,000 шлёпков за неделю',
                 'start_date': get_moscow_time().date(),
                 'end_date': get_moscow_time().date() + timedelta(days=7)
@@ -38,11 +37,9 @@ class GlobalGoalsSystem:
             }
         ]
         
-        # Загружаем из базы
         self.load_from_db()
     
     def load_from_db(self):
-        """Загрузить цели из базы"""
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT * FROM global_goals WHERE is_active = TRUE")
@@ -62,7 +59,6 @@ class GlobalGoalsSystem:
                     })
     
     def update_goal_progress(self, goal_id: int, increment: int = 1):
-        """Обновить прогресс цели"""
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -76,7 +72,6 @@ class GlobalGoalsSystem:
                 if result:
                     current, target, reward_type, reward_value = result
                     
-                    # Проверяем достижение цели
                     if current >= target:
                         self.complete_goal(goal_id, reward_type, reward_value)
                     
@@ -84,21 +79,17 @@ class GlobalGoalsSystem:
                     return current, target
     
     def complete_goal(self, goal_id: int, reward_type: str, reward_value):
-        """Завершить цель и выдать награду"""
         with get_connection() as conn:
             with conn.cursor() as cur:
-                # Отмечаем как завершённую
                 cur.execute("UPDATE global_goals SET is_active = FALSE WHERE id = %s", (goal_id,))
                 
-                # Выдаём награду всем активным пользователям
                 if reward_type == 'points':
                     cur.execute("""
                         UPDATE user_points 
                         SET points = points + %s 
-                        WHERE points > 0  # Только активным
+                        WHERE points > 0
                     """, (reward_value,))
                 
-                # Сохраняем историю
                 cur.execute("""
                     INSERT INTO goal_completions (goal_id, completed_at, reward_type, reward_value)
                     VALUES (%s, NOW(), %s, %s)
@@ -107,7 +98,6 @@ class GlobalGoalsSystem:
                 conn.commit()
     
     def get_community_contributions(self, user_id: int):
-        """Получить вклад пользователя в глобальные цели"""
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -115,7 +105,7 @@ class GlobalGoalsSystem:
                            COUNT(DISTINCT s.user_id) as contributors,
                            COALESCE(SUM(CASE WHEN s.user_id = %s THEN 1 ELSE 0 END), 0) as user_contributions
                     FROM global_goals g
-                    LEFT JOIN detailed_stats s ON g.id = 1  # Для миллионного шлёпка
+                    LEFT JOIN detailed_stats s ON g.id = 1
                     WHERE g.is_active = TRUE
                     GROUP BY g.id, g.goal_name, g.current_value, g.target_value
                 """, (user_id,))
@@ -136,14 +126,11 @@ class GlobalGoalsSystem:
                 return contributions
     
     def get_global_stats(self):
-        """Получить глобальную статистику"""
         with get_connection() as conn:
             with conn.cursor() as cur:
-                # Общее количество шлёпков
                 cur.execute("SELECT total_shleps FROM global_stats WHERE id = 1")
                 total_shleps = cur.fetchone()[0] or 0
                 
-                # Активные пользователи сегодня
                 cur.execute("""
                     SELECT COUNT(DISTINCT user_id) 
                     FROM detailed_stats 
@@ -151,7 +138,6 @@ class GlobalGoalsSystem:
                 """)
                 active_today = cur.fetchone()[0] or 0
                 
-                # Шлёпков сегодня
                 cur.execute("""
                     SELECT SUM(shlep_count) 
                     FROM detailed_stats 
@@ -159,7 +145,6 @@ class GlobalGoalsSystem:
                 """)
                 today_shleps = cur.fetchone()[0] or 0
                 
-                # Рекорд за день
                 cur.execute("""
                     SELECT MAX(daily_total) 
                     FROM (
