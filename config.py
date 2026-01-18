@@ -7,11 +7,6 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
-if not BOT_TOKEN:
-    print("⚠️ ВНИМАНИЕ: BOT_TOKEN не установлен! Бот не запустится.")
-if not DATABASE_URL or "your_database_url" in DATABASE_URL:
-    print("⚠️ ВНИМАНИЕ: DATABASE_URL не настроен. Будет использоваться заглушка БД.")
-
 MISHOK_REACTIONS = [
     "Ой, больно! Ну зачем ты это сделал? 😠",
     "Эй, моя лысина не тренажёр для рук! 👴💢",
@@ -77,7 +72,7 @@ MISHOK_INTRO = """
 *Игровые системы:*
 🎯 Уровни и прокачка — получай опыт, повышай уровень
 🏆 Достижения — 9 уровней достижений
-⚡ Навыки — прокачивай умения (скоро)
+⚡ Навыки — прокачивай умения
 
 *Основные команды:*
 /start — Начать работу с ботом
@@ -158,68 +153,3 @@ STICKERS = {
     "crying": "CAACAgIAAxkBAAIBa2av5QdGFeELlO_o51dt05bfeSJQAAIIAAPANk8TGNJvqPByIXYzBA",
     "laughing": "CAACAgIAAxkBAAIBbGav5Qh_6F5rY93AtoHv5dqH-Lh8AAIJAAPANk8TMsJdS61V4SIzBA",
 }
-
-LEVEL_CONFIG = {
-    "base_xp": 100,
-    "xp_multiplier": 1.5,
-    "max_level": 100,
-    "xp_per_shlep": 10,
-}
-
-SKILLS_CONFIG = {
-    "accurate_slap": {
-        "name": "Меткий шлёпок",
-        "description": "Увеличивает базовый опыт на 10% за уровень",
-        "max_level": 10,
-        "base_effect": 0.1,
-        "cost_multiplier": 2.0
-    },
-    "combo_slap": {
-        "name": "Серия ударов",
-        "description": "Шанс сделать дополнительный шлёпок (5% за уровень)",
-        "max_level": 5,
-        "base_effect": 0.05,
-        "cost_multiplier": 2.5
-    },
-    "critical_slap": {
-        "name": "Критический удар",
-        "description": "Шанс на критический удар (2x опыт, 5% за уровень)",
-        "max_level": 5,
-        "base_effect": 0.05,
-        "cost_multiplier": 3.0
-    }
-}
-
-BOT_SETTINGS = {
-    "auto_delete_messages": False,
-    "delete_after_seconds": 30,
-    "max_shleps_per_minute": 60,
-    "cooldown_seconds": 1,
-    "notify_new_features": True,
-    "language": "ru",
-    "timezone": "Europe/Moscow"
-}
-
-def validate_config():
-    errors = []
-    
-    if not BOT_TOKEN:
-        errors.append("BOT_TOKEN не установлен")
-    
-    if len(MISHOK_REACTIONS) < 10:
-        errors.append("Слишком мало реакций Мишка (минимум 10)")
-    
-    if not MISHOK_INTRO:
-        errors.append("MISHOK_INTRO не установлен")
-    
-    if errors:
-        print("❌ Ошибки конфигурации:")
-        for error in errors:
-            print(f"  - {error}")
-        return False
-    
-    print("✅ Конфигурация загружена корректно")
-    return True
-
-if __name__ != "__main__":
-    validate_config()
