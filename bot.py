@@ -4,7 +4,6 @@ import logging
 import random
 import sys
 import os
-import asyncio
 from datetime import datetime
 from functools import wraps
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -27,6 +26,7 @@ _CONFIG = None
 _DB = None
 _KEYBOARD = None
 _CACHE = None
+_STATS = None
 
 def get_config():
     global _CONFIG
@@ -108,6 +108,35 @@ def get_cache():
                 def get_stats(self): return {}
             _CACHE = StubCache()
     return _CACHE
+
+def get_stats_module():
+    global _STATS
+    if _STATS is None:
+        try:
+            from statistics import (
+                get_favorite_time, 
+                get_comparison_stats,
+                get_global_trends_info,
+                format_daily_activity_chart,
+                format_hourly_distribution_chart
+            )
+            _STATS = {
+                'favorite_time': get_favorite_time,
+                'comparison': get_comparison_stats,
+                'global_trends': get_global_trends_info,
+                'daily_chart': format_daily_activity_chart,
+                'hourly_chart': format_hourly_distribution_chart
+            }
+        except ImportError as e:
+            logger.error(f"Ошибка импорта statistics: {e}")
+            _STATS = {
+                'favorite_time': lambda uid: "📊 Статистика временно недоступна",
+                'comparison': lambda uid: {'total_users': 0, 'avg_shleps': 0, 'percentile': 0, 'rank': 1},
+                'global_trends': lambda: {},
+                'daily_chart': lambda uid, days=7: "📊 Нет данных",
+                'hourly_chart': lambda uid: "⏰ Нет данных"
+            }
+    return _STATS
 
 # ========== ДЕКОРАТОРЫ ==========
 def command_handler(func):
@@ -218,13 +247,15 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE, mess
 
 Я — *Мишок Лысый*, виртуальный персонаж с идеально отполированной лысиной! 👴✨
 
-*Теперь с сохранением прогресса!* 📀
-Твои шлёпки, уровни и рекорды сохраняются после перезапуска.
+*Теперь с продвинутой статистикой!* 📈
+Детальный анализ твоей активности, сравнение с другими и глобальные тренды.
 
 *Основные команды:*
 /shlep — Шлёпнуть Мишка
-/stats — Статистика
+/stats — Глобальная статистика
 /level — Твой уровень
+/my_stats — Детальная статистика
+/trends — Глобальные тренды
 
 *Для чатов:*
 /chat_stats — Статистика чата
@@ -378,6 +409,122 @@ async def level_command(update: Update, context: ContextTypes.DEFAULT_TYPE, mess
     
     await message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
+# ========== НОВЫЕ КОМАНДЫ СТАТИСТИКИ ==========
+@command_handler
+async def my_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
+    """Детальная статистика пользователя"""
+    user = update.effective_user
+    stats = get_stats_module()
+    
+    # Основная статистика
+    db = get_db()
+    username, user_count, last_shlep = db['get_user_stats'](user.id)
+    level_info = calculate_level(user_count)
+    
+    # Любимое время
+    favorite_time = stats['favorite_time'](user.id)
+    
+    # Сравнение с другими
+    comparison = stats['comparison'](user.id)
+    
+    # Активность за неделю
+    daily_chart = stats['daily_chart'](user.id, 7)
+    
+    text = f"""📈 *ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА*
+
+👤 *Игрок:* {user.first_name}
+📊 *Всего шлёпков:* {format_number(user_count)}
+🎯 *Уровень:* {level_info['level']}
+⚡ *Диапазон урона:* {level_info['min_damage']}-{level_info['max_damage']}
+
+{favorite_time}
+
+📊 *Сравнение с другими:*
+👥 *Всего игроков:* {comparison.get('total_users', 0)}
+📈 *Среднее на игрока:* {comparison.get('avg_shleps', 0)}
+🏆 *Твой ранг:* {comparison.get('rank', 1)}
+📊 *Лучше чем:* {comparison.get('percentile', 0)}% игроков
+
+📅 *Активность за неделю:*
+{daily_chart}
+
+*Используй /trends для глобальной статистики*"""
+    
+    if last_shlep:
+        text += f"\n\n⏰ *Последний шлёпок:* {last_shlep.strftime('%d.%m.%Y %H:%M')}"
+    
+    await message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+
+@command_handler
+async def trends_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
+    """Глобальные тренды и активность"""
+    stats = get_stats_module()
+    trends = stats['global_trends']()
+    
+    if not trends:
+        await message.reply_text("📊 *ГЛОБАЛЬНЫЕ ТРЕНДЫ*\n\nДанные временно недоступны. Попробуйте позже.")
+        return
+    
+    text = f"""📊 *ГЛОБАЛЬНЫЕ ТРЕНДЫ*
+
+👥 *Активных за 24 часа:* {trends.get('active_users_24h', 0)}
+👊 *Шлёпков за 24 часа:* {trends.get('shleps_24h', 0)}
+📈 *Среднее на игрока:* {trends.get('avg_per_user_24h', 0)}
+
+🔥 *Активных сегодня:* {trends.get('active_today', 0)}
+⏰ *Текущий час:* {trends.get('current_hour', 0):02d}:00
+👊 *Шлёпков в этом часу:* {trends.get('shleps_this_hour', 0)}
+📈 *Прогноз на сегодня:* {trends.get('projected_today', 0)}"""
+
+    # Добавляем распределение по часам для первого пользователя из топа
+    db = get_db()
+    top_users = db['get_top_users'](1)
+    if top_users:
+        top_user_id = 1  # Заглушка - нужен реальный user_id
+        hourly_chart = stats['hourly_chart'](top_user_id)
+        text += f"\n\n⏰ *Распределение активности (топ-игрок):*\n{hourly_chart}"
+    
+    text += "\n\n*Используй /my_stats для персональной статистики*"
+    
+    await message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+
+@command_handler
+async def detailed_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
+    """Расширенная статистика с графиками"""
+    user = update.effective_user
+    stats = get_stats_module()
+    
+    # Получаем все данные
+    db = get_db()
+    username, user_count, last_shlep = db['get_user_stats'](user.id)
+    level_info = calculate_level(user_count)
+    
+    favorite_time = stats['favorite_time'](user.id)
+    daily_chart = stats['daily_chart'](user.id, 14)  # 2 недели
+    hourly_chart = stats['hourly_chart'](user.id)
+    
+    text = f"""📊 *РАСШИРЕННАЯ СТАТИСТИКА*
+
+👤 *Игрок:* {user.first_name}
+📊 *Шлёпков:* {format_number(user_count)}
+🎯 *Уровень:* {level_info['level']}
+
+{favorite_time}
+
+📅 *Активность за 2 недели:*
+{daily_chart}
+
+{hourly_chart}
+
+*Команды статистики:*
+/my_stats — Краткая статистика
+/trends — Глобальные тренды
+/stats — Общая статистика
+/level — Уровень"""
+    
+    await message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+
+# ========== КОМАНДЫ ДЛЯ ЧАТОВ ==========
 @command_handler
 @chat_only
 async def chat_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
@@ -495,6 +642,7 @@ async def roles_command(update: Update, context: ContextTypes.DEFAULT_TYPE, mess
     
     await message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
+# ========== ВСПОМОГАТЕЛЬНЫЕ КОМАНДЫ ==========
 @command_handler
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
     """Показывает помощь по командам"""
@@ -505,6 +653,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE, messa
 /shlep — Шлёпнуть Мишка  
 /stats — Глобальная статистика
 /level — Твой уровень
+/my_stats — Детальная статистика
+/detailed_stats — Расширенная статистика
+/trends — Глобальные тренды
 /mishok — О Мишке
 
 *Для чатов:*
@@ -529,9 +680,11 @@ async def backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE, mes
     """Создаёт бэкап базы данных (только для админов)"""
     db = get_db()
     
-    # Простая проверка на админа (можно улучшить)
+    # Простая проверка на админа
     user = update.effective_user
-    if user.id != 123456789:  # Замените на ваш ID
+    from config import ADMIN_ID
+    
+    if user.id != ADMIN_ID:
         await message.reply_text("⚠️ Эта команда только для администраторов!")
         return
     
@@ -560,6 +713,8 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, mes
         "mishok_info": mishok_info_command,
         "chat_stats": chat_stats_command,
         "chat_top": chat_top_command,
+        "my_stats": my_stats_command,
+        "trends": trends_command,
     }
     
     if data in handlers:
@@ -583,12 +738,16 @@ async def handle_quick_callback(update: Update, context: ContextTypes.DEFAULT_TY
         await chat_stats_command(update, context)
     elif data == "quick_level":
         await level_command(update, context)
+    elif data == "quick_my_stats":
+        await my_stats_command(update, context)
     elif data == "quick_daily_top":
         await query.message.reply_text("📊 *ТОП ДНЯ*\n\nСобираем статистику...")
     elif data == "quick_vote":
         await query.message.reply_text("🗳️ *ГОЛОСОВАНИЕ*\n\nИспользуй /vote для создания голосования")
     elif data == "quick_duel":
         await query.message.reply_text("⚔️ *ДУЭЛЬ*\n\nИспользуй /duel @username для вызова")
+    elif data == "quick_trends":
+        await trends_command(update, context)
 
 @command_handler
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
@@ -601,6 +760,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, mes
         "👊 Шлёпнуть Мишка": shlep_command,
         "🎯 Уровень": level_command,
         "📊 Статистика": stats_command,
+        "📈 Моя статистика": my_stats_command,
         "👴 О Мишке": mishok_info_command,
     }
     
@@ -623,6 +783,7 @@ async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE, mess
 /shlep — шлёпнуть Мишка
 /stats — статистика
 /level — уровень
+/my_stats — детальная статистика
 
 *Для чата:*
 /chat_stats — статистика чата
@@ -661,6 +822,9 @@ def main():
         ("shlep", shlep_command),
         ("stats", stats_command),
         ("level", level_command),
+        ("my_stats", my_stats_command),
+        ("trends", trends_command),
+        ("detailed_stats", detailed_stats_command),
         ("help", help_command),
         ("mishok", mishok_info_command),
         ("chat_stats", chat_stats_command),
@@ -668,7 +832,7 @@ def main():
         ("vote", vote_command),
         ("duel", duel_command),
         ("roles", roles_command),
-        ("backup", backup_command),  # Новая команда для админов
+        ("backup", backup_command),
     ]
     
     for name, handler in commands:
@@ -686,6 +850,7 @@ def main():
     print("="*50)
     print(f"• Данные сохраняются в: mishok.db")
     print(f"• Бэкапы создаются в: db_backups/")
+    print(f"• Статистика: включена")
     print(f"• Бот готов к работе!")
     print("="*50)
     
