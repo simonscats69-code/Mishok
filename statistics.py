@@ -1,222 +1,381 @@
+#!/usr/bin/env python3
+"""
+Statistics module for Mishok bot - адаптирован для SQLite
+"""
+
+import sqlite3
 from datetime import datetime, timedelta
-from database import get_connection
-from utils import get_moscow_time
+from typing import Dict, List, Optional, Any
+from database import get_detailed_stats, get_global_trends
 
 class StatisticsSystem:
     def __init__(self):
         pass
     
-    def record_shlep(self, user_id: int, timestamp: datetime = None):
-        if timestamp is None:
-            timestamp = get_moscow_time()
+    def get_daily_activity(self, user_id: int, days: int = 7) -> Dict[str, int]:
+        """
+        Возвращает активность пользователя по дням
         
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                date = timestamp.date()
-                hour = timestamp.hour
-                
-                cur.execute("""
-                    INSERT INTO detailed_stats (user_id, stat_date, hour, shlep_count)
-                    VALUES (%s, %s, %s, 1)
-                    ON CONFLICT (user_id, stat_date, hour) 
-                    DO UPDATE SET shlep_count = detailed_stats.shlep_count + 1
-                """, (user_id, date, hour))
-                
-                conn.commit()
-    
-    def get_daily_activity(self, user_id: int, days: int = 7):
-        end_date = get_moscow_time().date()
-        start_date = end_date - timedelta(days=days-1)
+        Args:
+            user_id: ID пользователя
+            days: количество дней для анализа (по умолчанию 7)
         
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT stat_date, SUM(shlep_count) as daily_shleps
-                    FROM detailed_stats
-                    WHERE user_id = %s AND stat_date BETWEEN %s AND %s
-                    GROUP BY stat_date
-                    ORDER BY stat_date
-                """, (user_id, start_date, end_date))
-                
-                result = {}
-                current_date = start_date
-                while current_date <= end_date:
-                    result[current_date.strftime("%d.%m")] = 0
-                    current_date += timedelta(days=1)
-                
-                for date, count in cur.fetchall():
-                    result[date.strftime("%d.%m")] = count
-                
-                return result
+        Returns:
+            Словарь {дата: количество_шлёпков}
+        """
+        try:
+            stats = get_detailed_stats(user_id, days)
+            daily_data = stats.get('daily_activity', {})
+            
+            # Форматируем даты
+            result = {}
+            for date_obj, count in daily_data.items():
+                if isinstance(date_obj, str):
+                    date_str = date_obj
+                else:
+                    date_str = date_obj.strftime("%d.%m")
+                result[date_str] = count
+            
+            return result
+        except Exception as e:
+            print(f"❌ Ошибка в get_daily_activity: {e}")
+            return {}
     
-    def get_hourly_distribution(self, user_id: int, days: int = 30):
-        end_date = get_moscow_time().date()
-        start_date = end_date - timedelta(days=days-1)
+    def get_hourly_distribution(self, user_id: int, days: int = 30) -> List[int]:
+        """
+        Возвращает распределение шлёпков по часам суток
         
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT hour, SUM(shlep_count) as total
-                    FROM detailed_stats
-                    WHERE user_id = %s AND stat_date BETWEEN %s AND %s
-                    GROUP BY hour
-                    ORDER BY hour
-                """, (user_id, start_date, end_date))
-                
-                distribution = [0] * 24
-                for hour, total in cur.fetchall():
-                    distribution[hour] = total
-                
-                return distribution
+        Args:
+            user_id: ID пользователя
+            days: количество дней для анализа
+        
+        Returns:
+            Список из 24 чисел - количество шлёпков в каждый час
+        """
+        try:
+            stats = get_detailed_stats(user_id, days)
+            return stats.get('hourly_distribution', [0] * 24)
+        except Exception as e:
+            print(f"❌ Ошибка в get_hourly_distribution: {e}")
+            return [0] * 24
     
-    def get_favorite_time(self, user_id: int):
+    def get_favorite_time(self, user_id: int) -> str:
+        """
+        Определяет любимое время пользователя для шлёпков
+        
+        Args:
+            user_id: ID пользователя
+        
+        Returns:
+            Строка с описанием любимого времени
+        """
         distribution = self.get_hourly_distribution(user_id, 30)
         
         if not any(distribution):
-            return "Пока нет данных о твоей активности"
+            return "Пока нет данных о твоей активности 📊"
         
         max_hour = distribution.index(max(distribution))
         max_count = max(distribution)
         
+        # Определяем время суток
+        if 0 <= max_hour < 6:
+            time_desc = "ночью 🌙"
+            time_range = "с 0:00 до 6:00"
+        elif 6 <= max_hour < 12:
+            time_desc = "утром 🌅"
+            time_range = "с 6:00 до 12:00"
+        elif 12 <= max_hour < 18:
+            time_desc = "днём ☀️"
+            time_range = "с 12:00 до 18:00"
+        else:
+            time_desc = "вечером 🌆"
+            time_range = "с 18:00 до 24:00"
+        
+        hour_formatted = f"{max_hour:02d}:00"
+        
         times_of_day = [
-            (0, 5, "ночью 🌙", "с 0:00 до 6:00"),
-            (6, 11, "утром 🌅", "с 6:00 до 12:00"),
-            (12, 17, "днём ☀️", "с 12:00 до 18:00"),
-            (18, 23, "вечером 🌆", "с 18:00 до 24:00")
+            (0, 5, "🌙 Ночью (0-6)", sum(distribution[0:6])),
+            (6, 11, "🌅 Утром (6-12)", sum(distribution[6:12])),
+            (12, 17, "☀️ Днём (12-18)", sum(distribution[12:18])),
+            (18, 23, "🌆 Вечером (18-24)", sum(distribution[18:24]))
         ]
         
-        time_desc = ""
-        time_range = ""
-        for start, end, description, range_text in times_of_day:
-            if start <= max_hour <= end:
-                time_desc = description
-                time_range = range_text
-                break
+        # Находим самое активное время суток
+        best_period = max(times_of_day, key=lambda x: x[3])
         
-        hour_formatted = f"{max_hour}:00"
-        return f"Чаще всего шлёпаешь {time_desc} ({hour_formatted})\nВсего шлёпков в это время: {max_count}"
+        return (
+            f"⏰ *Любимое время:* {time_desc} ({hour_formatted})\n"
+            f"📊 *Шлёпков в этот час:* {max_count}\n"
+            f"🎯 *Самое активное время суток:* {best_period[2]}\n"
+            f"📈 *Всего шлёпков {best_period[2].split()[0].lower()}:* {best_period[3]}"
+        )
     
-    def get_activity_summary(self, user_id: int):
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT 
-                        COUNT(DISTINCT stat_date) as active_days,
-                        SUM(shlep_count) as total_shleps,
-                        MAX(stat_date) as last_active,
-                        AVG(shlep_count) as daily_avg
-                    FROM detailed_stats
-                    WHERE user_id = %s
-                """, (user_id,))
-                
-                result = cur.fetchone()
-                if not result or result[0] is None:
-                    return {
-                        'active_days': 0,
-                        'total_shleps': 0,
-                        'last_active': None,
-                        'daily_avg': 0
-                    }
-                
-                active_days, total_shleps, last_active, daily_avg = result
-                
-                cur.execute("""
-                    SELECT stat_date, SUM(shlep_count) as daily_total
-                    FROM detailed_stats
-                    WHERE user_id = %s
-                    GROUP BY stat_date
-                    ORDER BY daily_total DESC
-                    LIMIT 1
-                """, (user_id,))
-                
-                best_day_result = cur.fetchone()
-                best_day = best_day_result[0] if best_day_result else None
-                best_day_count = best_day_result[1] if best_day_result else 0
-                
-                return {
-                    'active_days': active_days or 0,
-                    'total_shleps': total_shleps or 0,
-                    'last_active': last_active,
-                    'daily_avg': round(daily_avg or 0, 1),
-                    'best_day': best_day,
-                    'best_day_count': best_day_count or 0
-                }
+    def get_activity_summary(self, user_id: int) -> Dict[str, Any]:
+        """
+        Возвращает сводку активности пользователя
+        
+        Args:
+            user_id: ID пользователя
+        
+        Returns:
+            Словарь с различными метриками активности
+        """
+        try:
+            stats = get_detailed_stats(user_id, 365)  # За весь период
+            summary = stats.get('summary', {})
+            
+            # Добавляем дополнительные метрики
+            hourly = self.get_hourly_distribution(user_id, 30)
+            if any(hourly):
+                summary['most_active_hour'] = hourly.index(max(hourly))
+                summary['avg_per_day'] = summary.get('daily_avg', 0)
+            
+            return summary
+        except Exception as e:
+            print(f"❌ Ошибка в get_activity_summary: {e}")
+            return {
+                'active_days': 0,
+                'total_shleps': 0,
+                'last_active': None,
+                'daily_avg': 0,
+                'best_day': None,
+                'best_day_count': 0
+            }
     
-    def get_comparison_stats(self, user_id: int):
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT 
-                        COUNT(DISTINCT user_id) as total_users,
-                        AVG(total_shleps) as avg_shleps_per_user,
-                        PERCENT_RANK() OVER (ORDER BY shlep_count) as user_percentile
-                    FROM user_stats us
-                    CROSS JOIN (
-                        SELECT AVG(shlep_count) as avg_shleps FROM user_stats
-                    ) avg_stats
-                    WHERE us.user_id = %s
-                """, (user_id,))
-                
-                result = cur.fetchone()
-                if not result:
-                    return {
-                        'total_users': 0,
-                        'avg_shleps': 0,
-                        'percentile': 0
-                    }
-                
-                total_users, avg_shleps, percentile = result
-                
-                cur.execute("""
-                    SELECT COUNT(*) as user_rank
-                    FROM user_stats
-                    WHERE shlep_count > (
-                        SELECT shlep_count FROM user_stats WHERE user_id = %s
-                    )
-                """, (user_id,))
-                
-                rank_result = cur.fetchone()
-                rank = rank_result[0] + 1 if rank_result else 1
-                
+    def get_comparison_stats(self, user_id: int) -> Dict[str, Any]:
+        """
+        Сравнивает пользователя с другими
+        
+        Args:
+            user_id: ID пользователя
+        
+        Returns:
+            Словарь с метриками сравнения
+        """
+        try:
+            # Подключаемся к базе для сложных запросов
+            conn = sqlite3.connect("mishok.db")
+            cursor = conn.cursor()
+            
+            # Общее количество пользователей
+            cursor.execute("SELECT COUNT(DISTINCT user_id) as total_users FROM shleps WHERE user_id > 0")
+            total_users = cursor.fetchone()[0] or 0
+            
+            if total_users == 0:
                 return {
-                    'total_users': total_users or 0,
-                    'avg_shleps': round(avg_shleps or 0, 1),
-                    'percentile': round((percentile or 0) * 100, 1),
-                    'rank': rank
+                    'total_users': 0,
+                    'avg_shleps': 0,
+                    'percentile': 0,
+                    'rank': 1
                 }
+            
+            # Среднее количество шлёпков на пользователя
+            cursor.execute("""
+                SELECT AVG(user_count) as avg_shleps 
+                FROM (
+                    SELECT user_id, COUNT(*) as user_count 
+                    FROM shleps 
+                    GROUP BY user_id
+                )
+            """)
+            avg_shleps = cursor.fetchone()[0] or 0
+            
+            # Количество шлёпков текущего пользователя
+            cursor.execute("SELECT COUNT(*) FROM shleps WHERE user_id = ?", (user_id,))
+            user_shleps = cursor.fetchone()[0] or 0
+            
+            # Процент пользователей с меньшим количеством шлёпков
+            cursor.execute("""
+                SELECT COUNT(DISTINCT user_id) as better_users
+                FROM shleps
+                GROUP BY user_id
+                HAVING COUNT(*) > ?
+            """, (user_shleps,))
+            better_users = cursor.fetchone()
+            better_users = better_users[0] if better_users else 0
+            
+            rank = better_users + 1
+            percentile = ((total_users - better_users) / total_users * 100) if total_users > 0 else 0
+            
+            conn.close()
+            
+            return {
+                'total_users': total_users,
+                'avg_shleps': round(avg_shleps, 1),
+                'percentile': round(percentile, 1),
+                'rank': rank,
+                'user_shleps': user_shleps,
+                'better_than': round(percentile, 1)
+            }
+            
+        except Exception as e:
+            print(f"❌ Ошибка в get_comparison_stats: {e}")
+            return {
+                'total_users': 0,
+                'avg_shleps': 0,
+                'percentile': 0,
+                'rank': 1
+            }
     
-    def get_global_trends(self):
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT 
-                        COUNT(DISTINCT user_id) as active_users_24h,
-                        SUM(shlep_count) as shleps_24h,
-                        COUNT(DISTINCT CASE WHEN stat_date = CURRENT_DATE THEN user_id END) as active_today
-                    FROM detailed_stats
-                    WHERE stat_date >= CURRENT_DATE - INTERVAL '1 day'
-                """)
-                
-                result = cur.fetchone()
-                active_24h, shleps_24h, active_today = result
-                
-                cur.execute("""
-                    SELECT 
-                        EXTRACT(HOUR FROM NOW()) as current_hour,
-                        COALESCE(SUM(shlep_count), 0) as shleps_this_hour
-                    FROM detailed_stats
-                    WHERE stat_date = CURRENT_DATE 
-                    AND hour = EXTRACT(HOUR FROM NOW())
-                """)
-                
-                hour_result = cur.fetchone()
-                current_hour = int(hour_result[0]) if hour_result[0] else 0
-                shleps_this_hour = hour_result[1] if hour_result[1] else 0
-                
-                return {
-                    'active_users_24h': active_24h or 0,
-                    'shleps_24h': shleps_24h or 0,
-                    'active_today': active_today or 0,
-                    'current_hour': current_hour,
-                    'shleps_this_hour': shleps_this_hour
-                }
+    def get_global_trends_info(self) -> Dict[str, Any]:
+        """
+        Возвращает глобальные тренды
+        
+        Returns:
+            Словарь с глобальной статистикой
+        """
+        try:
+            trends = get_global_trends()
+            
+            # Добавляем дополнительные вычисления
+            if trends['shleps_24h'] > 0 and trends['active_users_24h'] > 0:
+                trends['avg_per_user_24h'] = round(trends['shleps_24h'] / trends['active_users_24h'], 1)
+            else:
+                trends['avg_per_user_24h'] = 0
+            
+            # Прогноз на сегодня
+            if trends['current_hour'] > 0:
+                avg_per_hour = trends['shleps_this_hour'] / (trends['current_hour'] + 1)
+                trends['projected_today'] = int(avg_per_hour * 24)
+            else:
+                trends['projected_today'] = 0
+            
+            return trends
+            
+        except Exception as e:
+            print(f"❌ Ошибка в get_global_trends_info: {e}")
+            return {
+                'active_users_24h': 0,
+                'shleps_24h': 0,
+                'active_today': 0,
+                'current_hour': 0,
+                'shleps_this_hour': 0
+            }
+    
+    def format_daily_activity_chart(self, user_id: int, days: int = 7) -> str:
+        """
+        Форматирует активность в виде текстового графика
+        
+        Args:
+            user_id: ID пользователя
+            days: количество дней
+        
+        Returns:
+            Строка с текстовым графиком
+        """
+        activity = self.get_daily_activity(user_id, days)
+        
+        if not activity:
+            return "📊 Нет данных за последние дни"
+        
+        # Сортируем по дате
+        sorted_dates = sorted(activity.items())
+        
+        # Находим максимум для масштабирования
+        max_count = max(activity.values()) if activity else 1
+        
+        chart_lines = []
+        for date_str, count in sorted_dates[-days:]:  # Последние N дней
+            if max_count > 0:
+                bar_length = int((count / max_count) * 20)  # Макс 20 символов
+            else:
+                bar_length = 0
+            
+            bar = "█" * bar_length
+            if bar_length < 20:
+                bar += "░" * (20 - bar_length)
+            
+            emoji = "🔥" if count > 10 else "⚡" if count > 5 else "👉" if count > 0 else "⏸️"
+            
+            chart_lines.append(f"{emoji} {date_str}: {bar} {count}")
+        
+        return "\n".join(chart_lines)
+    
+    def format_hourly_distribution_chart(self, user_id: int) -> str:
+        """
+        Форматирует распределение по часам в виде текстового графика
+        
+        Args:
+            user_id: ID пользователя
+        
+        Returns:
+            Строка с текстовым графиком
+        """
+        distribution = self.get_hourly_distribution(user_id, 30)
+        
+        if not any(distribution):
+            return "⏰ Нет данных о распределении по часам"
+        
+        max_count = max(distribution)
+        
+        chart_lines = ["⏰ *Распределение по часам:*"]
+        
+        # Группируем по 4 часа для компактности
+        for block_start in range(0, 24, 4):
+            block_end = block_start + 3
+            block_data = distribution[block_start:block_end+1]
+            block_total = sum(block_data)
+            
+            if max_count > 0:
+                bar_length = int((block_total / max_count) * 15)  # Макс 15 символов
+            else:
+                bar_length = 0
+            
+            bar = "█" * bar_length
+            if bar_length < 15:
+                bar += "░" * (15 - bar_length)
+            
+            time_range = f"{block_start:02d}:00-{block_end:02d}:00"
+            chart_lines.append(f"{time_range}: {bar} {block_total}")
+        
+        return "\n".join(chart_lines)
+
+# ========== ГЛОБАЛЬНЫЙ ЭКЗЕМПЛЯР ==========
+stats_system = StatisticsSystem()
+
+# ========== ИНТЕРФЕЙС ДЛЯ ИМПОРТА ==========
+def get_daily_activity(user_id: int, days: int = 7):
+    return stats_system.get_daily_activity(user_id, days)
+
+def get_hourly_distribution(user_id: int, days: int = 30):
+    return stats_system.get_hourly_distribution(user_id, days)
+
+def get_favorite_time(user_id: int):
+    return stats_system.get_favorite_time(user_id)
+
+def get_activity_summary(user_id: int):
+    return stats_system.get_activity_summary(user_id)
+
+def get_comparison_stats(user_id: int):
+    return stats_system.get_comparison_stats(user_id)
+
+def get_global_trends_info():
+    return stats_system.get_global_trends_info()
+
+def format_daily_activity_chart(user_id: int, days: int = 7):
+    return stats_system.format_daily_activity_chart(user_id, days)
+
+def format_hourly_distribution_chart(user_id: int):
+    return stats_system.format_hourly_distribution_chart(user_id)
+
+if __name__ == "__main__":
+    print("🔍 Тестирование модуля статистики...")
+    print("=" * 50)
+    
+    # Тестовые данные
+    test_user_id = 123456
+    
+    print("1. Любимое время:")
+    print(get_favorite_time(test_user_id))
+    
+    print("\n2. Глобальные тренды:")
+    trends = get_global_trends_info()
+    for key, value in trends.items():
+        print(f"   {key}: {value}")
+    
+    print("\n3. Сравнительная статистика:")
+    comparison = get_comparison_stats(test_user_id)
+    for key, value in comparison.items():
+        print(f"   {key}: {value}")
+    
+    print("=" * 50)
