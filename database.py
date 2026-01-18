@@ -1,25 +1,73 @@
-import psycopg2
 import os
-from config import DATABASE_URL
 from contextlib import contextmanager
 from datetime import datetime
+
+# ========== КОНФИГУРАЦИЯ ==========
+from config import DATABASE_URL
+
+# Проверяем доступность psycopg2
+try:
+    import psycopg2
+    PSYCOPG2_AVAILABLE = True
+except ImportError:
+    PSYCOPG2_AVAILABLE = False
+    print("⚠️ psycopg2 не установлен, используется заглушка БД")
+
+# ========== СОЕДИНЕНИЕ С БАЗОЙ ==========
 
 @contextmanager
 def get_connection():
     """Получить соединение с базой данных"""
-    conn = psycopg2.connect(DATABASE_URL)
+    # Если psycopg2 не установлен или DATABASE_URL не настроен
+    if not PSYCOPG2_AVAILABLE or not DATABASE_URL or "your_database_url" in DATABASE_URL:
+        # Заглушка для разработки
+        class StubConnection:
+            def cursor(self): 
+                return StubCursor()
+            def commit(self): 
+                pass
+            def close(self): 
+                pass
+        
+        class StubCursor:
+            def execute(self, query, params=None):
+                # print(f"STUB EXECUTE: {query[:50]}...")
+                return None
+            def fetchone(self):
+                return (0, None)  # Для глобальной статистики
+            def fetchall(self):
+                return []
+            def __enter__(self):
+                return self
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                pass
+        
+        yield StubConnection()
+        return
+    
+    # Реальное соединение с PostgreSQL
     try:
-        yield conn
-    finally:
-        conn.close()
+        conn = psycopg2.connect(DATABASE_URL)
+        try:
+            yield conn
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"❌ Ошибка подключения к БД: {e}")
+        # Возвращаем заглушку при ошибке
+        yield None
+
+# ========== ИНИЦИАЛИЗАЦИЯ БАЗЫ ==========
 
 def init_db():
     """Инициализация всех таблиц"""
     with get_connection() as conn:
+        if conn is None:
+            print("⚠️ БД не инициализирована (нет соединения)")
+            return
+        
         with conn.cursor() as cur:
-            # ===== ОСНОВНЫЕ ТАБЛИЦЫ =====
-            
-            # Глобальная статистика
+            # ===== 1. ГЛОБАЛЬНАЯ СТАТИСТИКА =====
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS global_stats (
                     id SERIAL PRIMARY KEY,
@@ -28,7 +76,7 @@ def init_db():
                 )
             """)
             
-            # Статистика пользователей
+            # ===== 2. СТАТИСТИКА ПОЛЬЗОВАТЕЛЕЙ =====
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS user_stats (
                     user_id BIGINT PRIMARY KEY,
@@ -38,7 +86,7 @@ def init_db():
                 )
             """)
             
-            # Очки пользователей
+            # ===== 3. ОЧКИ ПОЛЬЗОВАТЕЛЕЙ =====
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS user_points (
                     user_id BIGINT PRIMARY KEY,
@@ -47,8 +95,7 @@ def init_db():
                 )
             """)
             
-            # ===== СИСТЕМА ДОСТИЖЕНИЙ =====
-            
+            # ===== 4. ДОСТИЖЕНИЯ =====
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS user_achievements (
                     user_id BIGINT,
@@ -58,8 +105,7 @@ def init_db():
                 )
             """)
             
-            # ===== СИСТЕМА УРОВНЕЙ =====
-            
+            # ===== 5. УРОВНИ И ОПЫТ =====
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS user_xp (
                     user_id BIGINT PRIMARY KEY,
@@ -78,18 +124,7 @@ def init_db():
                 )
             """)
             
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS level_ups (
-                    id SERIAL PRIMARY KEY,
-                    user_id BIGINT,
-                    level INT,
-                    reward INT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            
-            # ===== СИСТЕМА НАВЫКОВ =====
-            
+            # ===== 6. НАВЫКИ =====
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS user_skills (
                     user_id BIGINT,
@@ -99,8 +134,7 @@ def init_db():
                 )
             """)
             
-            # ===== ДЕТАЛЬНАЯ СТАТИСТИКА =====
-            
+            # ===== 7. ДЕТАЛЬНАЯ СТАТИСТИКА =====
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS detailed_stats (
                     user_id BIGINT,
@@ -111,20 +145,7 @@ def init_db():
                 )
             """)
             
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS shlep_sessions (
-                    id SERIAL PRIMARY KEY,
-                    user_id BIGINT,
-                    start_time TIMESTAMP,
-                    end_time TIMESTAMP,
-                    shlep_count INT,
-                    avg_speed FLOAT,
-                    max_combo INT
-                )
-            """)
-            
-            # ===== РЕКОРДЫ =====
-            
+            # ===== 8. РЕКОРДЫ =====
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS records (
                     record_type VARCHAR(50) PRIMARY KEY,
@@ -134,8 +155,7 @@ def init_db():
                 )
             """)
             
-            # ===== ГЛОБАЛЬНЫЕ ЦЕЛИ =====
-            
+            # ===== 9. ГЛОБАЛЬНЫЕ ЦЕЛИ =====
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS global_goals (
                     id SERIAL PRIMARY KEY,
@@ -150,8 +170,7 @@ def init_db():
                 )
             """)
             
-            # ===== СОБЫТИЯ =====
-            
+            # ===== 10. СОБЫТИЯ =====
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS active_events (
                     event_type VARCHAR(50) PRIMARY KEY,
@@ -162,8 +181,7 @@ def init_db():
                 )
             """)
             
-            # ===== ЕЖЕДНЕВНЫЕ ЗАДАНИЯ =====
-            
+            # ===== 11. ЗАДАНИЯ =====
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS user_daily_tasks (
                     user_id BIGINT,
@@ -175,20 +193,39 @@ def init_db():
                 )
             """)
             
-            # Инициализируем глобальную статистику
+            # ===== ИНИЦИАЛИЗАЦИЯ ДАННЫХ =====
+            
+            # Глобальная статистика
             cur.execute("SELECT COUNT(*) FROM global_stats")
             if cur.fetchone()[0] == 0:
                 cur.execute("INSERT INTO global_stats (total_shleps) VALUES (0)")
             
+            # Глобальные цели
+            cur.execute("SELECT COUNT(*) FROM global_goals")
+            if cur.fetchone()[0] == 0:
+                cur.execute("""
+                    INSERT INTO global_goals 
+                    (goal_name, target_value, current_value, reward_type, reward_value, is_active)
+                    VALUES 
+                    ('Миллионный шлёпок 🎯', 1000000, 0, 'points', 10000, TRUE),
+                    ('Неделя активности 📈', 50000, 0, 'multiplier', 150, TRUE)
+                """)
+            
             conn.commit()
+            print("✅ База данных инициализирована")
+
+# ========== ОСНОВНЫЕ ФУНКЦИИ ==========
 
 def add_shlep(user_id: int, username: str):
     """Добавить шлёпок в статистику"""
     with get_connection() as conn:
+        if conn is None:
+            return (0, 0)  # Заглушка
+        
         with conn.cursor() as cur:
             now = datetime.now()
             
-            # Обновляем глобальную статистику
+            # 1. Обновляем глобальную статистику
             cur.execute("""
                 UPDATE global_stats 
                 SET total_shleps = total_shleps + 1, last_shlep = %s
@@ -197,7 +234,7 @@ def add_shlep(user_id: int, username: str):
             """, (now,))
             total = cur.fetchone()[0]
             
-            # Обновляем статистику пользователя
+            # 2. Обновляем статистику пользователя
             cur.execute("""
                 INSERT INTO user_stats (user_id, username, shlep_count, last_shlep)
                 VALUES (%s, %s, 1, %s)
@@ -210,22 +247,33 @@ def add_shlep(user_id: int, username: str):
             """, (user_id, username, now, now))
             user_count = cur.fetchone()[0]
             
+            # 3. Обновляем глобальные цели
+            cur.execute("""
+                UPDATE global_goals 
+                SET current_value = current_value + 1
+                WHERE is_active = TRUE
+            """)
+            
             conn.commit()
             return total, user_count
 
 def get_stats():
     """Получить глобальную статистику"""
     with get_connection() as conn:
+        if conn is None:
+            return (0, None)  # Заглушка
+        
         with conn.cursor() as cur:
             cur.execute("SELECT total_shleps, last_shlep FROM global_stats WHERE id = 1")
             result = cur.fetchone()
-            if result:
-                return result
-            return (0, None)
+            return result if result else (0, None)
 
 def get_top_users(limit=10):
     """Топ пользователей по шлёпкам"""
     with get_connection() as conn:
+        if conn is None:
+            return []  # Заглушка
+        
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT username, shlep_count 
@@ -238,6 +286,9 @@ def get_top_users(limit=10):
 def add_points(user_id: int, points: int):
     """Добавить очки пользователю"""
     with get_connection() as conn:
+        if conn is None:
+            return 0  # Заглушка
+        
         with conn.cursor() as cur:
             now = datetime.now()
             
@@ -258,6 +309,9 @@ def add_points(user_id: int, points: int):
 def get_user_points(user_id: int):
     """Получить очки пользователя"""
     with get_connection() as conn:
+        if conn is None:
+            return 0  # Заглушка
+        
         with conn.cursor() as cur:
             cur.execute("SELECT points FROM user_points WHERE user_id = %s", (user_id,))
             result = cur.fetchone()
@@ -266,6 +320,9 @@ def get_user_points(user_id: int):
 def get_user_stats(user_id: int):
     """Получить статистику пользователя"""
     with get_connection() as conn:
+        if conn is None:
+            return (None, 0, None)  # Заглушка
+        
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT username, shlep_count, last_shlep 
@@ -273,3 +330,38 @@ def get_user_stats(user_id: int):
                 WHERE user_id = %s
             """, (user_id,))
             return cur.fetchone()
+
+# ========== ФУНКЦИИ ДЛЯ СИСТЕМ ==========
+
+def get_connection_for_system():
+    """Упрощённая версия для импорта в другие системы"""
+    return get_connection()
+
+def execute_query(query, params=None):
+    """Выполнить произвольный запрос"""
+    with get_connection() as conn:
+        if conn is None:
+            return None
+        
+        with conn.cursor() as cur:
+            cur.execute(query, params or ())
+            if query.strip().upper().startswith('SELECT'):
+                return cur.fetchall()
+            conn.commit()
+            return None
+
+# ========== ТЕСТОВАЯ ФУНКЦИЯ ==========
+
+def test_connection():
+    """Тест соединения с БД"""
+    try:
+        with get_connection() as conn:
+            if conn is None:
+                return False, "БД не настроена (используется заглушка)"
+            
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                result = cur.fetchone()
+                return True, "✅ Соединение с БД успешно"
+    except Exception as e:
+        return False, f"❌ Ошибка соединения: {e}"
