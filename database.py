@@ -9,11 +9,47 @@ try:
     PSYCOPG2_AVAILABLE = True
 except ImportError:
     PSYCOPG2_AVAILABLE = False
-    print("⚠️ psycopg2 не установлен, используется заглушка БД")
+
+class FakeDatabase:
+    """Заглушка базы данных для работы без PostgreSQL"""
+    def __init__(self):
+        self.global_stats = {'total_shleps': 0, 'last_shlep': None}
+        self.user_stats = {}
+        self.user_points = {}
+        self.user_achievements = {}
+        self.user_xp = {}
+        self.user_skills = {}
+        self.detailed_stats = []
+        self.records = {}
+        self.global_goals = [
+            {'id': 1, 'goal_name': 'Миллионный шлёпок 🎯', 'target_value': 1000000, 'current_value': 0, 'is_active': True},
+            {'id': 2, 'goal_name': 'Неделя активности 📈', 'target_value': 50000, 'current_value': 0, 'is_active': True}
+        ]
+        self.user_daily_tasks = {}
+    
+    def add_shlep(self, user_id: int, username: str):
+        now = datetime.now()
+        self.global_stats['total_shleps'] += 1
+        self.global_stats['last_shlep'] = now
+        
+        if user_id not in self.user_stats:
+            self.user_stats[user_id] = {'username': username, 'shlep_count': 0, 'last_shlep': None}
+        
+        self.user_stats[user_id]['shlep_count'] += 1
+        self.user_stats[user_id]['last_shlep'] = now
+        self.user_stats[user_id]['username'] = username
+        
+        for goal in self.global_goals:
+            if goal['is_active']:
+                goal['current_value'] += 1
+        
+        return self.global_stats['total_shleps'], self.user_stats[user_id]['shlep_count']
+
+fake_db = FakeDatabase()
 
 @contextmanager
 def get_connection():
-    if not PSYCOPG2_AVAILABLE or not DATABASE_URL or "your_database_url" in DATABASE_URL:
+    if not PSYCOPG2_AVAILABLE or not DATABASE_URL:
         class StubConnection:
             def cursor(self): 
                 return StubCursor()
@@ -21,17 +57,67 @@ def get_connection():
                 pass
             def close(self): 
                 pass
-        
-        class StubCursor:
-            def execute(self, query, params=None):
-                return None
-            def fetchone(self):
-                return (0, None)
-            def fetchall(self):
-                return []
             def __enter__(self):
                 return self
-            def __exit__(self, exc_type, exc_val, exc_tb):
+            def __exit__(self, *args):
+                pass
+        
+        class StubCursor:
+            def __init__(self):
+                self.result = None
+            
+            def execute(self, query, params=None):
+                query_lower = query.lower().strip()
+                
+                if "insert into global_stats" in query_lower:
+                    fake_db.global_stats = {'total_shleps': 0, 'last_shlep': None}
+                elif "update global_stats" in query_lower and "returning total_shleps" in query_lower:
+                    fake_db.global_stats['last_shlep'] = params[0] if params else datetime.now()
+                    self.result = [(fake_db.global_stats['total_shleps'],)]
+                elif "select total_shleps, last_shlep from global_stats" in query_lower:
+                    self.result = [(fake_db.global_stats['total_shleps'], fake_db.global_stats['last_shlep'])]
+                elif "insert into user_stats" in query_lower or "update user_stats" in query_lower:
+                    if "returning shlep_count" in query_lower:
+                        user_id = params[0]
+                        self.result = [(fake_db.user_stats.get(user_id, {}).get('shlep_count', 1),)]
+                elif "select username, shlep_count from user_stats" in query_lower:
+                    users = []
+                    for uid, data in fake_db.user_stats.items():
+                        users.append((data['username'], data['shlep_count']))
+                    users.sort(key=lambda x: x[1], reverse=True)
+                    limit = params[0] if params else 10
+                    self.result = users[:limit]
+                elif "select points from user_points" in query_lower:
+                    user_id = params[0]
+                    self.result = [(fake_db.user_points.get(user_id, 0),)]
+                elif "insert into user_points" in query_lower or "update user_points" in query_lower:
+                    if "returning points" in query_lower:
+                        user_id = params[0]
+                        points = params[1]
+                        fake_db.user_points[user_id] = fake_db.user_points.get(user_id, 0) + points
+                        self.result = [(fake_db.user_points[user_id],)]
+                elif "select username, shlep_count, last_shlep from user_stats" in query_lower:
+                    user_id = params[0]
+                    data = fake_db.user_stats.get(user_id)
+                    if data:
+                        self.result = [(data['username'], data['shlep_count'], data['last_shlep'])]
+                    else:
+                        self.result = []
+                
+                return self
+            
+            def fetchone(self):
+                if self.result and len(self.result) > 0:
+                    return self.result[0]
+                return None
+            
+            def fetchall(self):
+                return self.result or []
+            
+            def __enter__(self):
+                return self
+            
+            def __exit__(self, *args):
                 pass
         
         yield StubConnection()
@@ -218,6 +304,9 @@ def init_db():
             print("✅ База данных инициализирована")
 
 def add_shlep(user_id: int, username: str):
+    if not DATABASE_URL:
+        return fake_db.add_shlep(user_id, username)
+    
     with get_connection() as conn:
         if conn is None:
             return (0, 0)
@@ -255,6 +344,9 @@ def add_shlep(user_id: int, username: str):
             return total, user_count
 
 def get_stats():
+    if not DATABASE_URL:
+        return (fake_db.global_stats['total_shleps'], fake_db.global_stats['last_shlep'])
+    
     with get_connection() as conn:
         if conn is None:
             return (0, None)
@@ -265,6 +357,13 @@ def get_stats():
             return result if result else (0, None)
 
 def get_top_users(limit=10):
+    if not DATABASE_URL:
+        users = []
+        for uid, data in fake_db.user_stats.items():
+            users.append((data['username'], data['shlep_count']))
+        users.sort(key=lambda x: x[1], reverse=True)
+        return users[:limit]
+    
     with get_connection() as conn:
         if conn is None:
             return []
@@ -279,6 +378,10 @@ def get_top_users(limit=10):
             return cur.fetchall()
 
 def add_points(user_id: int, points: int):
+    if not DATABASE_URL:
+        fake_db.user_points[user_id] = fake_db.user_points.get(user_id, 0) + points
+        return fake_db.user_points[user_id]
+    
     with get_connection() as conn:
         if conn is None:
             return 0
@@ -301,6 +404,9 @@ def add_points(user_id: int, points: int):
             return result[0] if result else 0
 
 def get_user_points(user_id: int):
+    if not DATABASE_URL:
+        return fake_db.user_points.get(user_id, 0)
+    
     with get_connection() as conn:
         if conn is None:
             return 0
@@ -311,6 +417,12 @@ def get_user_points(user_id: int):
             return result[0] if result else 0
 
 def get_user_stats(user_id: int):
+    if not DATABASE_URL:
+        data = fake_db.user_stats.get(user_id)
+        if data:
+            return (data['username'], data['shlep_count'], data['last_shlep'])
+        return (None, 0, None)
+    
     with get_connection() as conn:
         if conn is None:
             return (None, 0, None)
@@ -339,6 +451,9 @@ def execute_query(query, params=None):
             return None
 
 def test_connection():
+    if not DATABASE_URL:
+        return True, "✅ Используется заглушка БД (без PostgreSQL)"
+    
     try:
         with get_connection() as conn:
             if conn is None:
