@@ -179,4 +179,145 @@ async def my_rating_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if daily_pos:
         text += f"📊 *За день:* #{daily_pos} ({daily_count} шлёпков)\n"
     else:
-        text += "📊 *
+        text += "📊 *За день:* не в топе\n"
+    
+    if weekly_pos:
+        text += f"📈 *За неделю:* #{weekly_pos} ({weekly_count} шлёпков)\n"
+    else:
+        text += "📈 *За неделю:* не в топе\n"
+    
+    # Получаем общее количество шлёпков
+    from database import get_connection
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT shlep_count FROM user_stats WHERE user_id = %s", (user.id,))
+            result = cur.fetchone()
+            total = result[0] if result else 0
+    
+    text += f"\n🎯 *Всего шлёпков:* {total}"
+    
+    await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN)
+
+# Обновляем функцию process_shlep для работы с системами:
+
+async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_callback: bool):
+    """Основная логика шлёпка с системами"""
+    user = update.effective_user
+    chat = update.effective_chat
+    
+    # Добавляем в статистику
+    total, user_count = add_shlep(user.id, user.username or user.first_name)
+    
+    # Проверяем достижения
+    new_achievements = achievement_system.check_achievements(user.id, user_count)
+    
+    # Обновляем задачи
+    completed_tasks = task_system.update_task_progress(user.id)
+    
+    # Выбираем случайную реакцию
+    reaction = random.choice(MISHOK_REACTIONS)
+    
+    # Формируем сообщение
+    message_text = f"""
+{reaction}
+
+*Шлёпок №{total}*
+👤 {user.first_name}: {user_count} шлёпков
+👴 Мишок: всё ещё лысый
+    """
+    
+    # Добавляем информацию о новых достижениях
+    if new_achievements:
+        for ach in new_achievements:
+            message_text += f"\n🎉 *Новое достижение!* {ach['emoji']} {ach['name']}"
+            # Добавляем очки за достижение
+            points = ach.get('points', 10)
+            total_points = add_points(user.id, points)
+            message_text += f" (+{points} очков)"
+    
+    # Добавляем информацию о выполненных задачах
+    if completed_tasks:
+        message_text += "\n\n📅 *Выполненные задания:*"
+        for task in completed_tasks:
+            message_text += f"\n✅ {task['emoji']} {task['name']} (+{task['reward']} очков)"
+            add_points(user.id, task['reward'])
+    
+    # Отправляем ASCII анимацию (с вероятностью 10%)
+    if random.random() < 0.1:
+        animation = generate_animation()
+        message_text += f"\n\n{animation}"
+    
+    # Отправляем сообщение
+    if is_callback:
+        await update.callback_query.edit_message_text(
+            message_text,
+            parse_mode=ParseMode.MARKDOWN
+        )
+    else:
+        await update.message.reply_text(
+            message_text,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=get_inline_keyboard() if chat.type != "private" else None
+        )
+    
+    # Отправляем стикер
+    sticker_key = random.choice(list(STICKERS.keys()))
+    if STICKERS.get(sticker_key):
+        try:
+            if is_callback:
+                await update.callback_query.message.reply_sticker(STICKERS[sticker_key])
+            else:
+                await update.message.reply_sticker(STICKERS[sticker_key])
+        except:
+            pass
+
+# Обновляем обработчики в main():
+
+def main():
+    """Запуск бота"""
+    if not BOT_TOKEN:
+        logger.error("BOT_TOKEN not found!")
+        return
+    
+    # Создаём приложение
+    application = Application.builder().token(BOT_TOKEN).build()
+    
+    # Основные команды
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("shlep", shlep_command))
+    application.add_handler(CommandHandler("stats", stats_command))
+    application.add_handler(CommandHandler("mishok", mishok_info))
+    application.add_handler(CommandHandler("achievements", achievements_command))
+    application.add_handler(CommandHandler("tasks", tasks_command))
+    application.add_handler(CommandHandler("rating", rating_command))
+    
+    # Inline-кнопки для шлёпка
+    application.add_handler(CallbackQueryHandler(shlep_callback, pattern="^shlep_mishok$"))
+    
+    # Inline-кнопки для статистики
+    application.add_handler(CallbackQueryHandler(stats_inline_callback, pattern="^stats_inline$"))
+    
+    # Inline-кнопки для достижений
+    application.add_handler(CallbackQueryHandler(my_achievements_callback, pattern="^my_achievements$"))
+    application.add_handler(CallbackQueryHandler(next_achievement_callback, pattern="^next_achievement$"))
+    application.add_handler(CallbackQueryHandler(top_achievements_callback, pattern="^top_achievements$"))
+    
+    # Inline-кнопки для заданий
+    application.add_handler(CallbackQueryHandler(my_tasks_callback, pattern="^my_tasks$"))
+    application.add_handler(CallbackQueryHandler(time_remaining_callback, pattern="^time_remaining$"))
+    application.add_handler(CallbackQueryHandler(my_rewards_callback, pattern="^my_rewards$"))
+    
+    # Inline-кнопки для рейтинга
+    application.add_handler(CallbackQueryHandler(daily_rating_callback, pattern="^daily_rating$"))
+    application.add_handler(CallbackQueryHandler(weekly_rating_callback, pattern="^weekly_rating$"))
+    application.add_handler(CallbackQueryHandler(my_rating_callback, pattern="^my_rating$"))
+    
+    # Сообщения
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
+    
+    # Ошибки
+    application.add_error_handler(error_handler)
+    
+    # Запуск
+    logger.info("Бот запускается...")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
