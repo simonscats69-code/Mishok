@@ -1,17 +1,21 @@
 from datetime import datetime, timedelta
 from collections import defaultdict
-import matplotlib.pyplot as plt
-import io
-import base64
 from database import get_connection
 from utils import get_moscow_time
+
+try:
+    import matplotlib.pyplot as plt
+    import io
+    import base64
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
 
 class StatisticsSystem:
     def __init__(self):
         pass
     
     def record_shlep(self, user_id: int, timestamp: datetime = None):
-        """Записать шлёпок в статистику"""
         if timestamp is None:
             timestamp = get_moscow_time()
         
@@ -30,7 +34,6 @@ class StatisticsSystem:
                 conn.commit()
     
     def get_daily_activity(self, user_id: int, days: int = 7):
-        """Получить активность за последние дни"""
         end_date = get_moscow_time().date()
         start_date = end_date - timedelta(days=days-1)
         
@@ -44,21 +47,18 @@ class StatisticsSystem:
                     ORDER BY stat_date
                 """, (user_id, start_date, end_date))
                 
-                # Заполняем все дни
                 result = {}
                 current_date = start_date
                 while current_date <= end_date:
                     result[current_date.strftime("%d.%m")] = 0
                     current_date += timedelta(days=1)
                 
-                # Заполняем реальные данные
-                for date_str, count in cur.fetchall():
+                for date, count in cur.fetchall():
                     result[date.strftime("%d.%m")] = count
                 
                 return result
     
     def get_hourly_distribution(self, user_id: int):
-        """Распределение по часам"""
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -76,7 +76,9 @@ class StatisticsSystem:
                 return distribution
     
     def generate_activity_chart(self, user_id: int, days: int = 7):
-        """Сгенерировать график активности"""
+        if not MATPLOTLIB_AVAILABLE:
+            return None
+        
         activity = self.get_daily_activity(user_id, days)
         
         dates = list(activity.keys())
@@ -90,20 +92,17 @@ class StatisticsSystem:
         plt.xticks(rotation=45)
         plt.tight_layout()
         
-        # Сохраняем в буфер
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=100)
         plt.close()
         buf.seek(0)
         
-        # Конвертируем в base64
         img_base64 = base64.b64encode(buf.read()).decode('utf-8')
         buf.close()
         
         return img_base64
     
     def get_favorite_time(self, user_id: int):
-        """Любимое время для шлёпков"""
         distribution = self.get_hourly_distribution(user_id)
         
         if not any(distribution):
@@ -129,10 +128,8 @@ class StatisticsSystem:
         return f"Ты чаще всего шлёпаешь {time_desc} ({max_hour}:00)"
     
     def compare_with_friends(self, user_id: int, friend_ids: list):
-        """Сравнить с друзьями"""
         with get_connection() as conn:
             with conn.cursor() as cur:
-                # Получаем статистику за последнюю неделю
                 end_date = get_moscow_time().date()
                 start_date = end_date - timedelta(days=7)
                 
