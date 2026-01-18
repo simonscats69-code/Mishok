@@ -12,20 +12,26 @@ except ImportError:
 
 class FakeDatabase:
     def __init__(self):
-        self.global_stats = {'total_shleps': 0, 'last_shlep': None}
+        self.global_stats = {
+            'total_shleps': 0, 
+            'last_shlep': None,
+            'max_damage': 0,
+            'max_damage_user_id': None,
+            'max_damage_username': None,
+            'max_damage_date': None
+        }
         self.user_stats = {}
-        self.user_points = {}
-        self.user_xp = {}
-        self.user_skills = {}
-        self.detailed_stats = []
-        self.global_goals = [
-            {'id': 1, 'goal_name': 'Миллионный шлёпок 🎯', 'target_value': 1000000, 'current_value': 0, 'is_active': True}
-        ]
     
-    def add_shlep(self, user_id: int, username: str):
+    def add_shlep(self, user_id: int, username: str, damage: int = 0):
         now = datetime.now()
         self.global_stats['total_shleps'] += 1
         self.global_stats['last_shlep'] = now
+        
+        if damage > self.global_stats['max_damage']:
+            self.global_stats['max_damage'] = damage
+            self.global_stats['max_damage_user_id'] = user_id
+            self.global_stats['max_damage_username'] = username
+            self.global_stats['max_damage_date'] = now
         
         if user_id not in self.user_stats:
             self.user_stats[user_id] = {'username': username, 'shlep_count': 0, 'last_shlep': None}
@@ -34,11 +40,7 @@ class FakeDatabase:
         self.user_stats[user_id]['last_shlep'] = now
         self.user_stats[user_id]['username'] = username
         
-        for goal in self.global_goals:
-            if goal['is_active']:
-                goal['current_value'] += 1
-        
-        return self.global_stats['total_shleps'], self.user_stats[user_id]['shlep_count']
+        return self.global_stats['total_shleps'], self.user_stats[user_id]['shlep_count'], self.global_stats['max_damage']
 
 fake_db = FakeDatabase()
 
@@ -65,12 +67,26 @@ def get_connection():
                 query_lower = query.lower().strip()
                 
                 if "insert into global_stats" in query_lower:
-                    fake_db.global_stats = {'total_shleps': 0, 'last_shlep': None}
+                    fake_db.global_stats = {
+                        'total_shleps': 0, 
+                        'last_shlep': None,
+                        'max_damage': 0,
+                        'max_damage_user_id': None,
+                        'max_damage_username': None,
+                        'max_damage_date': None
+                    }
                 elif "update global_stats" in query_lower and "returning total_shleps" in query_lower:
                     fake_db.global_stats['last_shlep'] = params[0] if params else datetime.now()
                     self.result = [(fake_db.global_stats['total_shleps'],)]
-                elif "select total_shleps, last_shlep from global_stats" in query_lower:
-                    self.result = [(fake_db.global_stats['total_shleps'], fake_db.global_stats['last_shlep'])]
+                elif "select total_shleps, last_shlep, max_damage, max_damage_username, max_damage_date from global_stats" in query_lower:
+                    stats = fake_db.global_stats
+                    self.result = [(
+                        stats['total_shleps'], 
+                        stats['last_shlep'],
+                        stats['max_damage'],
+                        stats['max_damage_username'],
+                        stats['max_damage_date']
+                    )]
                 elif "insert into user_stats" in query_lower or "update user_stats" in query_lower:
                     if "returning shlep_count" in query_lower:
                         user_id = params[0]
@@ -82,22 +98,13 @@ def get_connection():
                     users.sort(key=lambda x: x[1], reverse=True)
                     limit = params[0] if params else 10
                     self.result = users[:limit]
-                elif "select points from user_points" in query_lower:
-                    user_id = params[0]
-                    self.result = [(fake_db.user_points.get(user_id, 0),)]
-                elif "insert into user_points" in query_lower or "update user_points" in query_lower:
-                    if "returning points" in query_lower:
-                        user_id = params[0]
-                        points = params[1]
-                        fake_db.user_points[user_id] = fake_db.user_points.get(user_id, 0) + points
-                        self.result = [(fake_db.user_points[user_id],)]
                 elif "select username, shlep_count, last_shlep from user_stats" in query_lower:
                     user_id = params[0]
                     data = fake_db.user_stats.get(user_id)
                     if data:
                         self.result = [(data['username'], data['shlep_count'], data['last_shlep'])]
                     else:
-                        self.result = []
+                        self.result = [(f"Игрок_{user_id}", 0, None)]
                 
                 return self
             
@@ -139,7 +146,11 @@ def init_db():
                 CREATE TABLE IF NOT EXISTS global_stats (
                     id SERIAL PRIMARY KEY,
                     total_shleps BIGINT DEFAULT 0,
-                    last_shlep TIMESTAMP
+                    last_shlep TIMESTAMP,
+                    max_damage INT DEFAULT 0,
+                    max_damage_user_id BIGINT,
+                    max_damage_username VARCHAR(100),
+                    max_damage_date TIMESTAMP
                 )
             """)
             
@@ -152,88 +163,20 @@ def init_db():
                 )
             """)
             
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS user_points (
-                    user_id BIGINT PRIMARY KEY,
-                    points INT DEFAULT 0,
-                    last_updated TIMESTAMP
-                )
-            """)
-            
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS user_xp (
-                    user_id BIGINT PRIMARY KEY,
-                    xp BIGINT DEFAULT 0,
-                    last_updated TIMESTAMP
-                )
-            """)
-            
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS xp_history (
-                    id SERIAL PRIMARY KEY,
-                    user_id BIGINT,
-                    xp_amount INT,
-                    reason VARCHAR(100),
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS user_skills (
-                    user_id BIGINT,
-                    skill_id VARCHAR(50),
-                    level INT DEFAULT 0,
-                    PRIMARY KEY (user_id, skill_id)
-                )
-            """)
-            
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS detailed_stats (
-                    user_id BIGINT,
-                    stat_date DATE,
-                    hour INT,
-                    shlep_count INT DEFAULT 0,
-                    PRIMARY KEY (user_id, stat_date, hour)
-                )
-            """)
-            
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS global_goals (
-                    id SERIAL PRIMARY KEY,
-                    goal_name VARCHAR(100),
-                    target_value BIGINT,
-                    current_value BIGINT DEFAULT 0,
-                    reward_type VARCHAR(50),
-                    reward_value INT,
-                    is_active BOOLEAN DEFAULT TRUE,
-                    start_date DATE,
-                    end_date DATE
-                )
-            """)
-            
             cur.execute("SELECT COUNT(*) FROM global_stats")
             if cur.fetchone()[0] == 0:
                 cur.execute("INSERT INTO global_stats (total_shleps) VALUES (0)")
             
-            cur.execute("SELECT COUNT(*) FROM global_goals")
-            if cur.fetchone()[0] == 0:
-                cur.execute("""
-                    INSERT INTO global_goals 
-                    (goal_name, target_value, current_value, reward_type, reward_value, is_active)
-                    VALUES 
-                    ('Миллионный шлёпок 🎯', 1000000, 0, 'points', 10000, TRUE)
-                """)
-            
             conn.commit()
             print("База данных инициализирована")
 
-def add_shlep(user_id: int, username: str):
+def add_shlep(user_id: int, username: str, damage: int = 0):
     if not DATABASE_URL:
-        return fake_db.add_shlep(user_id, username)
+        return fake_db.add_shlep(user_id, username, damage)
     
     with get_connection() as conn:
         if conn is None:
-            return (0, 0)
+            return (0, 0, 0)
         
         with conn.cursor() as cur:
             now = datetime.now()
@@ -258,27 +201,50 @@ def add_shlep(user_id: int, username: str):
             """, (user_id, username, now, now))
             user_count = cur.fetchone()[0]
             
-            cur.execute("""
-                UPDATE global_goals 
-                SET current_value = current_value + 1
-                WHERE is_active = TRUE
-            """)
+            cur.execute("SELECT max_damage FROM global_stats WHERE id = 1")
+            current_max_damage = cur.fetchone()[0] or 0
+            
+            if damage > current_max_damage:
+                cur.execute("""
+                    UPDATE global_stats 
+                    SET max_damage = %s,
+                        max_damage_user_id = %s,
+                        max_damage_username = %s,
+                        max_damage_date = %s
+                    WHERE id = 1
+                """, (damage, user_id, username, now))
             
             conn.commit()
-            return total, user_count
+            return total, user_count, current_max_damage
 
 def get_stats():
     if not DATABASE_URL:
-        return (fake_db.global_stats['total_shleps'], fake_db.global_stats['last_shlep'])
+        stats = fake_db.global_stats
+        return (
+            stats['total_shleps'], 
+            stats['last_shlep'],
+            stats['max_damage'],
+            stats['max_damage_username'],
+            stats['max_damage_date']
+        )
     
     with get_connection() as conn:
         if conn is None:
-            return (0, None)
+            return (0, None, 0, None, None)
         
         with conn.cursor() as cur:
-            cur.execute("SELECT total_shleps, last_shlep FROM global_stats WHERE id = 1")
+            cur.execute("""
+                SELECT 
+                    total_shleps, 
+                    last_shlep,
+                    max_damage,
+                    max_damage_username,
+                    max_damage_date
+                FROM global_stats 
+                WHERE id = 1
+            """)
             result = cur.fetchone()
-            return result if result else (0, None)
+            return result if result else (0, None, 0, None, None)
 
 def get_top_users(limit=10):
     if not DATABASE_URL:
@@ -301,55 +267,16 @@ def get_top_users(limit=10):
             """, (limit,))
             return cur.fetchall()
 
-def add_points(user_id: int, points: int):
-    if not DATABASE_URL:
-        fake_db.user_points[user_id] = fake_db.user_points.get(user_id, 0) + points
-        return fake_db.user_points[user_id]
-    
-    with get_connection() as conn:
-        if conn is None:
-            return 0
-        
-        with conn.cursor() as cur:
-            now = datetime.now()
-            
-            cur.execute("""
-                INSERT INTO user_points (user_id, points, last_updated)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (user_id) 
-                DO UPDATE SET 
-                    points = user_points.points + EXCLUDED.points,
-                    last_updated = EXCLUDED.last_updated
-                RETURNING points
-            """, (user_id, points, now))
-            
-            result = cur.fetchone()
-            conn.commit()
-            return result[0] if result else 0
-
-def get_user_points(user_id: int):
-    if not DATABASE_URL:
-        return fake_db.user_points.get(user_id, 0)
-    
-    with get_connection() as conn:
-        if conn is None:
-            return 0
-        
-        with conn.cursor() as cur:
-            cur.execute("SELECT points FROM user_points WHERE user_id = %s", (user_id,))
-            result = cur.fetchone()
-            return result[0] if result else 0
-
 def get_user_stats(user_id: int):
     if not DATABASE_URL:
         data = fake_db.user_stats.get(user_id)
         if data:
             return (data['username'], data['shlep_count'], data['last_shlep'])
-        return (None, 0, None)
+        return (f"Игрок_{user_id}", 0, None)
     
     with get_connection() as conn:
         if conn is None:
-            return (None, 0, None)
+            return (f"Игрок_{user_id}", 0, None)
         
         with conn.cursor() as cur:
             cur.execute("""
@@ -357,4 +284,14 @@ def get_user_stats(user_id: int):
                 FROM user_stats 
                 WHERE user_id = %s
             """, (user_id,))
-            return cur.fetchone()
+            result = cur.fetchone()
+            if result:
+                return result
+            cur.execute("""
+                INSERT INTO user_stats (user_id, username, shlep_count)
+                VALUES (%s, %s, 0)
+                ON CONFLICT (user_id) DO NOTHING
+                RETURNING username, shlep_count, last_shlep
+            """, (user_id, f"Игрок_{user_id}"))
+            conn.commit()
+            return (f"Игрок_{user_id}", 0, None)
