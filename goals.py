@@ -5,9 +5,14 @@ from utils import get_moscow_time
 class GlobalGoalsSystem:
     def __init__(self):
         self.active_goals = []
+        self.completed_goals = []
         self.init_default_goals()
+        self.load_from_db()
     
     def init_default_goals(self):
+        now = get_moscow_time()
+        week_later = now + timedelta(days=7)
+        
         self.active_goals = [
             {
                 'id': 1,
@@ -15,7 +20,10 @@ class GlobalGoalsSystem:
                 'target': 1000000,
                 'current': 0,
                 'reward': {'type': 'points', 'value': 10000},
-                'description': 'Сообщество должно достичь 1,000,000 шлёпков!'
+                'description': 'Сообщество должно достичь 1,000,000 шлёпков!',
+                'is_active': True,
+                'created_at': now,
+                'end_date': None
             },
             {
                 'id': 2,
@@ -24,8 +32,9 @@ class GlobalGoalsSystem:
                 'current': 0,
                 'reward': {'type': 'multiplier', 'value': 1.5, 'duration': 24},
                 'description': '50,000 шлёпков за неделю',
-                'start_date': get_moscow_time().date(),
-                'end_date': get_moscow_time().date() + timedelta(days=7)
+                'is_active': True,
+                'created_at': now,
+                'end_date': week_later.date()
             },
             {
                 'id': 3,
@@ -33,11 +42,12 @@ class GlobalGoalsSystem:
                 'target': 24,
                 'current': 0,
                 'reward': {'type': 'achievement', 'value': 'hour_master'},
-                'description': 'Кто-то должен шлёпнуть в каждый час суток'
+                'description': 'Кто-то должен шлёпнуть в каждый час суток',
+                'is_active': True,
+                'created_at': now,
+                'end_date': None
             }
         ]
-        
-        self.load_from_db()
     
     def load_from_db(self):
         with get_connection() as conn:
@@ -55,10 +65,17 @@ class GlobalGoalsSystem:
                         'reward': {'type': reward_type, 'value': reward_value},
                         'description': f"Глобальная цель: {name}",
                         'start_date': start_date,
-                        'end_date': end_date
+                        'end_date': end_date,
+                        'is_active': is_active
                     })
     
     def update_goal_progress(self, goal_id: int, increment: int = 1):
+        goal = next((g for g in self.active_goals if g['id'] == goal_id), None)
+        if not goal:
+            return None
+        
+        goal['current'] += increment
+        
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -77,8 +94,19 @@ class GlobalGoalsSystem:
                     
                     conn.commit()
                     return current, target
+        return None
     
     def complete_goal(self, goal_id: int, reward_type: str, reward_value):
+        goal = next((g for g in self.active_goals if g['id'] == goal_id), None)
+        if not goal:
+            return False
+        
+        goal['is_active'] = False
+        goal['completed_at'] = get_moscow_time()
+        
+        self.completed_goals.append(goal)
+        self.active_goals = [g for g in self.active_goals if g['id'] != goal_id]
+        
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("UPDATE global_goals SET is_active = FALSE WHERE id = %s", (goal_id,))
@@ -96,29 +124,33 @@ class GlobalGoalsSystem:
                 """, (goal_id, reward_type, reward_value))
                 
                 conn.commit()
+        
+        return True
     
-    def get_community_contributions(self, user_id: int):
+    def get_user_contributions(self, user_id: int):
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT g.id, g.goal_name, g.current_value, g.target_value,
-                           COUNT(DISTINCT s.user_id) as contributors,
-                           COALESCE(SUM(CASE WHEN s.user_id = %s THEN 1 ELSE 0 END), 0) as user_contributions
+                    SELECT 
+                        g.id,
+                        g.goal_name,
+                        g.current_value,
+                        g.target_value,
+                        COALESCE(SUM(CASE WHEN ds.user_id = %s THEN ds.shlep_count ELSE 0 END), 0) as user_contributions
                     FROM global_goals g
-                    LEFT JOIN detailed_stats s ON g.id = 1
+                    LEFT JOIN detailed_stats ds ON g.id = 1
                     WHERE g.is_active = TRUE
                     GROUP BY g.id, g.goal_name, g.current_value, g.target_value
                 """, (user_id,))
                 
                 contributions = []
-                for goal_id, name, current, target, contributors, user_contribution in cur.fetchall():
+                for goal_id, name, current, target, user_contribution in cur.fetchall():
                     contributions.append({
                         'goal_id': goal_id,
                         'name': name,
                         'progress': (current / target * 100) if target > 0 else 0,
                         'current': current,
                         'target': target,
-                        'contributors': contributors,
                         'user_contribution': user_contribution,
                         'user_percentage': (user_contribution / current * 100) if current > 0 else 0
                     })
@@ -160,5 +192,27 @@ class GlobalGoalsSystem:
                     'active_today': active_today,
                     'today_shleps': today_shleps,
                     'daily_record': daily_record,
-                    'average_per_user': total_shleps / max(active_today, 1)
+                    'average_per_user': total_shleps / max(active_today, 1),
+                    'active_goals': len(self.active_goals),
+                    'completed_goals': len(self.completed_goals)
                 }
+    
+    def get_active_goals_with_progress(self):
+        goals_with_progress = []
+        for goal in self.active_goals:
+            progress = (goal['current'] / goal['target'] * 100) if goal['target'] > 0 else 0
+            remaining = goal['target'] - goal['current']
+            days_left = None
+            
+            if goal.get('end_date'):
+                days_left = (goal['end_date'] - datetime.now().date()).days
+                days_left = max(0, days_left)
+            
+            goals_with_progress.append({
+                **goal,
+                'progress_percent': progress,
+                'remaining': remaining,
+                'days_left': days_left
+            })
+        
+        return goals_with_progress
