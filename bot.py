@@ -1,74 +1,125 @@
 import logging
 import random
 from datetime import datetime
-from telegram import Update, ReplyKeyboardRemove
+from telegram import Update
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler,
-    ContextTypes, filters, JobQueue
+    ContextTypes, filters
 )
 from telegram.constants import ParseMode
 
-# Импорт конфигурации
-from config import BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO, STICKERS
+# ========== ИМПОРТЫ С ЗАЩИТОЙ ОТ ОШИБОК ==========
 
-# Импорт систем
-from database import init_db, add_shlep, get_stats, get_top_users, add_points
-from keyboard import (
-    get_game_keyboard, get_inline_keyboard, get_achievements_keyboard,
-    get_tasks_keyboard, get_rating_keyboard, get_level_keyboard,
-    get_stats_keyboard, get_records_keyboard, get_events_keyboard,
-    get_goals_keyboard, get_skills_keyboard, get_group_welcome_keyboard
-)
-from achievements import AchievementSystem
-from tasks import TaskSystem, RatingSystem
-from utils import get_moscow_time, format_time_remaining, generate_animation
+# 1. Конфигурация (обязательно)
+try:
+    from config import BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO, STICKERS
+except ImportError as e:
+    logging.error(f"❌ Ошибка импорта config: {e}")
+    # Минимальные значения для работы
+    BOT_TOKEN = ""
+    MISHOK_REACTIONS = ["Ой, больно! 😠", "Эй, не шлёпай! 👴💢"]
+    MISHOK_INTRO = "👴 *Мишок Лысый* - бот для шлёпков"
+    STICKERS = {}
 
-# Импорт новых систем (если они созданы)
+# 2. База данных (обязательно)
+try:
+    from database import init_db, add_shlep, get_stats, get_top_users, add_points, get_user_points
+except ImportError as e:
+    logging.error(f"❌ Ошибка импорта database: {e}")
+    # Заглушки
+    def init_db(): logging.info("БД: заглушка init_db")
+    def add_shlep(user_id, username): 
+        logging.info(f"БД: заглушка add_shlep для {user_id}")
+        return (0, 0)
+    def get_stats(): return (0, None)
+    def get_top_users(limit=10): return []
+    def add_points(user_id, points): 
+        logging.info(f"БД: заглушка add_points {points} для {user_id}")
+        return 0
+    def get_user_points(user_id): return 0
+
+# 3. Клавиатуры (обязательно)
+try:
+    from keyboard import (
+        get_game_keyboard, get_inline_keyboard, get_achievements_keyboard,
+        get_tasks_keyboard, get_rating_keyboard
+    )
+except ImportError as e:
+    logging.error(f"❌ Ошибка импорта keyboard: {e}")
+    # Заглушки
+    def get_game_keyboard(): return None
+    def get_inline_keyboard(): return None
+    def get_achievements_keyboard(): return None
+    def get_tasks_keyboard(): return None
+    def get_rating_keyboard(): return None
+
+# 4. Системы (опционально, с защитой)
+SYSTEMS = {}
+
+# Уровни
 try:
     from levels import LevelSystem, MishokLevelSystem, SkillsSystem
-    from statistics import StatisticsSystem
-    from events import RecordsSystem, EventSystem
-    from goals import GlobalGoalsSystem
-    
-    # Инициализация всех систем
-    level_system = LevelSystem()
-    mishok_level_system = MishokLevelSystem()
-    skills_system = SkillsSystem()
-    stats_system = StatisticsSystem()
-    records_system = RecordsSystem()
-    event_system = EventSystem()
-    goals_system = GlobalGoalsSystem()
-    
-    SYSTEMS_LOADED = True
+    SYSTEMS['levels'] = LevelSystem()
+    SYSTEMS['mishok_levels'] = MishokLevelSystem()
+    SYSTEMS['skills'] = SkillsSystem()
+    logging.info("✅ Система уровней загружена")
 except ImportError as e:
-    logging.warning(f"Некоторые системы не загружены: {e}")
-    SYSTEMS_LOADED = False
+    logging.warning(f"⚠️ Система уровней не загружена: {e}")
 
-# Инициализация старых систем
-achievement_system = AchievementSystem()
-task_system = TaskSystem()
-rating_system = RatingSystem()
+# Статистика
+try:
+    from statistics import StatisticsSystem
+    SYSTEMS['stats'] = StatisticsSystem()
+    logging.info("✅ Система статистики загружена")
+except ImportError as e:
+    logging.warning(f"⚠️ Система статистики не загружена: {e}")
 
-# Настройка логирования
+# Рекорды и события
+try:
+    from events import RecordsSystem, EventSystem
+    SYSTEMS['records'] = RecordsSystem()
+    SYSTEMS['events'] = EventSystem()
+    logging.info("✅ Системы рекордов и событий загружены")
+except ImportError as e:
+    logging.warning(f"⚠️ Системы рекордов/событий не загружены: {e}")
+
+# Цели
+try:
+    from goals import GlobalGoalsSystem
+    SYSTEMS['goals'] = GlobalGoalsSystem()
+    logging.info("✅ Система целей загружена")
+except ImportError as e:
+    logging.warning(f"⚠️ Система целей не загружена: {e}")
+
+# Достижения и задания
+try:
+    from achievements import AchievementSystem
+    from tasks import TaskSystem, RatingSystem
+    SYSTEMS['achievements'] = AchievementSystem()
+    SYSTEMS['tasks'] = TaskSystem()
+    SYSTEMS['rating'] = RatingSystem()
+    logging.info("✅ Системы достижений и заданий загружены")
+except ImportError as e:
+    logging.warning(f"⚠️ Системы достижений/заданий не загружены: {e}")
+
+# Утилиты
+try:
+    from utils import get_moscow_time, format_time_remaining, generate_animation
+except ImportError:
+    # Заглушки для утилит
+    def get_moscow_time(): return datetime.now()
+    def format_time_remaining(): return "00:00"
+    def generate_animation(): return "✨"
+
+# ========== НАСТРОЙКА ЛОГИРОВАНИЯ ==========
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Инициализация БД
+# ========== ИНИЦИАЛИЗАЦИЯ ==========
 init_db()
-
-# ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
-
-def get_user_display_name(user):
-    """Получить отображаемое имя пользователя"""
-    if user.username:
-        return f"@{user.username}"
-    elif user.first_name:
-        return user.first_name
-    else:
-        return f"User {user.id}"
 
 # ========== ОСНОВНЫЕ КОМАНДЫ ==========
 
@@ -81,15 +132,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 👋 Привет, {user.first_name}!
 
 Я бот с *Мишком Лысым* — самым терпеливым лысым персонажем в Telegram!
-Теперь с полноценной игровой системой:
 
-🎯 *Уровни и прокачка*
-📊 *Детальная статистика* 
-🏆 *Рекорды и достижения*
-🎪 *События и цели*
+🎮 *Доступные системы:*
+{ '✅ Уровни и прокачка' if 'levels' in SYSTEMS else '❌ Уровни (скоро)' }
+{ '✅ Детальная статистика' if 'stats' in SYSTEMS else '❌ Статистика (скоро)' }
+{ '✅ Рекорды и события' if 'records' in SYSTEMS else '❌ Рекорды (скоро)' }
+{ '✅ Глобальные цели' if 'goals' in SYSTEMS else '❌ Цели (скоро)' }
 
-В личных сообщениях используй кнопки ниже.
-В группах — команду /shlep или кнопку под сообщением.
+*Основные команды:*
+/shlep - шлёпнуть Мишка
+/level - твой уровень
+/stats - статистика
+/events - активные события
+/goals - глобальные цели
+/records - рекорды
     """
     
     if chat.type == "private":
@@ -100,7 +156,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     else:
         await update.message.reply_text(
-            f"{user.first_name} хочет шлёпать Мишка! Используй /shlep",
+            f"👋 {user.first_name}, используй /shlep чтобы шлёпнуть Мишка!",
             reply_markup=get_inline_keyboard()
         )
 
@@ -125,30 +181,30 @@ async def shlep_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await process_shlep(update, context, is_callback=True)
 
 async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_callback: bool):
-    """Основная логика шлёпка со всеми системами"""
+    """Основная логика шлёпка"""
     user = update.effective_user
     chat = update.effective_chat
     
-    # ===== 1. ОСНОВНАЯ СТАТИСТИКА =====
+    # 1. БАЗОВАЯ СТАТИСТИКА
     total_shleps, user_count = add_shlep(user.id, user.username or user.first_name)
     
-    # ===== 2. ПРОВЕРКА СИСТЕМ =====
+    # 2. ПЕРЕМЕННЫЕ ДЛЯ СИСТЕМ
     event_multiplier = 1.0
-    base_xp = 10
-    total_xp = base_xp
+    total_xp = 10
     level_info = {"level": 1, "progress": 0}
     new_achievements = []
     completed_tasks = []
     new_strength_record = False
     slap_strength = 0
     
-    if SYSTEMS_LOADED:
+    # 3. СИСТЕМА УРОВНЕЙ
+    if 'levels' in SYSTEMS:
         try:
-            # Проверяем события
-            event_multiplier, active_events = event_system.get_event_multiplier()
+            # Навыки
+            user_skills = SYSTEMS['skills'].get_user_skills(user.id)
             
-            # Применяем навыки
-            user_skills = skills_system.get_user_skills(user.id)
+            # Базовый XP
+            base_xp = 10
             
             # Меткий шлёпок
             if 'accurate_slap' in user_skills:
@@ -157,92 +213,107 @@ async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_c
                     base_xp *= (1 + user_skills['accurate_slap']['current_effect'])
             
             # Критический удар
-            is_critical = False
             if 'critical_slap' in user_skills:
                 critical_chance = user_skills['critical_slap']['current_effect']
                 if random.random() < critical_chance:
                     base_xp *= 2
-                    is_critical = True
             
-            # Применяем множитель события
+            # Множитель событий
+            if 'events' in SYSTEMS:
+                event_multiplier, _ = SYSTEMS['events'].get_event_multiplier()
+            
             total_xp = int(base_xp * event_multiplier)
             
             # Добавляем XP
-            level_info = level_system.add_xp(user.id, total_xp, "shlep")
-            
-            # Детальная статистика
-            stats_system.record_shlep(user.id)
-            
-            # Проверяем рекорды
-            slap_strength = random.random() * 100 * event_multiplier
-            new_strength_record, record_value = records_system.check_strength_record(
-                user.id, slap_strength
-            )
-            
-            # Обновляем глобальные цели
-            for goal in goals_system.active_goals:
-                goals_system.update_goal_progress(goal['id'])
+            level_info = SYSTEMS['levels'].add_xp(user.id, total_xp, "shlep")
         except Exception as e:
-            logger.error(f"Ошибка в системах: {e}")
+            logger.error(f"Ошибка системы уровней: {e}")
     
-    # ===== 3. СТАРЫЕ СИСТЕМЫ =====
-    # Достижения
-    new_achievements = achievement_system.check_achievements(user.id, user_count)
-    
-    # Задания
-    completed_tasks = task_system.update_task_progress(user.id)
-    
-    # ===== 4. ПОЛУЧАЕМ УРОВЕНЬ МИШКА =====
-    mishok_level_name = "Нежный Мишок"
-    if SYSTEMS_LOADED:
+    # 4. ДЕТАЛЬНАЯ СТАТИСТИКА
+    if 'stats' in SYSTEMS:
         try:
-            mishok_level = mishok_level_system.get_mishok_level(total_shleps)
+            SYSTEMS['stats'].record_shlep(user.id)
+        except:
+            pass
+    
+    # 5. РЕКОРДЫ
+    if 'records' in SYSTEMS:
+        try:
+            slap_strength = random.random() * 100 * event_multiplier
+            new_strength_record, _ = SYSTEMS['records'].check_strength_record(user.id, slap_strength)
+        except:
+            pass
+    
+    # 6. ГЛОБАЛЬНЫЕ ЦЕЛИ
+    if 'goals' in SYSTEMS:
+        try:
+            for goal in SYSTEMS['goals'].active_goals:
+                SYSTEMS['goals'].update_goal_progress(goal['id'])
+        except:
+            pass
+    
+    # 7. ДОСТИЖЕНИЯ
+    if 'achievements' in SYSTEMS:
+        try:
+            new_achievements = SYSTEMS['achievements'].check_achievements(user.id, user_count)
+        except:
+            pass
+    
+    # 8. ЗАДАНИЯ
+    if 'tasks' in SYSTEMS:
+        try:
+            completed_tasks = SYSTEMS['tasks'].update_task_progress(user.id)
+        except:
+            pass
+    
+    # 9. УРОВЕНЬ МИШКА
+    mishok_level_name = "Нежный Мишок"
+    if 'mishok_levels' in SYSTEMS:
+        try:
+            mishok_level = SYSTEMS['mishok_levels'].get_mishok_level(total_shleps)
             mishok_level_name = mishok_level['name']
         except:
             pass
     
-    # ===== 5. ВЫБОР РЕАКЦИИ =====
+    # 10. РЕАКЦИЯ
     reaction = random.choice(MISHOK_REACTIONS)
     
-    # ===== 6. ФОРМИРОВАНИЕ СООБЩЕНИЯ =====
+    # 11. ФОРМИРОВАНИЕ СООБЩЕНИЯ
     message_text = f"""
 {reaction}
 
 📊 *Шлёпок №{total_shleps:,}*
-👤 {user.first_name}: {user_count} шлёпков | Ур. {level_info.get('level', 1)}
-    """
+👤 {user.first_name}: {user_count} шлёпков
+"""
     
-    # Добавляем XP если системы загружены
-    if SYSTEMS_LOADED:
-        message_text += f"⚡ Опыт: +{total_xp} XP\n"
-        message_text += f"📈 Прогресс: {level_info.get('progress', 0):.1f}%\n"
+    # Добавляем уровень
+    if 'levels' in SYSTEMS:
+        message_text += f"🎯 Ур. {level_info['level']} (+{total_xp} XP)\n"
     
     message_text += f"👴 *Уровень Мишка:* {mishok_level_name}\n"
     
-    # Добавляем информацию о событии
-    if SYSTEMS_LOADED and event_multiplier != 1.0:
-        message_text += f"\n🎪 Множитель опыта: x{event_multiplier:.1f}\n"
+    # Добавляем множитель
+    if event_multiplier != 1.0:
+        message_text += f"🎪 Множитель: x{event_multiplier:.1f}\n"
     
-    # Добавляем информацию о новом рекорде
+    # Новый рекорд
     if new_strength_record:
-        message_text += f"\n🏆 *НОВЫЙ РЕКОРД СИЛЫ!* {slap_strength:.1f} единиц!"
+        message_text += f"\n🏆 *НОВЫЙ РЕКОРД!* {slap_strength:.1f} силы!\n"
     
-    # Добавляем информацию о новых достижениях
+    # Новые достижения
     if new_achievements:
         for ach in new_achievements:
-            message_text += f"\n🎉 *Новое достижение!* {ach['emoji']} {ach['name']}"
-            points = ach.get('points', 10)
-            total_points = add_points(user.id, points)
-            message_text += f" (+{points} очков)"
+            message_text += f"\n🎉 {ach['emoji']} *{ach['name']}*"
+            add_points(user.id, 10)
     
-    # Добавляем информацию о выполненных задачах
+    # Выполненные задания
     if completed_tasks:
-        message_text += "\n\n📅 *Выполненные задания:*"
+        message_text += "\n\n📅 *Выполнено:*"
         for task in completed_tasks:
             message_text += f"\n✅ {task['emoji']} {task['name']} (+{task['reward']} очков)"
             add_points(user.id, task['reward'])
     
-    # Добавляем ASCII анимацию
+    # Анимация
     if random.random() < 0.1:
         try:
             animation = generate_animation()
@@ -250,7 +321,7 @@ async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_c
         except:
             pass
     
-    # ===== 7. ОТПРАВКА СООБЩЕНИЯ =====
+    # 12. ОТПРАВКА
     if is_callback:
         await update.callback_query.edit_message_text(
             message_text,
@@ -263,10 +334,10 @@ async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_c
             reply_markup=get_inline_keyboard() if chat.type != "private" else None
         )
     
-    # ===== 8. ОТПРАВКА СТИКЕРА =====
-    sticker_key = random.choice(list(STICKERS.keys()))
-    if STICKERS.get(sticker_key):
+    # 13. СТИКЕР
+    if STICKERS:
         try:
+            sticker_key = random.choice(list(STICKERS.keys()))
             if is_callback:
                 await update.callback_query.message.reply_sticker(STICKERS[sticker_key])
             else:
@@ -274,13 +345,64 @@ async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_c
         except:
             pass
 
-# ========== КОМАНДЫ СТАТИСТИКИ ==========
+# ========== КОМАНДЫ СИСТЕМ ==========
+
+async def level_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /level"""
+    if 'levels' not in SYSTEMS:
+        await update.message.reply_text("🎯 Система уровней скоро будет доступна!")
+        return
+    
+    user = update.effective_user
+    try:
+        level_info = SYSTEMS['levels'].get_level_progress(user.id)
+        user_skills = SYSTEMS['skills'].get_user_skills(user.id)
+        
+        points = get_user_points(user.id)
+        
+        text = f"""
+🎯 *Твой уровень:* {level_info['level']}
+⚡ *Опыт:* {level_info['xp_current']:,}/{level_info['xp_needed']:,}
+📊 *Прогресс:* {level_info['progress']:.1f}%
+💰 *Очков:* {points}
+
+*Навыки:*
+"""
+        
+        for skill_id, skill_info in user_skills.items():
+            text += f"\n{skill_info['name']}: Ур. {skill_info['current_level']}"
+            if skill_info['next_cost']:
+                text += f" (След.: {skill_info['next_cost']} очков)"
+        
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    except Exception as e:
+        logger.error(f"Ошибка команды level: {e}")
+        await update.message.reply_text("❌ Ошибка загрузки уровня")
+
+async def detailed_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /detailed_stats"""
+    if 'stats' not in SYSTEMS:
+        await update.message.reply_text("📊 Детальная статистика скоро будет доступна!")
+        return
+    
+    user = update.effective_user
+    try:
+        favorite_time = SYSTEMS['stats'].get_favorite_time(user.id)
+        
+        text = f"""
+📈 *Детальная статистика*
+
+{favorite_time}
+
+*Статистика обновляется после каждого шлёпка!*
+"""
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    except:
+        await update.message.reply_text("📊 Используй /stats для базовой статистики")
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Базовая статистика (/stats)"""
+    """Команда /stats"""
     total_shleps, last_shlep = get_stats()
-    
-    # Получаем топ пользователей
     top_users = get_top_users(5)
     
     top_text = "\n".join([
@@ -290,7 +412,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     last_time = last_shlep.strftime("%d.%m.%Y %H:%M") if last_shlep else "никогда"
     
-    stats_text = f"""
+    text = f"""
 📊 *Статистика шлёпков*
 
 🔢 Всего шлёпков: *{total_shleps:,}*
@@ -298,572 +420,108 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 🏆 *Топ шлёпателей:*
 {top_text}
-
-Мишок устал, но держится! 💪
-    """
-    
-    await update.message.reply_text(
-        stats_text,
-        parse_mode=ParseMode.MARKDOWN
-    )
-
-async def detailed_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Детальная статистика (/detailed_stats)"""
-    user = update.effective_user
-    
-    if not SYSTEMS_LOADED:
-        await update.message.reply_text(
-            "📊 Система статистики временно недоступна",
-            parse_mode=ParseMode.MARKDOWN
-        )
-        return
-    
-    try:
-        # Получаем любимое время
-        favorite_time = stats_system.get_favorite_time(user.id)
-        
-        # Получаем глобальную статистику
-        global_stats = goals_system.get_global_stats()
-        
-        text = f"""
-📈 *Детальная статистика*
-
-{favorite_time}
-
-*Глобальная статистика сообщества:*
-👥 Активных сегодня: {global_stats.get('active_today', 0)}
-🎯 Шлёпков сегодня: {global_stats.get('today_shleps', 0):,}
-🏆 Рекорд за день: {global_stats.get('daily_record', 0):,}
-📊 Всего шлёпков: {global_stats.get('total_shleps', 0):,}
-        """
-        
-        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
-    except Exception as e:
-        logger.error(f"Ошибка статистики: {e}")
-        await update.message.reply_text(
-            "❌ Ошибка загрузки статистики",
-            parse_mode=ParseMode.MARKDOWN
-        )
-
-# ========== КОМАНДЫ УРОВНЕЙ И НАВЫКОВ ==========
-
-async def level_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Информация о уровне (/level)"""
-    user = update.effective_user
-    
-    if not SYSTEMS_LOADED:
-        await update.message.reply_text(
-            "🎯 Система уровней временно недоступна",
-            parse_mode=ParseMode.MARKDOWN
-        )
-        return
-    
-    try:
-        level_info = level_system.get_level_progress(user.id)
-        user_skills = skills_system.get_user_skills(user.id)
-        
-        # Получаем очки
-        from database import get_connection
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT points FROM user_points WHERE user_id = %s", (user.id,))
-                result = cur.fetchone()
-                points = result[0] if result else 0
-        
-        text = f"""
-🎯 *Твой уровень:* {level_info['level']}
-⚡ *Опыт:* {level_info['xp_current']:,}/{level_info['xp_needed']:,}
-📊 *Прогресс:* {level_info['progress']:.1f}%
-💰 *Очков:* {points}
-
-*Навыки:*
-        """
-        
-        skill_emojis = {
-            'accurate_slap': '🎯',
-            'combo_slap': '👊', 
-            'critical_slap': '💥'
-        }
-        
-        for skill_id, skill_info in user_skills.items():
-            emoji = skill_emojis.get(skill_id, '⚡')
-            text += f"\n{emoji} *{skill_info['name']}*: Ур. {skill_info['current_level']}/{skill_info['max_level']}"
-            if skill_info['next_cost']:
-                text += f" (След. уровень: {skill_info['next_cost']} очков)"
-            text += f"\n  └ {skill_info['description']}\n"
-        
-        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=get_level_keyboard())
-    except Exception as e:
-        logger.error(f"Ошибка уровня: {e}")
-        await update.message.reply_text(
-            "❌ Ошибка загрузки информации об уровне",
-            parse_mode=ParseMode.MARKDOWN
-        )
-
-async def upgrade_skill_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Улучшить навык (/upgrade [навык])"""
-    user = update.effective_user
-    
-    if not SYSTEMS_LOADED:
-        await update.message.reply_text(
-            "⚡ Система навыков временно недоступна",
-            parse_mode=ParseMode.MARKDOWN
-        )
-        return
-    
-    if not context.args:
-        # Показываем список доступных навыков
-        user_skills = skills_system.get_user_skills(user.id)
-        
-        text = "⚡ *Улучшение навыков*\n\n"
-        text += "Доступные навыки:\n"
-        
-        skill_list = {
-            'accurate': ('🎯 Меткий шлёпок', 'accurate_slap'),
-            'combo': ('👊 Серия ударов', 'combo_slap'),
-            'critical': ('💥 Критический удар', 'critical_slap')
-        }
-        
-        for key, (name, skill_id) in skill_list.items():
-            if skill_id in user_skills:
-                skill = user_skills[skill_id]
-                text += f"\n`/upgrade {key}` - {name} (Ур. {skill['current_level']})"
-                if skill['next_cost']:
-                    text += f" - {skill['next_cost']} очков"
-        
-        text += "\n\nПример: `/upgrade accurate`"
-        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
-        return
-    
-    skill_key = context.args[0].lower()
-    skill_map = {
-        'accurate': 'accurate_slap',
-        'combo': 'combo_slap', 
-        'critical': 'critical_slap'
-    }
-    
-    if skill_key not in skill_map:
-        await update.message.reply_text(
-            "❌ Неизвестный навык. Используй /upgrade без аргументов для списка.",
-            parse_mode=ParseMode.MARKDOWN
-        )
-        return
-    
-    skill_id = skill_map[skill_key]
-    success, message = skills_system.upgrade_skill(user.id, skill_id)
-    
-    if success:
-        await update.message.reply_text(f"✅ {message}", parse_mode=ParseMode.MARKDOWN)
-    else:
-        await update.message.reply_text(f"❌ {message}", parse_mode=ParseMode.MARKDOWN)
-
-# ========== КОМАНДЫ РЕКОРДОВ ==========
+"""
+    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
 async def records_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Рекорды (/records)"""
-    
-    if not SYSTEMS_LOADED:
-        all_records = {}
-    else:
-        all_records = records_system.get_all_records()
-    
-    if not all_records:
-        text = "🏆 Рекордов пока нет. Будь первым!"
-    else:
-        text = "🏆 *Текущие рекорды:*\n\n"
-        
-        for record_type, record in all_records.items():
-            timestamp = record['timestamp'].strftime("%d.%m.%Y %H:%M") if record['timestamp'] else "недавно"
-            
-            # Форматируем значение
-            if record_type == 'strongest_slap':
-                value_text = f"{record['value']:.1f} силы"
-            elif record_type == 'fastest_slap':
-                value_text = f"{record['value']:.1f} шлёпков/мин"
-            elif record_type == 'longest_combo':
-                value_text = f"{int(record['value'])} ударов подряд"
-            else:
-                value_text = f"{record['value']:.1f}"
-            
-            text += f"*{record['name']}:*\n"
-            text += f"  👤 {record['username']}\n"
-            text += f"  🎯 {value_text}\n"
-            text += f"  ⏰ {timestamp}\n\n"
-    
-    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
-
-# ========== КОМАНДЫ СОБЫТИЙ ==========
-
-async def events_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """События (/events)"""
-    
-    if not SYSTEMS_LOADED:
-        active_events = []
-        upcoming_events = []
-        current_multiplier = 1.0
-    else:
-        current_multiplier, active_events = event_system.get_event_multiplier()
-        upcoming_events = event_system.get_upcoming_events()
-    
-    text = "🎪 *События и бонусы*\n\n"
-    
-    # Текущий множитель
-    if current_multiplier != 1.0:
-        text += f"📈 *Текущий множитель опыта:* x{current_multiplier:.1f}\n\n"
-    
-    if active_events:
-        text += "*🎉 Активные сейчас:*\n"
-        for event in active_events:
-            text += f"\n*{event['name']}*\n"
-            text += f"  {event['description']}\n"
-            text += f"  ⏳ Заканчивается через: {event['ends_in']} мин\n"
-    else:
-        text += "Сейчас нет активных событий.\n\n"
-    
-    if upcoming_events:
-        text += "\n*⏰ Скоро начнутся:*\n"
-        for event in upcoming_events[:3]:
-            starts_in = f"через {event['starts_in']} минут" if event['starts_in'] > 0 else "скоро"
-            text += f"\n⏰ *{event['name']}* - {starts_in}\n"
-            text += f"  Множитель: x{event['multiplier']:.1f}\n"
-    
-    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
-
-# ========== КОМАНДЫ ЦЕЛЕЙ ==========
-
-async def goals_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Глобальные цели (/goals)"""
-    user = update.effective_user
-    
-    if not SYSTEMS_LOADED:
-        global_stats = {"total_shleps": 0}
-        contributions = []
-    else:
-        contributions = goals_system.get_community_contributions(user.id)
-        global_stats = goals_system.get_global_stats()
-    
-    text = "🎯 *Глобальные цели сообщества*\n\n"
-    
-    # Прогресс к миллиону
-    total_shleps = global_stats.get('total_shleps', 0)
-    progress_percent = (total_shleps / 1000000 * 100) if total_shleps > 0 else 0
-    progress_bar_length = 20
-    filled = int(progress_percent / 100 * progress_bar_length)
-    progress_bar = "█" * filled + "░" * (progress_bar_length - filled)
-    
-    text += f"🎯 *Цель: 1,000,000 шлёпков*\n"
-    text += f"📊 {total_shleps:,} / 1,000,000\n"
-    text += f"{progress_bar} {progress_percent:.1f}%\n\n"
-    
-    if contributions:
-        text += "*Твой вклад в цели:*\n"
-        for goal in contributions:
-            goal_progress_bar_length = 10
-            goal_filled = int(goal['progress'] / 100 * goal_progress_bar_length)
-            goal_progress_bar = "█" * goal_filled + "░" * (goal_progress_bar_length - goal_filled)
-            
-            text += f"\n*{goal['name']}*\n"
-            text += f"{goal_progress_bar} {goal['progress']:.1f}%\n"
-            text += f"🎯 {goal['current']:,}/{goal['target']:,}\n"
-            text += f"👤 Твой вклад: {goal['user_contribution']} шлёпков\n"
-    else:
-        text += "У тебя пока нет вклада в цели. Шлёпай больше!"
-    
-    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
-
-# ========== КОМАНДЫ ДОСТИЖЕНИЙ ==========
-
-async def achievements_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Система достижений (/achievements)"""
-    await update.message.reply_text(
-        "🎯 *Система достижений*\n\n"
-        "Получайте достижения за шлёпки! Чем больше шлёпаете, тем круче достижения!",
-        reply_markup=get_achievements_keyboard(),
-        parse_mode=ParseMode.MARKDOWN
-    )
-
-async def my_achievements_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Мои достижения"""
-    query = update.callback_query
-    await query.answer()
-    
-    user = query.from_user
-    achievements = achievement_system.get_user_achievements(user.id)
-    
-    if not achievements:
-        text = "🎯 У тебя пока нет достижений. Продолжай шлёпать!"
-    else:
-        text = "🏆 *Твои достижения:*\n\n"
-        for ach in achievements:
-            achieved_at = ach['achieved_at'].strftime("%d.%m.%Y") if 'achieved_at' in ach else ""
-            text += f"{ach['emoji']} *{ach['name']}*\n"
-            text += f"  └ {ach['description']}"
-            if achieved_at:
-                text += f" ({achieved_at})"
-            text += "\n\n"
-    
-    await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN)
-
-async def next_achievement_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Следующее достижение"""
-    query = update.callback_query
-    await query.answer()
-    
-    user = query.from_user
-    
-    # Получаем текущее количество шлёпков пользователя
-    from database import get_connection
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT shlep_count FROM user_stats WHERE user_id = %s", (user.id,))
-            result = cur.fetchone()
-            current_count = result[0] if result else 0
-    
-    next_ach = achievement_system.get_next_achievement(current_count)
-    
-    if not next_ach:
-        text = "🎉 Поздравляю! Ты получил все достижения! Ты настоящая легенда! 🏆"
-    else:
-        text = f"🎯 *Следующее достижение:*\n\n"
-        text += f"{next_ach['emoji']} *{next_ach['name']}*\n"
-        text += f"  └ {next_ach['description']}\n\n"
-        text += f"📊 *Прогресс:* {current_count}/{next_ach['threshold']}\n"
-        text += f"⏳ *Осталось:* {next_ach['remaining']} шлёпков"
-    
-    await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN)
-
-# ========== КОМАНДЫ ЗАДАНИЙ ==========
-
-async def tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Ежедневные задания (/tasks)"""
-    user = update.effective_user
-    task_system.init_user_tasks(user.id)
-    
-    await update.message.reply_text(
-        "📅 *Ежедневные задания*\n\n"
-        "Выполняй задания каждый день и получай награды! Задания обновляются в 00:00 по МСК.",
-        reply_markup=get_tasks_keyboard(),
-        parse_mode=ParseMode.MARKDOWN
-    )
-
-async def my_tasks_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Мои задания на сегодня"""
-    query = update.callback_query
-    await query.answer()
-    
-    user = query.from_user
-    tasks = task_system.get_user_tasks(user.id)
-    
-    text = "📅 *Твои задания на сегодня:*\n\n"
-    time_left = format_time_remaining()
-    
-    total_reward = 0
-    completed_count = 0
-    
-    for task in tasks:
-        status = "✅" if task['completed'] else "⏳"
-        progress = f"{task['progress']}/{task['required']}"
-        reward = f"+{task['reward']} очков"
-        
-        text += f"{task['emoji']} *{task['name']}*\n"
-        text += f"  └ {status} {progress} | {reward}\n\n"
-        
-        if task['completed']:
-            completed_count += 1
-            total_reward += task['reward']
-    
-    text += f"⏰ *До конца дня:* {time_left}\n"
-    text += f"✅ *Выполнено:* {completed_count}/{len(tasks)}\n"
-    text += f"💰 *Всего наград:* {total_reward} очков"
-    
-    await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN)
-
-# ========== КОМАНДЫ РЕЙТИНГА ==========
-
-async def rating_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Рейтинги (/rating)"""
-    await update.message.reply_text(
-        "🏆 *Рейтинги*\n\n"
-        "Соревнуйся с другими в количестве шлёпков!",
-        reply_markup=get_rating_keyboard(),
-        parse_mode=ParseMode.MARKDOWN
-    )
-
-async def daily_rating_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Рейтинг за день"""
-    query = update.callback_query
-    await query.answer()
-    
-    rating = rating_system.get_daily_rating()
-    today = get_moscow_time().strftime("%d.%m.%Y")
-    
-    text = f"📊 *Рейтинг за {today}:*\n\n"
-    
-    if not rating:
-        text += "Пока никто не шлёпал сегодня 😴"
-    else:
-        medals = ["🥇", "🥈", "🥉"] + [f"{i}." for i in range(4, 21)]
-        
-        for i, (user_id, username, count) in enumerate(rating[:10], 1):
-            medal = medals[i-1] if i <= len(medals) else f"{i}."
-            name = username or f"User {user_id}"
-            text += f"{medal} {name}: *{count}* шлёпков\n"
-    
-    await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN)
-
-async def weekly_rating_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Рейтинг за неделю"""
-    query = update.callback_query
-    await query.answer()
-    
-    rating = rating_system.get_weekly_rating()
-    
-    text = "📈 *Рейтинг за неделю:*\n\n"
-    
-    if not rating:
-        text += "Пока тихо на этой неделе... 😴"
-    else:
-        medals = ["🥇", "🥈", "🥉"] + [f"{i}." for i in range(4, 21)]
-        
-        for i, (user_id, username, count) in enumerate(rating[:10], 1):
-            medal = medals[i-1] if i <= len(medals) else f"{i}."
-            name = username or f"User {user_id}"
-            text += f"{medal} {name}: *{count}* шлёпков\n"
-    
-    await query.edit_message_text(text, parse_mode=ParseMode.MARKDOWN)
-
-# ========== INLINE ОБРАБОТЧИКИ ==========
-
-async def level_inline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Inline кнопка уровня"""
-    query = update.callback_query
-    await query.answer()
-    await level_command(update, context)
-
-async def stats_inline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Inline кнопка статистики"""
-    query = update.callback_query
-    await query.answer()
-    await stats_command(update, context)
-
-async def records_inline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Inline кнопка рекордов"""
-    query = update.callback_query
-    await query.answer()
-    await records_command(update, context)
-
-async def events_inline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Inline кнопка событий"""
-    query = update.callback_query
-    await query.answer()
-    await events_command(update, context)
-
-async def goals_inline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Inline кнопка целей"""
-    query = update.callback_query
-    await query.answer()
-    await goals_command(update, context)
-
-async def help_in_group_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Помощь в группе"""
-    query = update.callback_query
-    await query.answer()
-    
-    help_text = """
-🎮 *Доступные команды в группах:*
-
-/shlep - шлёпнуть Мишка
-/level - твой уровень
-/stats - статистика
-/events - события
-/goals - глобальные цели
-/records - рекорды
-
-Используй кнопки ниже для быстрых действий!
-    """
-    
-    await query.edit_message_text(
-        help_text,
-        parse_mode=ParseMode.MARKDOWN,
-        reply_markup=get_quick_actions_keyboard()
-    )
-
-# ========== ОБРАБОТЧИК КНОПОК ==========
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка кнопок в личных сообщениях"""
-    text = update.message.text
-    chat = update.effective_chat
-    
-    if chat.type != "private":
+    """Команда /records"""
+    if 'records' not in SYSTEMS:
+        await update.message.reply_text("🏆 Система рекордов скоро будет доступна!")
         return
     
-    # Определяем какая кнопка нажата
-    button_actions = {
-        "👊 Шлёпнуть Мишка": lambda: process_shlep(update, context, False),
-        "🎯 Уровень": lambda: level_command(update, context),
-        "📈 Статистика": lambda: detailed_stats_command(update, context),
-        "📊 Статистика": lambda: stats_command(update, context),
-        "🏆 Рекорды": lambda: records_command(update, context),
-        "🎪 События": lambda: events_command(update, context),
-        "🎯 Цели": lambda: goals_command(update, context),
-        "⚡ Навыки": lambda: upgrade_skill_command(update, context),
-        "👴 О Мишке": lambda: mishok_info(update, context),
-        "📅 Задания": lambda: tasks_command(update, context),
-        "🏆 Рейтинг": lambda: rating_command(update, context)
-    }
+    try:
+        all_records = SYSTEMS['records'].get_all_records()
+        
+        if not all_records:
+            text = "🏆 Рекордов пока нет. Будь первым!"
+        else:
+            text = "🏆 *Текущие рекорды:*\n\n"
+            for record_type, record in all_records.items():
+                text += f"*{record['name']}:*\n"
+                text += f"  👤 {record['username']}\n"
+                text += f"  🎯 {record['value']:.1f}\n\n"
+        
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    except:
+        await update.message.reply_text("🏆 Шлёпай больше чтобы установить рекорды!")
+
+async def events_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /events"""
+    if 'events' not in SYSTEMS:
+        await update.message.reply_text("🎪 Система событий скоро будет доступна!")
+        return
     
-    if text in button_actions:
-        await button_actions[text]()
-    else:
-        await update.message.reply_text(
-            "Используй кнопки ниже или команды!",
-            reply_markup=get_game_keyboard()
-        )
+    try:
+        multiplier, active_events = SYSTEMS['events'].get_event_multiplier()
+        
+        text = "🎪 *События*\n\n"
+        
+        if multiplier != 1.0:
+            text += f"📈 *Текущий множитель опыта:* x{multiplier:.1f}\n\n"
+        
+        if active_events:
+            text += "*Активные события:*\n"
+            for event in active_events:
+                text += f"\n🎉 {event['name']}\n"
+                text += f"  {event['description']}\n"
+        else:
+            text += "Сейчас нет активных событий."
+        
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    except:
+        await update.message.reply_text("🎪 События появятся скоро!")
 
-# ========== ДРУГИЕ ОБРАБОТЧИКИ ==========
+async def goals_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /goals"""
+    if 'goals' not in SYSTEMS:
+        await update.message.reply_text("🎯 Система целей скоро будет доступна!")
+        return
+    
+    try:
+        global_stats = SYSTEMS['goals'].get_global_stats()
+        total_shleps = global_stats.get('total_shleps', 0)
+        progress = (total_shleps / 1000000 * 100)
+        
+        text = f"""
+🎯 *Глобальная цель: 1,000,000 шлёпков*
 
-async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Приветствие при добавлении в группу"""
-    if update.message.new_chat_members:
-        for member in update.message.new_chat_members:
-            if member.id == context.bot.id:
-                welcome_text = """
-👴 *Мишок Лысый в чате!*
+📊 *Прогресс:* {total_shleps:,} / 1,000,000
+📈 {progress:.1f}%
 
-Теперь можно шлёпать меня по лысине прямо здесь!
+👥 *Активных сегодня:* {global_stats.get('active_today', 0)}
+"""
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    except:
+        await update.message.reply_text("🎯 Цель: 1,000,000 шлёпков всем сообществом!")
 
-Используй:
-/shlep - шлёпнуть Мишка
-/level - твой уровень
-/stats - статистика
-/events - активные события
+async def upgrade_skill_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /upgrade"""
+    if 'skills' not in SYSTEMS:
+        await update.message.reply_text("⚡ Система навыков скоро будет доступна!")
+        return
+    
+    await update.message.reply_text(
+        "⚡ Используй:\n"
+        "/upgrade accurate - Меткий шлёпок\n"
+        "/upgrade combo - Серия ударов\n"
+        "/upgrade critical - Критический удар"
+    )
 
-Или нажми кнопку ниже для быстрого шлёпка!
-                """
-                await update.message.reply_text(
-                    welcome_text,
-                    reply_markup=get_inline_keyboard(),
-                    parse_mode=ParseMode.MARKDOWN
-                )
-
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка ошибок"""
-    logger.error(f"Update {update} caused error {context.error}")
-    if update and update.effective_message:
-        await update.effective_message.reply_text(
-            "❌ Произошла ошибка. Попробуй снова или свяжись с разработчиком."
-        )
-
-# ========== ЗАПУСК БОТА ==========
+# ========== ЗАПУСК ==========
 
 def main():
     """Запуск бота"""
     if not BOT_TOKEN:
-        logger.error("BOT_TOKEN not found!")
+        logger.error("❌ BOT_TOKEN не найден!")
         return
     
-    # Создаём приложение
+    # Проверка систем
+    loaded_systems = [name for name in SYSTEMS.keys()]
+    logger.info(f"✅ Загружено систем: {len(loaded_systems)}")
+    if loaded_systems:
+        logger.info(f"📦 Системы: {', '.join(loaded_systems)}")
+    
+    # Создание приложения
     application = Application.builder().token(BOT_TOKEN).build()
     
     # ===== ОСНОВНЫЕ КОМАНДЫ =====
@@ -872,7 +530,7 @@ def main():
     application.add_handler(CommandHandler("stats", stats_command))
     application.add_handler(CommandHandler("mishok", mishok_info))
     
-    # ===== НОВЫЕ КОМАНДЫ (системы 1-5) =====
+    # ===== СИСТЕМНЫЕ КОМАНДЫ =====
     application.add_handler(CommandHandler("level", level_command))
     application.add_handler(CommandHandler("detailed_stats", detailed_stats_command))
     application.add_handler(CommandHandler("records", records_command))
@@ -880,49 +538,16 @@ def main():
     application.add_handler(CommandHandler("goals", goals_command))
     application.add_handler(CommandHandler("upgrade", upgrade_skill_command))
     
-    # ===== КОМАНДЫ ИЗ ПРЕДЫДУЩИХ СИСТЕМ =====
-    application.add_handler(CommandHandler("achievements", achievements_command))
-    application.add_handler(CommandHandler("tasks", tasks_command))
-    application.add_handler(CommandHandler("rating", rating_command))
-    
-    # ===== INLINE-КНОПКИ =====
+    # ===== INLINE КНОПКИ =====
     application.add_handler(CallbackQueryHandler(shlep_callback, pattern="^shlep_mishok$"))
-    application.add_handler(CallbackQueryHandler(level_inline_callback, pattern="^level_inline$"))
-    application.add_handler(CallbackQueryHandler(stats_inline_callback, pattern="^stats_inline$"))
-    application.add_handler(CallbackQueryHandler(records_inline_callback, pattern="^records_inline$"))
-    application.add_handler(CallbackQueryHandler(events_inline_callback, pattern="^events_inline$"))
-    application.add_handler(CallbackQueryHandler(goals_inline_callback, pattern="^goals_inline$"))
-    application.add_handler(CallbackQueryHandler(help_in_group_callback, pattern="^help_in_group$"))
-    
-    # Достижения
-    application.add_handler(CallbackQueryHandler(my_achievements_callback, pattern="^my_achievements$"))
-    application.add_handler(CallbackQueryHandler(next_achievement_callback, pattern="^next_achievement$"))
-    
-    # Задания
-    application.add_handler(CallbackQueryHandler(my_tasks_callback, pattern="^my_tasks$"))
-    
-    # Рейтинг
-    application.add_handler(CallbackQueryHandler(daily_rating_callback, pattern="^daily_rating$"))
-    application.add_handler(CallbackQueryHandler(weekly_rating_callback, pattern="^weekly_rating$"))
-    
-    # ===== СООБЩЕНИЯ =====
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
-    application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, group_welcome))
-    
-    # ===== ОШИБКИ =====
-    application.add_error_handler(error_handler)
     
     # ===== ЗАПУСК =====
-    logger.info("🤖 Бот Мишок Лысый запускается...")
-    if SYSTEMS_LOADED:
-        logger.info("✅ Все системы загружены: Уровни, Статистика, Рекорды, События, Цели")
-    else:
-        logger.warning("⚠️ Некоторые системы не загружены, бот будет работать в базовом режиме")
+    logger.info("🚀 Бот Мишок Лысый запускается...")
     
     try:
         application.run_polling(allowed_updates=Update.ALL_TYPES)
     except Exception as e:
-        logger.error(f"Ошибка запуска бота: {e}")
+        logger.error(f"💥 Ошибка запуска бота: {e}")
 
 if __name__ == "__main__":
     main()
