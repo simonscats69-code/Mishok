@@ -1,8 +1,3 @@
-"""
-📱 Модуль клавиатур для бота "Мишок Лысый"
-Содержит все клавиатуры для личных сообщений и групп
-"""
-
 from telegram import (
     InlineKeyboardMarkup, 
     InlineKeyboardButton, 
@@ -10,13 +5,7 @@ from telegram import (
     KeyboardButton
 )
 
-# ========== ОСНОВНЫЕ КЛАВИАТУРЫ ДЛЯ ЛИЧНЫХ СООБЩЕНИЙ ==========
-
 def get_main_keyboard():
-    """
-    Основная клавиатура для личных сообщений
-    Используется когда системы не загружены
-    """
     return ReplyKeyboardMarkup([
         [KeyboardButton("👊 Шлёпнуть Мишка")],
         [KeyboardButton("📊 Статистика"), KeyboardButton("🎯 Достижения")],
@@ -24,12 +13,7 @@ def get_main_keyboard():
         [KeyboardButton("👴 О Мишке")]
     ], resize_keyboard=True, input_field_placeholder="Выбери действие...")
 
-
 def get_game_keyboard():
-    """
-    Полная игровая клавиатура со всеми системами
-    Используется когда системы загружены
-    """
     return ReplyKeyboardMarkup([
         [KeyboardButton("👊 Шлёпнуть Мишка")],
         [
@@ -49,14 +33,7 @@ def get_game_keyboard():
         ]
     ], resize_keyboard=True, input_field_placeholder="Выбери систему...")
 
-
-# ========== INLINE-КЛАВИАТУРЫ ДЛЯ ГРУПП ==========
-
 def get_inline_keyboard():
-    """
-    Основная inline-клавиатура для групп
-    Показывается под сообщениями в чатах
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("👊 Шлёпнуть Мишка", callback_data="shlep_mishok"),
@@ -72,12 +49,7 @@ def get_inline_keyboard():
         ]
     ])
 
-
 def get_simple_inline_keyboard():
-    """
-    Упрощённая inline-клавиатура для групп
-    Когда нужно минимум кнопок
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("👊 Шлёпнуть сейчас!", callback_data="shlep_mishok"),
@@ -85,11 +57,7 @@ def get_simple_inline_keyboard():
         ]
     ])
 
-
 def get_group_welcome_keyboard():
-    """
-    Клавиатура при добавлении бота в группу
-    """
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🎮 Показать команды", callback_data="help_in_group")],
         [InlineKeyboardButton("👊 Шлёпнуть Мишка", callback_data="shlep_mishok")],
@@ -99,13 +67,7 @@ def get_group_welcome_keyboard():
         ]
     ])
 
-
-# ========== КЛАВИАТУРЫ ДЛЯ СИСТЕМЫ ДОСТИЖЕНИЙ ==========
-
 def get_achievements_keyboard():
-    """
-    Клавиатура для системы достижений
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📈 Мои достижения", callback_data="my_achievements"),
@@ -118,11 +80,7 @@ def get_achievements_keyboard():
         [InlineKeyboardButton("◀️ Назад к меню", callback_data="back_main")]
     ])
 
-
 def get_achievement_details_keyboard(achievement_id):
-    """
-    Клавиатура для детальной информации о достижении
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📅 Дата получения", callback_data=f"achievement_date_{achievement_id}"),
@@ -131,13 +89,7 @@ def get_achievement_details_keyboard(achievement_id):
         [InlineKeyboardButton("◀️ Назад к достижениям", callback_data="back_achievements")]
     ])
 
-
-# ========== КЛАВИАТУРЫ ДЛЯ СИСТЕМЫ ЗАДАНИЙ ==========
-
 def get_tasks_keyboard():
-    """
-    Клавиатура для системы заданий
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📋 Мои задания", callback_data="my_tasks"),
@@ -150,11 +102,7 @@ def get_tasks_keyboard():
         [InlineKeyboardButton("◀️ Назад к меню", callback_data="back_main")]
     ])
 
-
 def get_task_details_keyboard(task_id, completed=False):
-    """
-    Клавиатура для детальной информации о задании
-    """
     buttons = []
     
     if not completed:
@@ -169,13 +117,7 @@ def get_task_details_keyboard(task_id, completed=False):
     
     return InlineKeyboardMarkup(buttons)
 
-
-# ========== КЛАВИАТУРЫ ДЛЯ СИСТЕМЫ РЕЙТИНГА ==========
-
 def get_rating_keyboard():
-    """
-    Клавиатура для системы рейтинга
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📊 За день", callback_data="daily_rating"),
@@ -192,11 +134,7 @@ def get_rating_keyboard():
         [InlineKeyboardButton("◀️ Назад к меню", callback_data="back_main")]
     ])
 
-
 def get_rating_period_keyboard(period="daily"):
-    """
-    Клавиатура для выбора периода рейтинга
-    """
     periods = {
         "daily": "📊 За день",
         "weekly": "📈 За неделю", 
@@ -216,13 +154,7 @@ def get_rating_period_keyboard(period="daily"):
     
     return InlineKeyboardMarkup(buttons)
 
-
-# ========== КЛАВИАТУРЫ ДЛЯ СИСТЕМЫ УРОВНЕЙ ==========
-
 def get_level_keyboard():
-    """
-    Клавиатура для системы уровней
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📊 Прогресс уровня", callback_data="level_progress"),
@@ -239,11 +171,7 @@ def get_level_keyboard():
         [InlineKeyboardButton("◀️ Назад к меню", callback_data="back_main")]
     ])
 
-
 def get_skills_keyboard():
-    """
-    Клавиатура для системы навыков
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("🎯 Меткий шлёпок", callback_data="skill_accurate_info"),
@@ -260,11 +188,7 @@ def get_skills_keyboard():
         [InlineKeyboardButton("◀️ Назад к уровням", callback_data="back_level")]
     ])
 
-
 def get_upgrade_skill_keyboard(skill_id, can_upgrade=True, cost=0):
-    """
-    Клавиатура для улучшения навыка
-    """
     buttons = []
     
     if can_upgrade:
@@ -279,13 +203,7 @@ def get_upgrade_skill_keyboard(skill_id, can_upgrade=True, cost=0):
     
     return InlineKeyboardMarkup(buttons)
 
-
-# ========== КЛАВИАТУРЫ ДЛЯ СИСТЕМЫ СТАТИСТИКИ ==========
-
 def get_stats_keyboard():
-    """
-    Клавиатура для системы статистики
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📊 Активность", callback_data="activity_stats"),
@@ -302,11 +220,7 @@ def get_stats_keyboard():
         [InlineKeyboardButton("◀️ Назад к меню", callback_data="back_main")]
     ])
 
-
 def get_stats_period_keyboard(period="daily"):
-    """
-    Клавиатура для выбора периода статистики
-    """
     periods = {
         "daily": "📅 За день",
         "weekly": "📈 За неделю",
@@ -323,13 +237,7 @@ def get_stats_period_keyboard(period="daily"):
     
     return InlineKeyboardMarkup(buttons)
 
-
-# ========== КЛАВИАТУРЫ ДЛЯ СИСТЕМЫ РЕКОРДОВ ==========
-
 def get_records_keyboard():
-    """
-    Клавиатура для системы рекордов
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("💪 Сила шлёпка", callback_data="record_strength"),
@@ -350,11 +258,7 @@ def get_records_keyboard():
         [InlineKeyboardButton("◀️ Назад к меню", callback_data="back_main")]
     ])
 
-
 def get_record_details_keyboard(record_type):
-    """
-    Клавиатура для детальной информации о рекорде
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📅 История", callback_data=f"record_history_{record_type}"),
@@ -366,13 +270,7 @@ def get_record_details_keyboard(record_type):
         ]
     ])
 
-
-# ========== КЛАВИАТУРЫ ДЛЯ СИСТЕМЫ СОБЫТИЙ ==========
-
 def get_events_keyboard():
-    """
-    Клавиатура для системы событий
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("🎪 Активные", callback_data="active_events"),
@@ -389,11 +287,7 @@ def get_events_keyboard():
         [InlineKeyboardButton("◀️ Назад к меню", callback_data="back_main")]
     ])
 
-
 def get_event_details_keyboard(event_id):
-    """
-    Клавиатура для детальной информации о событии
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("⏳ Таймер", callback_data=f"event_timer_{event_id}"),
@@ -405,13 +299,7 @@ def get_event_details_keyboard(event_id):
         ]
     ])
 
-
-# ========== КЛАВИАТУРЫ ДЛЯ СИСТЕМЫ ЦЕЛЕЙ ==========
-
 def get_goals_keyboard():
-    """
-    Клавиатура для системы целей
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("🎯 Глобальные цели", callback_data="global_goals"),
@@ -428,11 +316,7 @@ def get_goals_keyboard():
         [InlineKeyboardButton("◀️ Назад к меню", callback_data="back_main")]
     ])
 
-
 def get_goal_details_keyboard(goal_id):
-    """
-    Клавиатура для детальной информации о цели
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📊 Прогресс", callback_data=f"goal_progress_{goal_id}"),
@@ -445,30 +329,12 @@ def get_goal_details_keyboard(goal_id):
         [InlineKeyboardButton("◀️ Назад к целям", callback_data="back_goals")]
     ])
 
-
-# ========== КЛАВИАТУРЫ НАВИГАЦИИ И УТИЛИТЫ ==========
-
 def get_back_button(back_to: str = "main"):
-    """
-    Универсальная кнопка "Назад"
-    
-    Args:
-        back_to: Куда возвращаться (main, achievements, tasks, rating, level, stats, records, events, goals)
-    """
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("◀️ Назад", callback_data=f"back_{back_to}")]
     ])
 
-
 def get_confirm_keyboard(action: str, yes_text="✅ Да", no_text="❌ Нет"):
-    """
-    Клавиатура подтверждения действия
-    
-    Args:
-        action: Идентификатор действия
-        yes_text: Текст на кнопке "Да"
-        no_text: Текст на кнопке "Нет"
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton(yes_text, callback_data=f"confirm_{action}"),
@@ -476,36 +342,20 @@ def get_confirm_keyboard(action: str, yes_text="✅ Да", no_text="❌ Нет")
         ]
     ])
 
-
 def get_navigation_keyboard(current_page: int, total_pages: int, prefix: str):
-    """
-    Клавиатура навигации по страницам
-    
-    Args:
-        current_page: Текущая страница
-        total_pages: Всего страниц
-        prefix: Префикс для callback_data
-    """
     buttons = []
     
-    # Кнопка "Назад"
     if current_page > 1:
         buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"{prefix}_{current_page-1}"))
     
-    # Номер текущей страницы
     buttons.append(InlineKeyboardButton(f"{current_page}/{total_pages}", callback_data="current_page"))
     
-    # Кнопка "Вперёд"
     if current_page < total_pages:
         buttons.append(InlineKeyboardButton("Вперёд ➡️", callback_data=f"{prefix}_{current_page+1}"))
     
     return InlineKeyboardMarkup([buttons])
 
-
 def get_main_menu_keyboard():
-    """
-    Клавиатура главного меню (inline версия)
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("🎮 Играть", callback_data="play_menu"),
@@ -526,11 +376,7 @@ def get_main_menu_keyboard():
         [InlineKeyboardButton("🆘 Помощь", callback_data="help_menu")]
     ])
 
-
 def get_help_keyboard():
-    """
-    Клавиатура помощи
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📖 Команды", callback_data="help_commands"),
@@ -547,11 +393,7 @@ def get_help_keyboard():
         [InlineKeyboardButton("◀️ Назад в меню", callback_data="back_main")]
     ])
 
-
 def get_admin_keyboard():
-    """
-    Клавиатура для администратора
-    """
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📊 Статистика бота", callback_data="admin_stats"),
@@ -568,17 +410,7 @@ def get_admin_keyboard():
         [InlineKeyboardButton("◀️ Выход", callback_data="back_main")]
     ])
 
-
-# ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
-
 def create_custom_keyboard(buttons_data, columns=2):
-    """
-    Создание кастомной клавиатуры из данных
-    
-    Args:
-        buttons_data: Список кортежей (текст, callback_data)
-        columns: Количество кнопок в строке
-    """
     keyboard = []
     row = []
     
@@ -591,16 +423,7 @@ def create_custom_keyboard(buttons_data, columns=2):
     
     return InlineKeyboardMarkup(keyboard)
 
-
 def create_grid_keyboard(items, prefix, columns=3):
-    """
-    Создание клавиатуры-сетки
-    
-    Args:
-        items: Список элементов
-        prefix: Префикс для callback_data
-        columns: Количество колонок
-    """
     keyboard = []
     row = []
     
@@ -625,11 +448,7 @@ def create_grid_keyboard(items, prefix, columns=3):
     
     return InlineKeyboardMarkup(keyboard)
 
-
-# ========== ТЕСТОВАЯ ФУНКЦИЯ ==========
-
 def test_keyboards():
-    """Тестовая функция для проверки создания клавиатур"""
     keyboards = {
         "Основная": get_main_keyboard(),
         "Игровая": get_game_keyboard(),
@@ -654,8 +473,6 @@ def test_keyboards():
     print(f"✅ Создано {len(keyboards)} клавиатур")
     return keyboards
 
-
 if __name__ == "__main__":
-    # Тестирование при прямом запуске
     test_keyboards()
     print("✅ Модуль клавиатур готов к работе")
