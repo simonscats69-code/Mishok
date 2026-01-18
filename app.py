@@ -104,7 +104,6 @@ async def clear_cache_endpoint(request):
 def create_app():
     app = web.Application()
     
-    # Основные эндпоинты
     app.router.add_post('/webhook', webhook_handler)
     app.router.add_get('/health', health_check)
     app.router.add_get('/health/detailed', health_detailed)
@@ -112,19 +111,17 @@ def create_app():
     app.router.add_post('/cache/clear', clear_cache_endpoint)
     app.router.add_get('/', health_check)
     
-    # Webhook настройки
     app.on_startup.append(set_webhook_on_startup)
     
     return app
 
 async def cleanup_cache():
-    """Фоновая задача для очистки кэша"""
     try:
         from cache import cache
         logger.info("Запущена фоновая задача очистки кэша")
         
         while True:
-            await asyncio.sleep(60)  # Каждую минуту
+            await asyncio.sleep(60)
             cleared = await cache.clear_expired()
             if cleared > 0:
                 logger.debug(f"Фоновая очистка кэша: удалено {cleared} записей")
@@ -133,25 +130,36 @@ async def cleanup_cache():
     except Exception as e:
         logger.error(f"Ошибка в фоновой задаче кэша: {e}")
 
+async def check_chat_records():
+    """Фоновая задача для проверки и назначения ролей в чатах"""
+    try:
+        logger.info("Запущена фоновая задача проверки ролей")
+        
+        while True:
+            await asyncio.sleep(300)  # Проверяем каждые 5 минут
+            
+            # Здесь должна быть логика проверки рекордов и назначения ролей
+            # Пока оставляем заглушку
+            
+            logger.debug("Проверка ролей в чатах выполнена")
+    except Exception as e:
+        logger.error(f"Ошибка в фоновой задаче проверки ролей: {e}")
+
 async def startup_tasks(app):
-    """Запуск фоновых задач при старте"""
     if WEBHOOK_MODE:
-        # Запускаем фоновую задачу очистки кэша только в режиме webhook
         asyncio.create_task(cleanup_cache())
+        asyncio.create_task(check_chat_records())
         logger.info("Фоновые задачи запущены")
 
 def handle_shutdown(signum, frame):
-    """Обработчик graceful shutdown"""
     logger.info(f"Получен сигнал {signum}, завершаем работу...")
     
     if application:
         logger.info("Останавливаем приложение...")
         try:
             if WEBHOOK_MODE:
-                # В режиме webhook нужно явно остановить
                 pass
             else:
-                # В режиме polling останавливаем приложение
                 import threading
                 if hasattr(application, '_initialized') and application._initialized:
                     application.stop()
@@ -175,7 +183,8 @@ def main():
         
         from bot import (
             start_command, shlep_command, stats_command, mishok_info_command,
-            help_command, level_command, inline_handler,
+            help_command, level_command, chat_stats_command, chat_top_command,
+            vote_command, duel_command, roles_command, inline_handler,
             button_handler, group_welcome, error_handler,
             cache_stats_command, clear_cache_command
         )
@@ -184,7 +193,6 @@ def main():
             CommandHandler, MessageHandler, CallbackQueryHandler, filters
         )
         
-        # Основные команды
         application.add_handler(CommandHandler("start", start_command))
         application.add_handler(CommandHandler("shlep", shlep_command))
         application.add_handler(CommandHandler("stats", stats_command))
@@ -192,7 +200,12 @@ def main():
         application.add_handler(CommandHandler("help", help_command))
         application.add_handler(CommandHandler("level", level_command))
         
-        # Админские команды для кэша
+        application.add_handler(CommandHandler("chat_stats", chat_stats_command))
+        application.add_handler(CommandHandler("chat_top", chat_top_command))
+        application.add_handler(CommandHandler("vote", vote_command))
+        application.add_handler(CommandHandler("duel", duel_command))
+        application.add_handler(CommandHandler("roles", roles_command))
+        
         from config import ADMIN_ID
         if ADMIN_ID:
             from telegram.ext import filters as tg_filters
@@ -200,14 +213,12 @@ def main():
             application.add_handler(CommandHandler("cache_stats", cache_stats_command, filters=admin_filter))
             application.add_handler(CommandHandler("clear_cache", clear_cache_command, filters=admin_filter))
         
-        # Обработчики
         application.add_handler(CallbackQueryHandler(inline_handler))
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
         application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, group_welcome))
         
         application.add_error_handler(error_handler)
         
-        # Настраиваем обработчики сигналов для graceful shutdown
         signal.signal(signal.SIGINT, handle_shutdown)
         signal.signal(signal.SIGTERM, handle_shutdown)
         
@@ -216,31 +227,27 @@ def main():
         if WEBHOOK_MODE:
             logger.info(f"Запуск в режиме вебхука на порту {PORT}")
             
-            # Создаем приложение и запускаем
             app = create_app()
             
-            # Запускаем фоновые задачи
             asyncio.get_event_loop().run_until_complete(startup_tasks(app))
             
-            # Запускаем веб-сервер
             web.run_app(
                 app, 
                 host='0.0.0.0', 
                 port=PORT,
-                shutdown_timeout=10  # Время на graceful shutdown
+                shutdown_timeout=10
             )
         else:
             logger.info("Запуск в режиме polling")
             
-            # Запускаем фоновые задачи для polling режима
             loop = asyncio.get_event_loop()
             loop.create_task(cleanup_cache())
+            loop.create_task(check_chat_records())
             
-            # Запускаем polling
             application.run_polling(
                 allowed_updates=Update.ALL_TYPES,
                 drop_pending_updates=True,
-                close_loop=False  # Не закрывать event loop
+                close_loop=False
             )
             
     except Exception as e:
