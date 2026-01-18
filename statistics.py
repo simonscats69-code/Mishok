@@ -1,15 +1,6 @@
 from datetime import datetime, timedelta
-from collections import defaultdict
 from database import get_connection
 from utils import get_moscow_time
-
-try:
-    import matplotlib.pyplot as plt
-    import io
-    import base64
-    MATPLOTLIB_AVAILABLE = True
-except ImportError:
-    MATPLOTLIB_AVAILABLE = False
 
 class StatisticsSystem:
     def __init__(self):
@@ -75,33 +66,6 @@ class StatisticsSystem:
                 
                 return distribution
     
-    def generate_activity_chart(self, user_id: int, days: int = 7):
-        if not MATPLOTLIB_AVAILABLE:
-            return None
-        
-        activity = self.get_daily_activity(user_id, days)
-        
-        dates = list(activity.keys())
-        counts = list(activity.values())
-        
-        plt.figure(figsize=(10, 5))
-        plt.bar(dates, counts, color='skyblue')
-        plt.title('Активность по дням', fontsize=14)
-        plt.xlabel('Дата', fontsize=12)
-        plt.ylabel('Количество шлёпков', fontsize=12)
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-        
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=100)
-        plt.close()
-        buf.seek(0)
-        
-        img_base64 = base64.b64encode(buf.read()).decode('utf-8')
-        buf.close()
-        
-        return img_base64
-    
     def get_favorite_time(self, user_id: int):
         distribution = self.get_hourly_distribution(user_id)
         
@@ -109,7 +73,6 @@ class StatisticsSystem:
             return "Пока нет данных"
         
         max_hour = distribution.index(max(distribution))
-        total = sum(distribution)
         
         times_of_day = [
             (0, 6, "ночью 🌙"),
