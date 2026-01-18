@@ -130,25 +130,9 @@ async def cleanup_cache():
     except Exception as e:
         logger.error(f"Ошибка в фоновой задаче кэша: {e}")
 
-async def check_chat_records():
-    """Фоновая задача для проверки и назначения ролей в чатах"""
-    try:
-        logger.info("Запущена фоновая задача проверки ролей")
-        
-        while True:
-            await asyncio.sleep(300)  # Проверяем каждые 5 минут
-            
-            # Здесь должна быть логика проверки рекордов и назначения ролей
-            # Пока оставляем заглушку
-            
-            logger.debug("Проверка ролей в чатах выполнена")
-    except Exception as e:
-        logger.error(f"Ошибка в фоновой задаче проверки ролей: {e}")
-
 async def startup_tasks(app):
     if WEBHOOK_MODE:
         asyncio.create_task(cleanup_cache())
-        asyncio.create_task(check_chat_records())
         logger.info("Фоновые задачи запущены")
 
 def handle_shutdown(signum, frame):
@@ -242,7 +226,6 @@ def main():
             
             loop = asyncio.get_event_loop()
             loop.create_task(cleanup_cache())
-            loop.create_task(check_chat_records())
             
             application.run_polling(
                 allowed_updates=Update.ALL_TYPES,
