@@ -34,7 +34,7 @@ except ImportError as e:
 
 try:
     from config import (
-        BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO, ACHIEVEMENTS
+        BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO
     )
     CONFIG_AVAILABLE = True
 except ImportError as e:
@@ -43,7 +43,6 @@ except ImportError as e:
     BOT_TOKEN = os.getenv("BOT_TOKEN", "")
     MISHOK_REACTIONS = ["Ой, больно! 😠", "Эй, не шлёпай! 👴💢"]
     MISHOK_INTRO = "👴 *Мишок Лысый* - бот для шлёпков"
-    ACHIEVEMENTS = {}
 
 try:
     from database import (
@@ -69,7 +68,7 @@ except ImportError as e:
 try:
     from keyboard import (
         get_game_keyboard, get_inline_keyboard, get_skills_keyboard,
-        get_achievements_keyboard, get_stats_keyboard, get_goals_keyboard,
+        get_stats_keyboard, get_goals_keyboard,
         get_upgrade_skill_keyboard, get_back_button
     )
     KEYBOARD_AVAILABLE = True
@@ -79,7 +78,6 @@ except ImportError as e:
     def get_game_keyboard(): return None
     def get_inline_keyboard(): return None
     def get_skills_keyboard(): return None
-    def get_achievements_keyboard(): return None
     def get_stats_keyboard(): return None
     def get_goals_keyboard(): return None
     def get_upgrade_skill_keyboard(*args, **kwargs): return None
@@ -109,13 +107,6 @@ try:
     logger.info("Система целей загружена")
 except Exception as e:
     logger.warning(f"Система целей не загружена: {e}")
-
-try:
-    from achievements import AchievementSystem
-    SYSTEMS['achievements'] = AchievementSystem()
-    logger.info("Система достижений загружена")
-except Exception as e:
-    logger.warning(f"Система достижений не загружена: {e}")
 
 try:
     from utils import get_moscow_time
@@ -164,14 +155,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Что ты можешь делать:*
 • Шлёпать меня по лысине командой `/shlep`
 • Смотреть статистику шлёпков `/stats`
-• Узнать информацию обо мне `/mishok`
 • Прокачивать уровень и навыки `/level`
-• Смотреть достижения `/achievements`
 • Улучшать навыки `/upgrade`
 • Смотреть цели сообщества `/goals`
 • Детальная статистика `/detailed_stats`
 
-*Игровые системы:* {len(SYSTEMS)} из 4 загружено
+*Игровые системы:* {len(SYSTEMS)} из 3 загружено
 
 *Для начала просто отправь:* `/shlep`
     """
@@ -223,22 +212,12 @@ async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_c
         
         total_xp = skill_effects['total_xp']
         level_info = {"level": 1, "progress": 0, "xp_current": 0, "xp_needed": 100}
-        new_achievements = []
         
         if 'levels' in SYSTEMS:
             try:
                 level_info = SYSTEMS['levels'].add_xp(user.id, total_xp, "shlep")
             except Exception as e:
                 logger.error(f"Ошибка системы уровней: {e}")
-        
-        if 'achievements' in SYSTEMS:
-            try:
-                new_achievements = SYSTEMS['achievements'].check_achievements(user.id, user_count)
-                if new_achievements is None:
-                    new_achievements = []
-            except Exception as e:
-                logger.error(f"Ошибка системы достижений: {e}")
-                new_achievements = []
         
         if 'stats' in SYSTEMS:
             try:
@@ -289,11 +268,6 @@ async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_c
         
         if skill_effects.get('extra_shlep'):
             message_lines.append(f"👊 Серия ударов! Дополнительный шлёпок!")
-        
-        if new_achievements:
-            for ach in new_achievements:
-                message_lines.append(f"\n🎉 {ach['emoji']} *{ach['name']}*")
-                add_points(user.id, ach.get('reward_points', 10))
         
         message_text = "\n".join(message_lines)
         
@@ -353,7 +327,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🏆 *Топ шлёпателей:*
 {top_text}
 
-*Глобальные системы:* {len(SYSTEMS)}/4 загружено
+*Глобальные системы:* {len(SYSTEMS)}/3 загружено
     """
         
         await update.message.reply_text(
@@ -540,45 +514,6 @@ async def upgrade_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Ошибка команды /upgrade: {e}")
         await update.message.reply_text("Ошибка загрузки информации о навыках")
 
-async def achievements_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        if 'achievements' not in SYSTEMS:
-            await update.message.reply_text(
-                "🏆 *Достижения*\n\nСистема достижений временно недоступна.",
-                parse_mode=ParseMode.MARKDOWN
-            )
-            return
-        
-        user = update.effective_user
-        achievements = SYSTEMS['achievements'].get_user_achievements(user.id)
-        achievements_progress = SYSTEMS['achievements'].get_achievements_progress(user.id)
-        next_achievement = SYSTEMS['achievements'].get_next_achievement(
-            get_user_stats(user.id)[1] if get_user_stats(user.id) else 0
-        )
-        
-        if not achievements:
-            text = "🏆 *Твои достижения*\n\nПока нет достижений. Продолжай шлёпать!"
-        else:
-            text = f"🏆 *Твои достижения:* {len(achievements)}/{len(achievements_progress)}\n\n"
-            for ach in achievements[:5]:
-                date = ach['achieved_at'].strftime("%d.%m.%Y") if 'achieved_at' in ach else ""
-                text += f"{ach['emoji']} *{ach['name']}*\n"
-                text += f"  {ach['description']}\n"
-                if date:
-                    text += f"  📅 Получено: {date}\n"
-                text += "\n"
-        
-        if next_achievement:
-            text += f"\n🎯 *Следующее достижение:*\n"
-            text += f"{next_achievement['emoji']} *{next_achievement['name']}*\n"
-            text += f"Осталось шлёпков: {next_achievement['remaining']}\n"
-        
-        keyboard = get_achievements_keyboard() if KEYBOARD_AVAILABLE else None
-        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
-    except Exception as e:
-        logger.error(f"Ошибка команды /achievements: {e}")
-        await update.message.reply_text("Система достижений скоро будет доступна!")
-
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = """
 🆘 *Помощь по командам*
@@ -587,14 +522,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /start — Начало работы с ботом
 /shlep — Шлёпнуть Мишка по лысине
 /stats — Общая статистика шлёпков
-/mishok — Информация о Мишке
 
 *Игровые системы:*
 /level — Твой уровень и прогресс
 /detailed_stats — Детальная статистика
 /goals — Глобальные цели
 /upgrade — Улучшение навыки
-/achievements — Достижения
 
 *В группах:* используй команды или inline-кнопки
 """
@@ -614,8 +547,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📊 Статистика": stats_command,
         "🎯 Цели": goals_command,
         "⚡ Навыки": upgrade_command,
-        "👴 О Мишке": mishok_info_command,
-        "🏆 Достижения": achievements_command,
     }
     
     if text in button_actions:
@@ -667,8 +598,6 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await help_command(update, context)
         elif data.startswith("skill_"):
             await handle_skill_callback(update, context, data)
-        elif data.startswith("achievement_"):
-            await handle_achievement_callback(update, context, data)
         elif data.startswith("upgrade_"):
             await handle_upgrade_callback(update, context, data)
         elif data.startswith("back_"):
@@ -810,79 +739,6 @@ async def handle_upgrade_callback(update: Update, context: ContextTypes.DEFAULT_
         
         keyboard = get_back_button("skills")
         await query.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
-
-async def handle_achievement_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, data: str):
-    query = update.callback_query
-    
-    if data == "my_achievements":
-        await achievements_command(update, context)
-    elif data == "next_achievement":
-        user = update.effective_user
-        user_stats = get_user_stats(user.id)
-        current_count = user_stats[1] if user_stats else 0
-        next_achievement = SYSTEMS['achievements'].get_next_achievement(current_count)
-        
-        if next_achievement:
-            text = f"""
-🎯 *Следующее достижение:*
-
-{next_achievement['emoji']} *{next_achievement['name']}*
-{next_achievement['description']}
-
-*Прогресс:* {current_count}/{next_achievement['threshold']}
-*Осталось:* {next_achievement['remaining']} шлёпков
-*Награда:* {next_achievement.get('reward_points', 10)} очков
-"""
-        else:
-            text = "🎉 *Поздравляю!* Ты достиг всех доступных достижений!"
-        
-        keyboard = get_back_button("achievements")
-        await query.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
-    elif data == "achievements_progress":
-        user = update.effective_user
-        achievements_progress = SYSTEMS['achievements'].get_achievements_progress(user.id)
-        
-        text = "🏆 *Прогресс по достижениям:*\n\n"
-        for ach in achievements_progress:
-            progress_bar = "█" * int(ach['progress_percent'] / 10) + "░" * (10 - int(ach['progress_percent'] / 10))
-            status = "✅" if ach['achieved'] else "⏳"
-            text += f"{status} {ach['emoji']} {ach['name']}\n"
-            if not ach['achieved']:
-                text += f"{progress_bar} {ach['current']}/{ach['threshold']}\n\n"
-            else:
-                text += "Завершено!\n\n"
-        
-        keyboard = get_back_button("achievements")
-        await query.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
-    elif data == "achievements_stats":
-        user = update.effective_user
-        achievements = SYSTEMS['achievements'].get_user_achievements(user.id)
-        achievements_progress = SYSTEMS['achievements'].get_achievements_progress(user.id)
-        
-        total_achievements = len(achievements_progress)
-        completed = len(achievements)
-        percentage = (completed / total_achievements * 100) if total_achievements > 0 else 0
-        
-        text = f"""
-📊 *Статистика достижений*
-
-Всего достижений: {total_achievements}
-Завершено: {completed} ({percentage:.1f}%)
-Осталось: {total_achievements - completed}
-
-*Награды получено:*
-"""
-        
-        total_points = 0
-        for ach in achievements:
-            total_points += ach.get('reward_points', 0)
-        
-        text += f"Очков: {format_number(total_points)}"
-        
-        keyboard = get_back_button("achievements")
-        await query.message.edit_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=keyboard)
-    else:
-        await query.message.reply_text("Информация о достижении скоро будет доступна!")
 
 async def handle_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, data: str):
     query = update.callback_query
@@ -1054,8 +910,6 @@ async def handle_back_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await detailed_stats_command(update, context)
     elif data == "back_goals":
         await goals_command(update, context)
-    elif data == "back_achievements":
-        await achievements_command(update, context)
     else:
         await query.message.reply_text("Возврат в меню")
 
@@ -1088,7 +942,6 @@ def main():
     application.add_handler(CommandHandler("detailed_stats", detailed_stats_command))
     application.add_handler(CommandHandler("goals", goals_command))
     application.add_handler(CommandHandler("upgrade", upgrade_command))
-    application.add_handler(CommandHandler("achievements", achievements_command))
     
     application.add_handler(CallbackQueryHandler(inline_handler))
     
