@@ -136,3 +136,16 @@ def get_confirm_keyboard(action: str, confirm_id: int):
             InlineKeyboardButton("❌ Нет", callback_data=f"confirm_no_{action}_{confirm_id}")
         ]
     ])
+
+def get_simple_actions_keyboard():
+    """Простая клавиатура для отладки"""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("👊 Шлёпнуть", callback_data="quick_shlep"),
+            InlineKeyboardButton("📊 Статистика", callback_data="quick_stats")
+        ],
+        [
+            InlineKeyboardButton("❓ Помощь", callback_data="help_inline"),
+            InlineKeyboardButton("⚙️ Настройки", callback_data="settings")
+        ]
+    ])
