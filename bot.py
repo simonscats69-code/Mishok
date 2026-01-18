@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-🤖 Бот "Мишок Лысый" - Telegram бот для шлёпков по виртуальной лысине
-Основной файл с импортами всех систем и обработкой команд
-"""
 
 import logging
 import random
@@ -11,11 +7,8 @@ import os
 from datetime import datetime
 from typing import Optional, Dict, Any
 
-# ========== НАСТРОЙКА ОКРУЖЕНИЯ ==========
-# Решаем проблему с NumPy
 os.environ['NUMPY_EXPERIMENTAL_ARRAY_FUNCTION'] = '0'
 
-# ========== НАСТРОЙКА ЛОГИРОВАНИЯ ==========
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO,
@@ -26,7 +19,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ========== ИМПОРТ TELEGRAM API ==========
 try:
     from telegram import Update
     from telegram.ext import (
@@ -38,12 +30,10 @@ try:
 except ImportError as e:
     logger.error(f"❌ Ошибка импорта telegram: {e}")
     TELEGRAM_AVAILABLE = False
-    # Заглушки для тестирования
     class Update: pass
     class ContextTypes: 
         class DEFAULT_TYPE: pass
 
-# ========== ИМПОРТ КОНФИГУРАЦИИ (ОБЯЗАТЕЛЬНО) ==========
 try:
     from config import (
         BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO, STICKERS,
@@ -53,7 +43,6 @@ try:
 except ImportError as e:
     logger.error(f"❌ Ошибка импорта config: {e}")
     CONFIG_AVAILABLE = False
-    # Минимальная конфигурация для работы
     BOT_TOKEN = os.getenv("BOT_TOKEN", "")
     MISHOK_REACTIONS = ["Ой, больно! 😠", "Эй, не шлёпай! 👴💢"]
     MISHOK_INTRO = "👴 *Мишок Лысый* - бот для шлёпков"
@@ -61,7 +50,6 @@ except ImportError as e:
     ACHIEVEMENTS = {}
     DAILY_TASKS = []
 
-# ========== ИМПОРТ БАЗЫ ДАННЫХ ==========
 try:
     from database import (
         init_db, add_shlep, get_stats, get_top_users, add_points, 
@@ -71,7 +59,6 @@ try:
 except ImportError as e:
     logger.error(f"❌ Ошибка импорта database: {e}")
     DATABASE_AVAILABLE = False
-    # Заглушки для функций БД
     def init_db(): logger.info("БД: заглушка init_db")
     def add_shlep(user_id, username): 
         logger.info(f"БД: заглушка add_shlep для {user_id}")
@@ -84,7 +71,6 @@ except ImportError as e:
     def get_user_points(user_id): return 0
     def get_user_stats(user_id): return (None, 0, None)
 
-# ========== ИМПОРТ КЛАВИАТУР ==========
 try:
     from keyboard import (
         get_game_keyboard, get_inline_keyboard, get_achievements_keyboard,
@@ -100,10 +86,8 @@ except ImportError as e:
     def get_tasks_keyboard(): return None
     def get_rating_keyboard(): return None
 
-# ========== ИМПОРТ СИСТЕМ (С ЗАЩИТОЙ ОТ ОШИБОК) ==========
 SYSTEMS = {}
 
-# 1. Система уровней
 try:
     from levels import LevelSystem, MishokLevelSystem, SkillsSystem
     SYSTEMS['levels'] = LevelSystem()
@@ -113,7 +97,6 @@ try:
 except ImportError as e:
     logger.warning(f"⚠️ Система уровней не загружена: {e}")
 
-# 2. Система статистики
 try:
     from statistics import StatisticsSystem
     SYSTEMS['stats'] = StatisticsSystem()
@@ -121,7 +104,6 @@ try:
 except ImportError as e:
     logger.warning(f"⚠️ Система статистики не загружена: {e}")
 
-# 3. Система рекордов и событий
 try:
     from events import RecordsSystem, EventSystem
     SYSTEMS['records'] = RecordsSystem()
@@ -130,7 +112,6 @@ try:
 except ImportError as e:
     logger.warning(f"⚠️ Системы рекордов/событий не загружены: {e}")
 
-# 4. Система целей
 try:
     from goals import GlobalGoalsSystem
     SYSTEMS['goals'] = GlobalGoalsSystem()
@@ -138,7 +119,6 @@ try:
 except ImportError as e:
     logger.warning(f"⚠️ Система целей не загружена: {e}")
 
-# 5. Система достижений и заданий
 try:
     from achievements import AchievementSystem
     from tasks import TaskSystem, RatingSystem
@@ -149,7 +129,6 @@ try:
 except ImportError as e:
     logger.warning(f"⚠️ Системы достижений/заданий не загружены: {e}")
 
-# 6. Утилиты
 try:
     from utils import get_moscow_time, format_time_remaining, generate_animation
     UTILS_AVAILABLE = True
@@ -160,7 +139,6 @@ except ImportError:
     def format_time_remaining(): return "00:00"
     def generate_animation(): return "✨"
 
-# ========== ПРОВЕРКА ДОСТУПНОСТИ КРИТИЧЕСКИХ КОМПОНЕНТОВ ==========
 if not TELEGRAM_AVAILABLE:
     logger.error("❌ Библиотека python-telegram-bot не установлена!")
     sys.exit(1)
@@ -169,7 +147,6 @@ if not BOT_TOKEN:
     logger.error("❌ BOT_TOKEN не установлен! Добавь его в .env файл")
     sys.exit(1)
 
-# ========== ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ ==========
 if DATABASE_AVAILABLE:
     try:
         init_db()
@@ -179,14 +156,10 @@ if DATABASE_AVAILABLE:
 else:
     logger.warning("⚠️ База данных недоступна, используется заглушка")
 
-# ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
-
 def format_number(num: int) -> str:
-    """Форматирование чисел с разделителями"""
     return f"{num:,}".replace(",", " ")
 
 def get_user_display_name(update: Update) -> str:
-    """Получить отображаемое имя пользователя"""
     user = update.effective_user
     if user.username:
         return f"@{user.username}"
@@ -195,10 +168,7 @@ def get_user_display_name(update: Update) -> str:
     else:
         return f"User {user.id}"
 
-# ========== ОБРАБОТЧИКИ КОМАНД ==========
-
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /start"""
     if not CONFIG_AVAILABLE:
         await update.message.reply_text(
             "❌ Конфигурация бота не загружена. Обратитесь к администратору.",
@@ -241,7 +211,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def mishok_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /mishok"""
     await update.message.reply_text(
         MISHOK_INTRO,
         parse_mode=ParseMode.MARKDOWN,
@@ -249,24 +218,22 @@ async def mishok_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
 
 async def shlep_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /shlep"""
     await process_shlep(update, context, is_callback=False)
 
 async def shlep_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик inline-кнопки шлёпка"""
     query = update.callback_query
     await query.answer()
     await process_shlep(update, context, is_callback=True)
 
 async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_callback: bool):
-    """Основная логика обработки шлёпка"""
     user = update.effective_user
     chat = update.effective_chat
     
-    # 1. Регистрируем шлёпок в БД
+    if 'tasks' in SYSTEMS:
+        SYSTEMS['tasks'].init_user_tasks(user.id)
+    
     total_shleps, user_count = add_shlep(user.id, user.username or user.first_name)
     
-    # 2. Инициализируем переменные для систем
     event_multiplier = 1.0
     total_xp = 10
     level_info = {"level": 1, "progress": 0, "xp_current": 0, "xp_needed": 100}
@@ -275,9 +242,6 @@ async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_c
     new_strength_record = False
     slap_strength = random.uniform(10, 100)
     
-    # 3. Обрабатываем системы, если они доступны
-    
-    # Система событий (множитель опыта)
     if 'events' in SYSTEMS:
         try:
             event_multiplier, active_events = SYSTEMS['events'].get_event_multiplier()
@@ -285,48 +249,36 @@ async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_c
         except Exception as e:
             logger.error(f"Ошибка системы событий: {e}")
     
-    # Система уровней и навыков
     if 'levels' in SYSTEMS:
         try:
-            # Добавляем XP
             level_info = SYSTEMS['levels'].add_xp(user.id, total_xp, "shlep")
-            
-            # Применяем навыки
-            if 'skills' in SYSTEMS:
-                user_skills = SYSTEMS['skills'].get_user_skills(user.id)
-                # Здесь можно добавить логику применения навыков
         except Exception as e:
             logger.error(f"Ошибка системы уровней: {e}")
     
-    # Система рекордов
     if 'records' in SYSTEMS:
         try:
             new_strength_record, _ = SYSTEMS['records'].check_strength_record(user.id, slap_strength)
         except Exception as e:
             logger.error(f"Ошибка системы рекордов: {e}")
     
-    # Система достижений
     if 'achievements' in SYSTEMS:
         try:
             new_achievements = SYSTEMS['achievements'].check_achievements(user.id, user_count)
         except Exception as e:
             logger.error(f"Ошибка системы достижений: {e}")
     
-    # Система заданий
     if 'tasks' in SYSTEMS:
         try:
             completed_tasks = SYSTEMS['tasks'].update_task_progress(user.id)
         except Exception as e:
             logger.error(f"Ошибка системы заданий: {e}")
     
-    # Система статистики
     if 'stats' in SYSTEMS:
         try:
             SYSTEMS['stats'].record_shlep(user.id)
         except Exception as e:
             logger.error(f"Ошибка системы статистики: {e}")
     
-    # Система целей
     if 'goals' in SYSTEMS:
         try:
             for goal in SYSTEMS['goals'].active_goals:
@@ -334,7 +286,6 @@ async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_c
         except Exception as e:
             logger.error(f"Ошибка системы целей: {e}")
     
-    # 4. Получаем уровень Мишка
     mishok_level_name = "Нежный Мишок"
     if 'mishok_levels' in SYSTEMS:
         try:
@@ -343,46 +294,38 @@ async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_c
         except Exception as e:
             logger.error(f"Ошибка получения уровня Мишка: {e}")
     
-    # 5. Выбираем случайную реакцию
     reaction = random.choice(MISHOK_REACTIONS) if MISHOK_REACTIONS else "Ой! 😠"
     
-    # 6. Формируем сообщение
     message_lines = [
         f"{reaction}\n",
         f"📊 *Шлёпок №{format_number(total_shleps)}*",
         f"👤 *{user.first_name}*: {format_number(user_count)} шлёпков",
     ]
     
-    # Добавляем уровень игрока
     if 'levels' in SYSTEMS:
         message_lines.append(f"🎯 Уровень: {level_info['level']} (+{total_xp} XP)")
         message_lines.append(f"📈 Прогресс: {level_info['progress']:.1f}%")
     
     message_lines.append(f"👴 *Уровень Мишка:* {mishok_level_name}")
     
-    # Добавляем информацию о событии
     if event_multiplier != 1.0:
         message_lines.append(f"🎪 Множитель: x{event_multiplier:.1f}")
     
-    # Добавляем информацию о новом рекорде
     if new_strength_record:
         message_lines.append(f"\n🏆 *НОВЫЙ РЕКОРД СИЛЫ!* {slap_strength:.1f} единиц!")
-        add_points(user.id, 100)  # Награда за рекорд
+        add_points(user.id, 100)
     
-    # Добавляем информацию о новых достижениях
     if new_achievements:
         for ach in new_achievements:
             message_lines.append(f"\n🎉 {ach['emoji']} *{ach['name']}*")
             add_points(user.id, ach.get('reward_points', 10))
     
-    # Добавляем информацию о выполненных заданиях
     if completed_tasks:
         message_lines.append("\n📅 *Выполненные задания:*")
         for task in completed_tasks:
             message_lines.append(f"✅ {task['emoji']} {task['name']} (+{task['reward']} очков)")
             add_points(user.id, task['reward'])
     
-    # Добавляем анимацию (редко)
     if random.random() < 0.1 and UTILS_AVAILABLE:
         try:
             animation = generate_animation()
@@ -390,10 +333,8 @@ async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_c
         except:
             pass
     
-    # Объединяем все строки
     message_text = "\n".join(message_lines)
     
-    # 7. Отправляем сообщение
     if is_callback:
         await update.callback_query.edit_message_text(
             message_text,
@@ -407,8 +348,7 @@ async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_c
             reply_markup=keyboard
         )
     
-    # 8. Отправляем стикер (если есть)
-    if STICKERS and random.random() < 0.7:  # 70% шанс отправить стикер
+    if STICKERS and random.random() < 0.7:
         try:
             sticker_key = random.choice(list(STICKERS.keys()))
             if is_callback:
@@ -419,11 +359,9 @@ async def process_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, is_c
             logger.error(f"Ошибка отправки стикера: {e}")
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /stats"""
     total_shleps, last_shlep = get_stats()
     top_users = get_top_users(5)
     
-    # Формируем топ пользователей
     top_text_lines = []
     if top_users:
         for i, (username, count) in enumerate(top_users[:5], 1):
@@ -453,11 +391,9 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def level_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /level"""
     if 'levels' not in SYSTEMS:
         await update.message.reply_text(
-            "🎯 *Система уровней*\n\n"
-            "Система уровней временно недоступна. Продолжай шлёпать Мишка!",
+            "🎯 *Система уровней*\n\nСистема уровней временно недоступна. Продолжай шлёпать Мишка!",
             parse_mode=ParseMode.MARKDOWN
         )
         return
@@ -466,8 +402,6 @@ async def level_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         level_info = SYSTEMS['levels'].get_level_progress(user.id)
-        
-        # Получаем очки пользователя
         points = get_user_points(user.id)
         
         text = f"""
@@ -479,7 +413,6 @@ async def level_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *Следующий уровень через:* {format_number(level_info['next_level_in'])} XP
 """
         
-        # Добавляем информацию о навыках, если система доступна
         if 'skills' in SYSTEMS:
             try:
                 user_skills = SYSTEMS['skills'].get_user_skills(user.id)
@@ -499,11 +432,9 @@ async def level_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def detailed_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /detailed_stats"""
     if 'stats' not in SYSTEMS:
         await update.message.reply_text(
-            "📈 *Детальная статистика*\n\n"
-            "Система детальной статистики временно недоступна.",
+            "📈 *Детальная статистика*\n\nСистема детальной статистики временно недоступна.",
             parse_mode=ParseMode.MARKDOWN
         )
         return
@@ -532,12 +463,9 @@ async def detailed_stats_command(update: Update, context: ContextTypes.DEFAULT_T
         )
 
 async def records_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /records"""
     if 'records' not in SYSTEMS:
         await update.message.reply_text(
-            "🏆 *Рекорды*\n\n"
-            "Система рекордов временно недоступна.\n"
-            "Шлёпай больше, чтобы установить первые рекорды!",
+            "🏆 *Рекорды*\n\nСистема рекордов временно недоступна.\nШлёпай больше, чтобы установить первые рекорды!",
             parse_mode=ParseMode.MARKDOWN
         )
         return
@@ -565,12 +493,9 @@ async def records_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def events_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /events"""
     if 'events' not in SYSTEMS:
         await update.message.reply_text(
-            "🎪 *События*\n\n"
-            "Система событий временно недоступна.\n"
-            "Скоро появятся специальные события с бонусами!",
+            "🎪 *События*\n\nСистема событий временно недоступна.\nСкоро появятся специальные события с бонусами!",
             parse_mode=ParseMode.MARKDOWN
         )
         return
@@ -604,12 +529,9 @@ async def events_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def goals_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /goals"""
     if 'goals' not in SYSTEMS:
         await update.message.reply_text(
-            "🎯 *Глобальные цели*\n\n"
-            "Система целей временно недоступна.\n"
-            "Скоро появятся глобальные цели для всего сообщества!",
+            "🎯 *Глобальные цели*\n\nСистема целей временно недоступна.\nСкоро появятся глобальные цели для всего сообщества!",
             parse_mode=ParseMode.MARKDOWN
         )
         return
@@ -619,7 +541,6 @@ async def goals_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         total_shleps = global_stats.get('total_shleps', 0)
         progress_percent = (total_shleps / 1000000 * 100) if total_shleps > 0 else 0
         
-        # Создаём прогресс-бар
         bar_length = 20
         filled = int(progress_percent / 100 * bar_length)
         progress_bar = "█" * filled + "░" * (bar_length - filled)
@@ -640,18 +561,14 @@ async def goals_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Ошибка команды /goals: {e}")
         await update.message.reply_text(
-            "🎯 *Цель сообщества:* 1,000,000 шлёпков!\n"
-            "Шлёпай больше, чтобы помочь достичь цели!",
+            "🎯 *Цель сообщества:* 1,000,000 шлёпков!\nШлёпай больше, чтобы помочь достичь цели!",
             parse_mode=ParseMode.MARKDOWN
         )
 
 async def upgrade_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /upgrade"""
     if 'skills' not in SYSTEMS:
         await update.message.reply_text(
-            "⚡ *Улучшение навыков*\n\n"
-            "Система навыков временно недоступна.\n"
-            "Скоро ты сможешь прокачивать свои умения!",
+            "⚡ *Улучшение навыков*\n\nСистема навыков временно недоступна.\nСкоро ты сможешь прокачивать свои умения!",
             parse_mode=ParseMode.MARKDOWN
         )
         return
@@ -671,37 +588,27 @@ async def upgrade_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
 async def achievements_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /achievements"""
     await update.message.reply_text(
-        "🏆 *Достижения*\n\n"
-        "Система достижений скоро будет доступна!\n"
-        "Получай достижения за количество шлёпков.",
+        "🏆 *Достижения*\n\nСистема достижений скоро будет доступна!\nПолучай достижения за количество шлёпков.",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=get_achievements_keyboard() if KEYBOARD_AVAILABLE else None
     )
 
 async def tasks_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /tasks"""
     await update.message.reply_text(
-        "📅 *Ежедневные задания*\n\n"
-        "Система заданий скоро будет доступна!\n"
-        "Выполняй задания каждый день и получай награды.",
+        "📅 *Ежедневные задания*\n\nСистема заданий скоро будет доступна!\nВыполняй задания каждый день и получай награды.",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=get_tasks_keyboard() if KEYBOARD_AVAILABLE else None
     )
 
 async def rating_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /rating"""
     await update.message.reply_text(
-        "🏆 *Рейтинги*\n\n"
-        "Система рейтингов скоро будет доступна!\n"
-        "Соревнуйся с другими игроками!",
+        "🏆 *Рейтинги*\n\nСистема рейтингов скоро будет доступна!\nСоревнуйся с другими игроками!",
         parse_mode=ParseMode.MARKDOWN,
         reply_markup=get_rating_keyboard() if KEYBOARD_AVAILABLE else None
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик команды /help"""
     help_text = """
 🆘 *Помощь по командам*
 
@@ -729,14 +636,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN)
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик нажатий кнопок в личных сообщениях"""
     text = update.message.text
     chat = update.effective_chat
     
     if chat.type != "private":
         return
     
-    # Сопоставление текста кнопок с командами
     button_actions = {
         "👊 Шлёпнуть Мишка": shlep_command,
         "🎯 Уровень": level_command,
@@ -760,7 +665,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Приветствие при добавлении бота в группу"""
     if update.message.new_chat_members:
         for member in update.message.new_chat_members:
             if member.id == context.bot.id:
@@ -782,8 +686,28 @@ async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode=ParseMode.MARKDOWN
                 )
 
+async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    
+    if data == "shlep_mishok":
+        await shlep_callback(update, context)
+    elif data == "stats_inline":
+        await stats_command(update, context)
+    elif data == "level_inline":
+        await level_command(update, context)
+    elif data == "records_inline":
+        await records_command(update, context)
+    elif data == "events_inline":
+        await events_command(update, context)
+    elif data == "goals_inline":
+        await goals_command(update, context)
+    elif data == "help_in_group":
+        await help_command(update, context)
+
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик ошибок"""
     logger.error(f"Update {update} вызвал ошибку: {context.error}")
     
     if update and update.effective_message:
@@ -795,28 +719,19 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
-# ========== НАСТРОЙКА И ЗАПУСК БОТА ==========
-
 def main():
-    """Основная функция запуска бота"""
-    # Проверка токена
     if not BOT_TOKEN:
         logger.error("❌ BOT_TOKEN не найден! Проверь .env файл.")
         return
     
-    # Создание приложения
     application = Application.builder().token(BOT_TOKEN).build()
     
-    # ===== РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ КОМАНД =====
-    
-    # Основные команды
     application.add_handler(CommandHandler("start", start_command))
     application.add_handler(CommandHandler("shlep", shlep_command))
     application.add_handler(CommandHandler("stats", stats_command))
     application.add_handler(CommandHandler("mishok", mishok_info_command))
     application.add_handler(CommandHandler("help", help_command))
     
-    # Команды игровых систем
     application.add_handler(CommandHandler("level", level_command))
     application.add_handler(CommandHandler("detailed_stats", detailed_stats_command))
     application.add_handler(CommandHandler("records", records_command))
@@ -824,40 +739,33 @@ def main():
     application.add_handler(CommandHandler("goals", goals_command))
     application.add_handler(CommandHandler("upgrade", upgrade_command))
     
-    # Дополнительные команды
     application.add_handler(CommandHandler("achievements", achievements_command))
     application.add_handler(CommandHandler("tasks", tasks_command))
     application.add_handler(CommandHandler("rating", rating_command))
     
-    # ===== РЕГИСТРАЦИЯ INLINE-ОБРАБОТЧИКОВ =====
     application.add_handler(CallbackQueryHandler(shlep_callback, pattern="^shlep_mishok$"))
+    application.add_handler(CallbackQueryHandler(inline_handler))
     
-    # ===== РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ СООБЩЕНИЙ =====
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
     application.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, group_welcome))
     
-    # ===== РЕГИСТРАЦИЯ ОБРАБОТЧИКА ОШИБОК =====
     application.add_error_handler(error_handler)
     
-    # ===== ЗАПУСК БОТА =====
     logger.info("=" * 50)
     logger.info("🚀 ЗАПУСК БОТА 'МИШОК ЛЫСЫЙ'")
     logger.info("=" * 50)
     
-    # Информация о загруженных системах
     logger.info(f"📦 Загружено систем: {len(SYSTEMS)} из 6")
     if SYSTEMS:
         logger.info(f"✅ Системы: {', '.join(SYSTEMS.keys())}")
     else:
         logger.warning("⚠️ Ни одна система не загружена, бот работает в базовом режиме")
     
-    # Информация о конфигурации
     if CONFIG_AVAILABLE:
         logger.info(f"✅ Конфигурация: {len(MISHOK_REACTIONS)} реакций, {len(STICKERS)} стикеров")
     else:
         logger.warning("⚠️ Конфигурация не загружена")
     
-    # Информация о БД
     if DATABASE_AVAILABLE:
         logger.info("✅ База данных доступна")
     else:
@@ -866,7 +774,6 @@ def main():
     logger.info("🤖 Бот готов к работе...")
     
     try:
-        # Запуск бота
         application.run_polling(
             allowed_updates=Update.ALL_TYPES,
             drop_pending_updates=True
