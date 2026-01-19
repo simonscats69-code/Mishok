@@ -919,6 +919,7 @@ async def accept_duel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 @command_handler
 @chat_only
 async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Основной обработчик команд дуэлей"""
     msg = get_message_from_update(update)
     if not msg:
         return
@@ -938,6 +939,31 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
+    # Получаем текст команды для обработки команд без пробела
+    command_text = ""
+    if update.message and update.message.text:
+        command_text = update.message.text.lower().strip()
+    
+    # Обработка команд без пробела
+    if command_text == "/duelaccept" or command_text == "/duelaccept@mishok_lysiy_bot":
+        # Обрабатываем /duelaccept
+        logger.info(f"Обработка команды без пробела: {command_text}")
+        await accept_duel_command(update, context)
+        return
+    elif command_text == "/duellist" or command_text == "/duellist@mishok_lysiy_bot":
+        # Обрабатываем /duel list
+        await list_duels_command(update, context)
+        return
+    elif command_text == "/duelstats" or command_text == "/duelstats@mishok_lysiy_bot":
+        # Обрабатываем /duel stats
+        await duel_stats_command(update, context)
+        return
+    elif command_text == "/duelcancel" or command_text == "/duelcancel@mishok_lysiy_bot":
+        # Обрабатываем /duel cancel
+        await cancel_duel_command(update, context)
+        return
+    
+    # Обычная обработка с пробелом
     if not context.args:
         await show_duel_info(update, context)
         return
@@ -965,7 +991,12 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "/duel accept_id [ID] - принять по ID\n"
             "/duel list - список вызовов\n"
             "/duel cancel - отменить свой вызов\n"
-            "/duel stats - ваша статистика дуэлей"
+            "/duel stats - ваша статистика дуэлей\n\n"
+            "Или используйте без пробела:\n"
+            "/duelaccept - принять вызов\n"
+            "/duellist - список вызовов\n"
+            "/duelstats - статистика\n"
+            "/duelcancel - отменить вызов"
         )
 
 async def list_duels_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1720,6 +1751,7 @@ def main():
     
     app = Application.builder().token(BOT_TOKEN).build()
     
+    # Регистрируем все варианты команд дуэлей
     commands = [
         ("start", start),
         ("shlep", shlep),
@@ -1734,7 +1766,15 @@ def main():
         ("chat_top", chat_top),
         ("vote", vote),
         ("vote_info", vote_info),
-        ("duel", duel),
+        ("duel", duel),                    # /duel
+        ("duelaccept", duel),              # /duelaccept (без пробела)
+        ("duelaccept@mishok_lysiy_bot", duel),  # С упоминанием бота
+        ("duellist", duel),                # /duellist (без пробела)
+        ("duellist@mishok_lysiy_bot", duel),    # С упоминанием бота
+        ("duelstats", duel),               # /duelstats (без пробела)
+        ("duelstats@mishok_lysiy_bot", duel),   # С упоминанием бота
+        ("duelcancel", duel),              # /duelcancel (без пробела)
+        ("duelcancel@mishok_lysiy_bot", duel),  # С упоминанием бота
         ("roles", roles),
         ("backup", backup),
         ("storage", storage),
