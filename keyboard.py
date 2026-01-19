@@ -3,7 +3,6 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMa
 def main_kb(for_chat=False):
     """Основная клавиатура - разная для чатов и личных сообщений"""
     if for_chat:
-        # Для чатов используем Inline клавиатуру
         return InlineKeyboardMarkup([
             [InlineKeyboardButton("👊 Шлёпнуть сейчас!", callback_data="shlep_mishok")],
             [
@@ -23,7 +22,6 @@ def main_kb(for_chat=False):
             ]
         ])
     else:
-        # Для личных сообщений - Reply клавиатура
         return ReplyKeyboardMarkup([
             [KeyboardButton("👊 Шлёпнуть Мишка")],
             [KeyboardButton("🎯 Уровень"), KeyboardButton("📊 Статистика")],
@@ -100,6 +98,4 @@ def get_duel_finished_keyboard(duel_id: str):
         ]
     ])
 
-# Алиасы для обратной совместимости
 get_inline_keyboard = lambda: main_kb(for_chat=True)
-get_game_keyboard = lambda: main_kb(for_chat=False)
