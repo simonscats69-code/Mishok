@@ -22,12 +22,12 @@ logger = logging.getLogger(__name__)
 
 def command_handler(func):
     @wraps(func)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             message = update.message or (update.callback_query and update.callback_query.message)
             if not message:
                 return
-            return await func(update, context, message, *args, **kwargs)
+            return await func(update, context, message)
         except Exception as e:
             logger.error(f"Ошибка в {func.__name__}: {e}", exc_info=True)
             try:
@@ -41,11 +41,11 @@ def command_handler(func):
 
 def chat_only(func):
     @wraps(func)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, message, *args, **kwargs):
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
         if update.effective_chat.type == "private":
             await message.reply_text("Эта команда работает только в группах!")
             return
-        return await func(update, context, message, *args, **kwargs)
+        return await func(update, context, message)
     return wrapper
 
 def format_num(num): 
@@ -180,7 +180,7 @@ async def stats(update, context, msg):
         for i, (u, c) in enumerate(top[:5], 1):
             lvl = calc_level(c)
             medal = ["🥇", "🥈", "🥉"][i-1] if i <= 3 else ""
-            text += f"\n{medag}{i}. {u or f'Игрок{i}'}"
+            text += f"\n{medal}{i}. {u or f'Игрок{i}'}"
             text += f"\n   📊 {format_num(c)} | Ур. {lvl['level']}"
             text += f"\n   ⚡ Урон: {lvl['min']}-{lvl['max']}"
     
@@ -318,7 +318,7 @@ async def chat_top(update, context, msg):
     for i, (u, c) in enumerate(top, 1):
         lvl = calc_level(c)
         medal = ["🥇", "🥈", "🥉"][i-1] if i <= 3 else ""
-        text += f"{medag}{i}. {u}\n"
+        text += f"{medal}{i}. {u}\n"
         text += f"   📊 {format_num(c)} | Ур. {lvl['level']}\n"
         text += f"   ⚡ Урон: {lvl['min']}-{lvl['max']}\n\n"
     
@@ -489,7 +489,7 @@ async def button_handler(update, context, msg):
     text = update.message.text
     logger.info(f"Button pressed: {text}")
     
-    if text == "👊 Шлёпнуть Мишка":
+    if text == "👊 Шlёпнуть Мишка":
         await shlep(update, context, msg)
     elif text == "🎯 Уровень":
         await level(update, context, msg)
