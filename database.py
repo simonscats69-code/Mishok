@@ -4,6 +4,7 @@ from datetime import datetime
 import logging
 from typing import Optional, Tuple, List, Any, Dict
 import shutil
+from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,12 @@ def load_data():
                 "total_users": len(data.get("users", {}))
             }
         
+        # Конвертируем списки обратно в множества
+        if "timestamps" in data:
+            for key, value in data["timestamps"].items():
+                if "users" in value and isinstance(value["users"], list):
+                    value["users"] = set(value["users"])
+        
         return data
     except Exception as e:
         logger.error(f"Ошибка загрузки данных: {e}")
@@ -58,8 +65,19 @@ def load_data():
 def save_data(data):
     """Сохраняет данные в файл"""
     try:
+        # Конвертируем множества в списки для JSON
+        data_copy = json.loads(json.dumps(data, default=str))
+        
+        if "timestamps" in data_copy:
+            for key, value in data_copy["timestamps"].items():
+                if "users" in value:
+                    if hasattr(value["users"], '__iter__'):
+                        value["users"] = list(value["users"])
+                    elif isinstance(value["users"], set):
+                        value["users"] = list(value["users"])
+        
         with open(DATA_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+            json.dump(data_copy, f, ensure_ascii=False, indent=2)
         return True
     except Exception as e:
         logger.error(f"Ошибка сохранения данных: {e}")
@@ -307,10 +325,18 @@ def get_activity_stats(days: int = 7) -> Dict[str, Any]:
     for i in range(days):
         date = (now - timedelta(days=i)).strftime("%Y-%m-%d")
         if date in timestamps:
+            users_list = timestamps[date]["users"]
+            if isinstance(users_list, set):
+                users_count = len(users_list)
+            elif isinstance(users_list, list):
+                users_count = len(set(users_list))
+            else:
+                users_count = 0
+                
             daily_stats.append({
                 "date": date,
                 "count": timestamps[date]["count"],
-                "users": len(timestamps[date]["users"])
+                "users": users_count
             })
         else:
             daily_stats.append({
@@ -335,7 +361,11 @@ def get_activity_stats(days: int = 7) -> Dict[str, Any]:
     for i in range(days):
         date = (now - timedelta(days=i)).strftime("%Y-%m-%d")
         if date in timestamps:
-            all_users.update(timestamps[date]["users"])
+            users_data = timestamps[date]["users"]
+            if isinstance(users_data, set):
+                all_users.update(users_data)
+            elif isinstance(users_data, list):
+                all_users.update(users_data)
     
     return {
         "daily": daily_stats,
@@ -395,8 +425,6 @@ def get_user_activity(user_id: int, days: int = 14) -> Dict[str, Any]:
         "hourly": formatted_hourly,
         "total": len(user_history)
     }
-
-from datetime import timedelta
 
 # Инициализация при импорте
 ensure_data_file()
