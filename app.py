@@ -1,3 +1,5 @@
+[file name]: app.py
+[file content begin]
 import os
 import logging
 import asyncio
@@ -11,12 +13,11 @@ def main():
     try:
         # Очистка просроченных дуэлей при запуске
         try:
-            from database import cleanup_expired_duels
-            cleaned = cleanup_expired_duels()
-            if cleaned > 0:
-                logger.info(f"Очищено {cleaned} просроченных дуэлей при запуске")
+            from duel_system import init_duel_system
+            system = init_duel_system()
+            logger.info("✅ Система дуэлей инициализирована")
         except ImportError as e:
-            logger.warning(f"Не удалось импортировать cleanup_expired_duels: {e}")
+            logger.warning(f"Не удалось импортировать duel_system: {e}")
         
         # Импортируем основную функцию бота
         from bot import main as bot_main
@@ -31,3 +32,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+[file content end]
