@@ -88,8 +88,12 @@ def format_num(num): return f"{num:,}".replace(",", " ")
 def calc_level(cnt):
     if cnt <= 0: return {'level':1,'progress':0,'min':10,'max':25,'next':10}
     lvl = (cnt//10)+1; prog = (cnt%10)*10
-    min_dmg = int(10 * (1.02 ** (lvl - 1)))
-    max_dmg = int(20 * (1.08 ** (lvl - 1)))
+    if lvl > 1000:
+        min_dmg = 10 + 1000*2 + (lvl-1000)*1
+        max_dmg = 15 + 1000*3 + (lvl-1000)*2
+    else:
+        min_dmg = int(10 * (1.02 ** min(lvl-1, 100)))
+        max_dmg = int(20 * (1.08 ** min(lvl-1, 100)))
     if max_dmg <= min_dmg: max_dmg = min_dmg + 10
     return {'level':lvl,'progress':prog,'min':min_dmg,'max':max_dmg,'next':10-(cnt%10) if (cnt%10)<10 else 0}
 
@@ -218,7 +222,8 @@ async def my_stats(update, context, msg):
 
 @command_handler
 async def trends(update, context, msg):
-    trends = get_stats_module()['trends']()
+    stats_module = get_stats_module()
+    trends = stats_module['trends']()
     if not trends: await msg.reply_text("📊 Данные временно недоступны"); return
     text = f"""📊 *ГЛОБАЛЬНЫЕ ТРЕНДЫ*
 👥 *Активных за 24 часа:* {trends.get('active_users_24h',0)}
@@ -231,7 +236,7 @@ async def trends(update, context, msg):
     top_users = db['top'](1)
     if top_users:
         top_user_id = 1
-        hourly_chart = stats['hourly'](top_user_id)
+        hourly_chart = stats_module['hourly'](top_user_id)
         text += f"\n\n⏰ *Распределение активности (топ-игрок):*\n{hourly_chart}"
     text += "\n\n*Используй /my_stats для персональной статистики*"
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
@@ -346,10 +351,10 @@ async def mishok(update, context, msg):
 
 @command_handler
 async def backup(update, context, msg):
-    from config import ADMIN_ID
+    ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
     if update.effective_user.id != ADMIN_ID: await msg.reply_text("⚠️ Эта команда только для администраторов!"); return
     ok = get_db()['backup']()
-    await msg.reply_text("✅ Бэкап базы данных создан успешно!" if ok else "❌ Ошибка при создании бэкапа")
+    await msg.reply_text("✅ Бэкап создан!" if ok else "❌ Ошибка")
 
 @command_handler
 async def storage(update, context, msg):
@@ -357,7 +362,7 @@ async def storage(update, context, msg):
     text = "📂 **Информация о хранилище:**\n"
     for p,d in [("/root","Основная папка"),("/bothost","Корень Bothost"),("/bothost/storage","Постоянное хранилище"),("/bothost/storage/mishok_data.json","Файл данных")]:
         ex = os.path.exists(p); sz = os.path.getsize(p) if ex and os.path.isfile(p) else 0
-        text += f"{'✅' if ex else '❌'} {d}: `{p}` ({sz/1024:.1f} KB)\n" if sz else f"{'✅' if ex else '❌'} {d}: `{p}`\n"
+        text += f"{'✅' if ex else '❌'} {d}: `{p}` ({sz/1024:.1f} KB)\n" if sz else f"{'✅' if exp else '❌'} {d}: `{p}`\n"
     text += f"\n💾 **Версия Бота:** Bothost Storage Ready"
     await msg.reply_text(text, parse_mode="Markdown")
 
