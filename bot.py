@@ -15,7 +15,6 @@ from database import add_shlep, get_stats, get_top_users, get_user_stats, get_ch
 from keyboard import get_chat_quick_actions, get_inline_keyboard, get_game_keyboard, get_chat_vote_keyboard
 from cache import cache
 from statistics import get_favorite_time, get_comparison_stats, get_global_trends_info, format_daily_activity_chart, format_hourly_distribution_chart
-from utils import format_number as fmt_num
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -173,7 +172,7 @@ async def shlep(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logger.error(f"Ошибка в shlep: {e}", exc_info=True)
-        await msg.reply_text("⚠️ Произошла ошибка при обработке шлёпка. Попробуйте еще раз.")
+        await msg.reply_text("⚠️ Произошла ошибка при обработке шlёпка. Попробуйте еще раз.")
 
 @command_handler 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -192,7 +191,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     maxu_safe = escape_markdown(maxu or 'Нет', version=1)
     
-    text = f"📊 ГЛОБАЛЬНАЯ СТАТИСТИКА\n👑 РЕКОРД УРОНА: {maxd} единиц\n👤 Рекордсмен: {maxu_safe}\n📅 Дата рекорда: {maxdt.strftime('%d.%m.%Y %H:%M') if maxdt else '—'}\n🔢 Всего шлёпков: {format_num(total)}\n⏰ Последний шлёпок: {last.strftime('%d.%m.%Y %H:%M') if last else 'нет'}"
+    text = f"📊 ГЛОБАЛЬНАЯ СТАТИСТИКА\n👑 РЕКОРД УРОНА: {maxd} единиц\n👤 Рекордсмен: {maxu_safe}\n📅 Дата рекорда: {maxdt.strftime('%d.%m.%Y %H:%M') if maxdt else '—'}\n🔢 Всего шlёпков: {format_num(total)}\n⏰ Последний шlёпок: {last.strftime('%d.%m.%Y %H:%M') if last else 'нет'}"
     
     if top:
         text += "\n\n🏆 ТОП ШЛЁПАТЕЛЕЙ:\n"
@@ -228,10 +227,10 @@ async def level(update: Update, context: ContextTypes.DEFAULT_TYPE):
     safe_name = escape_markdown(user.first_name, version=1)
     safe_advice = escape_markdown(advice, version=1)
     
-    text = f"🎯 ТВОЙ УРОВЕНЬ\n👤 Игрок: {safe_name}\n📊 Шлёпков: {format_num(cnt)}\n🎯 Уровень: {lvl['level']} ({title})\n{bar} {lvl['progress']}%\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n🎯 До след. уровня: {lvl['next']} шлёпков\n💡 {advice}"
+    text = f"🎯 ТВОЙ УРОВЕНЬ\n👤 Игрок: {safe_name}\n📊 Шlёпков: {format_num(cnt)}\n🎯 Уровень: {lvl['level']} ({title})\n{bar} {lvl['progress']}%\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n🎯 До след. уровня: {lvl['next']} шlёпков\n💡 {advice}"
     
     if last:
-        text += f"\n⏰ Последний шлёпок: {last.strftime('%d.%m.%Y %H:%M')}"
+        text += f"\n⏰ Последний шlёпок: {last.strftime('%d.%m.%Y %H:%M')}"
     
     await msg.reply_text(text)
 
@@ -247,10 +246,10 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lvl = calc_level(cnt)
     compare_stats = get_comparison_stats(user.id)
     
-    text = f"📈 ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Всего шлёпков: {format_num(cnt)}\n🎯 Уровень: {lvl['level']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n{get_favorite_time(user.id)}\n📊 Сравнение с другими:\n👥 Всего игроков: {compare_stats.get('total_users', 0)}\n📈 Среднее на игрока: {compare_stats.get('avg_shleps', 0)}\n🏆 Твой ранг: {compare_stats.get('rank', 1)}\n📊 Лучше чем: {compare_stats.get('percentile', 0)}% игроков\n📅 Активность за неделю:\n{format_daily_activity_chart(user.id, 7)}"
+    text = f"📈 ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Всего шlёпков: {format_num(cnt)}\n🎯 Уровень: {lvl['level']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n{get_favorite_time(user.id)}\n📊 Сравнение с другими:\n👥 Всего игроков: {compare_stats.get('total_users', 0)}\n📈 Среднее на игрока: {compare_stats.get('avg_shleps', 0)}\n🏆 Твой ранг: {compare_stats.get('rank', 1)}\n📊 Лучше чем: {compare_stats.get('percentile', 0)}% игроков\n📅 Активность за неделю:\n{format_daily_activity_chart(user.id, 7)}"
     
     if last:
-        text += f"\n⏰ Последний шлёпок: {last.strftime('%d.%m.%Y %H:%M')}"
+        text += f"\n⏰ Последний шlёпок: {last.strftime('%d.%m.%Y %H:%M')}"
     
     await msg.reply_text(text)
 
@@ -266,7 +265,7 @@ async def trends(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("📊 Данные временно недоступны")
         return
     
-    text = f"📊 ГЛОБАЛЬНЫЕ ТРЕНДЫ\n👥 Активных за 24 часа: {trends_data.get('active_users_24h', 0)}\n👊 Шлёпков за 24 часа: {trends_data.get('shleps_24h', 0)}\n📈 Среднее на игрока: {trends_data.get('avg_per_user_24h', 0)}\n🔥 Активных сегодня: {trends_data.get('active_today', 0)}\n⏰ Текущий час: {trends_data.get('current_hour', 0):02d}:00\n👊 Шlёпков в этом часу: {trends_data.get('shleps_this_hour', 0)}"
+    text = f"📊 ГЛОБАЛЬНЫЕ ТРЕНДЫ\n👥 Активных за 24 часа: {trends_data.get('active_users_24h', 0)}\n👊 Шlёпков за 24 часа: {trends_data.get('shleps_24h', 0)}\n📈 Среднее на игрока: {trends_data.get('avg_per_user_24h', 0)}\n🔥 Активных сегодня: {trends_data.get('active_today', 0)}\n⏰ Текущий час: {trends_data.get('current_hour', 0):02d}:00\n👊 Шlёпков в этом часу: {trends_data.get('shleps_this_hour', 0)}"
     
     await msg.reply_text(text)
 
@@ -301,10 +300,10 @@ async def chat_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cache.set(f"chat_stats_{chat.id}", cs)
     
     if not cs:
-        text = "📊 СТАТИСТИКА ЧАТА\n\nВ этом чате ещё не было шлёпков!\nИспользуй /shlep чтобы стать первым! 🎯"
+        text = "📊 СТАТИСТИКА ЧАТА\n\nВ этом чате ещё не было шlёпков!\nИспользуй /shlep чтобы стать первым! 🎯"
     else:
         max_user_safe = escape_markdown(cs.get('max_damage_user', 'Нет'), version=1)
-        text = f"📊 СТАТИСТИКА ЧАТА\n👥 Участников: {cs.get('total_users', 0)}\n👊 Всего шлёпков: {format_num(cs.get('total_shleps', 0))}\n🏆 Рекорд урона: {cs.get('max_damage', 0)} единиц\n👑 Рекордсмен: {max_user_safe}"
+        text = f"📊 СТАТИСТИКА ЧАТА\n👥 Участников: {cs.get('total_users', 0)}\n👊 Всего шlёпков: {format_num(cs.get('total_shleps', 0))}\n🏆 Рекорд урона: {cs.get('max_damage', 0)} единиц\n👑 Рекордсмен: {max_user_safe}"
     
     await msg.reply_text(text)
 
@@ -319,7 +318,7 @@ async def chat_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     top = get_chat_top_users(chat.id, 10)
     
     if not top:
-        await msg.reply_text("🏆 ТОП ЧАТА\n\nВ этом чате пока никто не шлёпал Мишка! Будь первым!")
+        await msg.reply_text("🏆 ТОП ЧАТА\n\nВ этом чате пока никто не шlёпал Мишка! Будь первым!")
         return
     
     text = "🏆 ТОП ШЛЁПАТЕЛЕЙ ЧАТА:\n\n"
@@ -340,7 +339,7 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg:
         return
     
-    question = " ".join(context.args) if context.args else "Шлёпнуть Мишка?"
+    question = " ".join(context.args) if context.args else "Шlёпнуть Мишка?"
     kb = get_chat_vote_keyboard()
     
     question_safe = escape_markdown(question, version=1)
@@ -365,9 +364,9 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         target = ' '.join(context.args)
         target_safe = escape_markdown(target, version=1)
         user_safe = escape_markdown(user.first_name, version=1)
-        text = f"⚔️ ВЫЗОВ НА ДУЭЛЬ!\n{user_safe} вызывает {target_safe} на дуэль шлёпков!\n\n📜 Правила:\n• 5 минут на дуэль\n• Побеждает тот, кто сделает больше шлёпков\n• Победитель получает бонус"
+        text = f"⚔️ ВЫЗОВ НА ДУЭЛЬ!\n{user_safe} вызывает {target_safe} на дуэль шlёпков!\n\n📜 Правила:\n• 5 минут на дуэль\n• Побеждает тот, кто сделает больше шlёпков\n• Победитель получает бонус"
     else:
-        text = "⚔️ СИСТЕМА ДУЭЛЕЙ\nИспользуй '/duel @username' чтобы вызвать кого-то на дуэль!\n\n📜 Правила:\n• Дуэль длится 5 минут\n• Побеждает тот, кто сделает больше шлёпков\n• Победитель получает специальную роль"
+        text = "⚔️ СИСТЕМА ДУЭЛЕЙ\nИспользуй '/duel @username' чтобы вызвать кого-то на дуэль!\n\n📜 Правила:\n• Дуэль длится 5 минут\n• Побеждает тот, кто сделает больше шlёпков\n• Победитель получает специальную роль"
     
     await msg.reply_text(text)
 
@@ -378,7 +377,7 @@ async def roles(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg:
         return
     
-    text = "👑 РОЛИ В ЧАТЕ\n\nКак получить роли:\n• 👑 Король шлёпков — быть топ-1 в чате\n• 🎯 Самый меткий — нанести максимальный урон\n• ⚡ Спринтер — сделать 10+ шлёпков за 5 минут\n• 💪 Силач — нанести урон 40+ единиц\n\nИспользуй /chat_top чтобы увидеть текущих лидеров!"
+    text = "👑 РОЛИ В ЧАТЕ\n\nКак получить роли:\n• 👑 Король шlёпков — быть топ-1 в чате\n• 🎯 Самый меткий — нанести максимальный урон\n• ⚡ Спринтер — сделать 10+ шlёпков за 5 минут\n• 💪 Силач — нанести урон 40+ единиц\n\nИспользуй /chat_top чтобы увидеть текущих лидеров!"
     await msg.reply_text(text)
 
 @command_handler
@@ -387,7 +386,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg:
         return
     
-    text = "🆘 ПОМОЩЬ\n\nОсновные команды:\n/start — Начало работы\n/shlep — Шлёпнуть Мишка\n/stats — Глобальная статистика\n/level — Твой уровень\n/my_stats — Детальная статистика\n/detailed_stats — Расширенная статистика\n/trends — Глобальные тренды\n/mishok — О Мишке\n\nДля чатов:\n/chat_stats — Статистика чата\n/chat_top — Топ игроков чата\n/vote — Голосование\n/duel — Дуэль\n/roles — Роли в чате\n\nТеперь с сохранением прогресса! 💾"
+    text = "🆘 ПОМОЩЬ\n\nОсновные команды:\n/start — Начало работы\n/shlep — Шlёпнуть Мишка\n/stats — Глобальная статистика\n/level — Твой уровень\n/my_stats — Детальная статистика\n/detailed_stats — Расширенная статистика\n/trends — Глобальные тренды\n/mishok — О Мишке\n\nДля чатов:\n/chat_stats — Статистика чата\n/chat_top — Топ игроков чата\n/vote — Голосование\n/duel — Дуэль\n/roles — Роли в чате\n\nТеперь с сохранением прогресса! 💾"
     await msg.reply_text(text)
 
 @command_handler
@@ -408,11 +407,11 @@ async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if update.message:
                 await update.message.reply_text(
-                    "ℹ️ Информация о Мишке:\n\nЯ — Мишок Лысый, бот для шлёпок! Используй /help для команд."
+                    "ℹ️ Информация о Мишке:\n\nЯ — Мишок Лысый, бот для шlёпок! Используй /help для команд."
                 )
             elif update.callback_query:
                 await update.callback_query.message.reply_text(
-                    "ℹ️ Информация о Мишке:\n\nЯ — Мишок Лысый, бот для шлёпок!"
+                    "ℹ️ Информация о Мишке:\n\nЯ — Мишок Лысый, бот для шlёпок!"
                 )
         except Exception as e2:
             logger.error(f"Не удалось отправить сообщение об ошибке: {e2}")
@@ -473,7 +472,7 @@ async def check_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += f"📊 Статистика:\n"
         text += f"👥 Пользователей: {result['stats']['users']}\n"
         text += f"💬 Чатов: {result['stats']['chats']}\n"
-        text += f"👊 Всего шлёпков: {result['stats']['total_shleps']}\n\n"
+        text += f"👊 Всего шlёпков: {result['stats']['total_shleps']}\n\n"
         
         if result['errors']:
             text += "❌ КРИТИЧЕСКИЕ ОШИБКИ:\n"
@@ -496,42 +495,6 @@ async def check_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         await msg.reply_text(f"❌ Ошибка проверки: {str(e)}")
-
-@command_handler
-async def fix_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
-    if not msg:
-        return
-    
-    from config import ADMIN_ID
-    if update.effective_user.id != ADMIN_ID:
-        await msg.reply_text("⚠️ Эта команда только для администраторов!")
-        return
-    
-    try:
-        from database import load_data, get_stats
-        
-        await msg.reply_text("🔄 Исправление структуры данных...")
-        
-        repair_data_structure()
-        
-        data = load_data()
-        total, last, maxd, maxu, maxdt = get_stats()
-        
-        text = (
-            "✅ СТРУКТУРА ДАННЫХ ИСПРАВЛЕНА\n\n"
-            f"👥 Пользователей: {len(data.get('users', {}))}\n"
-            f"💬 Чатов: {len(data.get('chats', {}))}\n"
-            f"👊 Всего шлёпков: {total}\n"
-            f"💥 Максимальный урон: {maxd}\n"
-            f"👑 Рекордсмен: {maxu or 'Нет'}\n\n"
-            "Ошибки больше не должны возникать!"
-        )
-        
-        await msg.reply_text(text)
-        
-    except Exception as e:
-        await msg.reply_text(f"❌ Ошибка: {str(e)}")
 
 @command_handler
 async def repair(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -557,7 +520,7 @@ async def repair(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "✅ СТРУКТУРА ДАННЫХ ВОССТАНОВЛЕНА\n\n"
                 f"👥 Пользователей: {len(data.get('users', {}))}\n"
                 f"💬 Чатов: {len(data.get('chats', {}))}\n"
-                f"👊 Всего шлёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n\n"
+                f"👊 Всего шlёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n\n"
                 "Ошибки больше не должны возникать!"
             )
         else:
@@ -597,7 +560,7 @@ async def data_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += f"\n📊 СОДЕРЖИМОЕ:\n"
             text += f"• Пользователей: {len(data.get('users', {}))}\n"
             text += f"• Чатов: {len(data.get('chats', {}))}\n"
-            text += f"• Всего шлёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n"
+            text += f"• Всего шlёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n"
             text += f"• Макс. урон: {data.get('global_stats', {}).get('max_damage', 0)}\n"
             text += f"• Записей в истории: {len(data.get('records', []))}\n"
             
@@ -732,8 +695,6 @@ async def quick_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, data
         await vote(update, context)
     elif data == "quick_duel":
         await duel(update, context)
-    elif data == "quick_daily_top":
-        await query.message.reply_text("📊 ТОП ДНЯ\n\nСобираем статистику...")
     else:
         await query.message.reply_text("⚙️ В разработке")
 
@@ -748,7 +709,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"Button pressed: {text}")
     
     try:
-        if text in ["👊 Шлёпнуть Мишка", "👊 Шлёпнуть", "Шлёпнуть Мишка"]:
+        if text in ["👊 Шlёпнуть Мишка", "👊 Шlёпнуть", "Шlёпнуть Мишка"]:
             await shlep(update, context)
         elif text == "🎯 Уровень":
             await level(update, context)
@@ -779,9 +740,9 @@ async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if m.id == context.bot.id:
                 await update.message.reply_text(
                     "👴 Мишок Лысый в чате!\n\n"
-                    "Теперь можно шлёпать меня по лысине прямо здесь!\n"
+                    "Теперь можно шlёпать меня по лысине прямо здесь!\n"
                     "Основные команды:\n"
-                    "/shlep — шлёпнуть Мишка\n"
+                    "/shlep — шlёпнуть Мишка\n"
                     "/stats — статистика\n"
                     "/level — уровень\n"
                     "/my_stats — детальная статистика\n"
@@ -821,7 +782,6 @@ def main():
         ("backup", backup),
         ("storage", storage),
         ("check_data", check_data),
-        ("fix_data", fix_data),
         ("repair", repair),
         ("data_info", data_info),
     ]
