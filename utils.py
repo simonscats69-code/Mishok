@@ -1,34 +1,24 @@
-#!/usr/bin/env python3
-"""
-Utility functions for Mishok bot
-"""
-
 import random
 import pytz
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional, Tuple
 
-def get_moscow_time() -> datetime:
-    """Возвращает текущее время в московском часовом поясе"""
+def get_moscow_time():
     try:
         moscow_tz = pytz.timezone('Europe/Moscow')
         return datetime.now(moscow_tz)
     except:
         return datetime.now()
 
-def format_number(number: int) -> str:
-    """Форматирует числа с пробелами: 1000000 -> 1 000 000"""
+def format_number(number):
     return f"{number:,}".replace(",", " ")
 
-def format_percentage(value: float, total: float) -> str:
-    """Форматирует проценты с одним знаком после запятой"""
+def format_percentage(value, total):
     if total == 0:
         return "0.0%"
     percentage = (value / total) * 100
     return f"{percentage:.1f}%"
 
-def create_progress_bar(value: float, total: float, length: int = 20) -> str:
-    """Создаёт текстовый прогресс-бар"""
+def create_progress_bar(value, total, length=20):
     if total == 0:
         filled = 0
     else:
@@ -39,14 +29,12 @@ def create_progress_bar(value: float, total: float, length: int = 20) -> str:
     
     return "█" * filled + "░" * empty
 
-def truncate_text(text: str, max_length: int = 100, suffix: str = "...") -> str:
-    """Обрезает текст до максимальной длины"""
+def truncate_text(text, max_length=100, suffix="..."):
     if len(text) <= max_length:
         return text
     return text[:max_length - len(suffix)] + suffix
 
-def format_time_ago(timestamp: datetime) -> str:
-    """Форматирует время в формате 'X назад'"""
+def format_time_ago(timestamp):
     if not timestamp:
         return "никогда"
     
@@ -70,8 +58,7 @@ def format_time_ago(timestamp: datetime) -> str:
     else:
         return "только что"
 
-def format_duration(seconds: int) -> str:
-    """Форматирует длительность в человекочитаемом виде"""
+def format_duration(seconds):
     if seconds < 60:
         return f"{seconds} сек"
     elif seconds < 3600:
@@ -86,8 +73,7 @@ def format_duration(seconds: int) -> str:
         hours = (seconds % 86400) // 3600
         return f"{days} д {hours} ч"
 
-def format_date_range(days: int) -> str:
-    """Форматирует диапазон дат"""
+def format_date_range(days):
     if days == 1:
         return "сегодня"
     elif days == 7:
@@ -99,14 +85,12 @@ def format_date_range(days: int) -> str:
     else:
         return f"за {days} дней"
 
-def calculate_average(data: List[int]) -> float:
-    """Рассчитывает среднее значение списка чисел"""
+def calculate_average(data):
     if not data:
         return 0.0
     return sum(data) / len(data)
 
-def calculate_median(data: List[int]) -> float:
-    """Рассчитывает медиану списка чисел"""
+def calculate_median(data):
     if not data:
         return 0.0
     
@@ -120,8 +104,7 @@ def calculate_median(data: List[int]) -> float:
         mid2 = sorted_data[n // 2]
         return (mid1 + mid2) / 2
 
-def calculate_percentile(data: List[int], percentile: float) -> float:
-    """Рассчитывает перцентиль списка чисел"""
+def calculate_percentile(data, percentile):
     if not data:
         return 0.0
     
@@ -137,17 +120,7 @@ def calculate_percentile(data: List[int], percentile: float) -> float:
     else:
         return sorted_data[f]
 
-def generate_chart(data: Dict[str, int], max_width: int = 50) -> str:
-    """
-    Генерирует текстовый график из словаря данных
-    
-    Args:
-        data: словарь {метка: значение}
-        max_width: максимальная ширина графика в символах
-    
-    Returns:
-        Строка с текстовым графиком
-    """
+def generate_chart(data, max_width=50):
     if not data:
         return "📊 Нет данных для отображения"
     
@@ -160,7 +133,6 @@ def generate_chart(data: Dict[str, int], max_width: int = 50) -> str:
         bar_length = int((value / max_value) * max_width)
         bar = "█" * bar_length
         
-        # Добавляем пустые символы если нужно
         if bar_length < max_width:
             bar += "░" * (max_width - bar_length)
         
@@ -168,22 +140,11 @@ def generate_chart(data: Dict[str, int], max_width: int = 50) -> str:
     
     return "\n".join(chart_lines)
 
-def generate_hourly_chart(hourly_data: List[int], compact: bool = False) -> str:
-    """
-    Генерирует график почасовой активности
-    
-    Args:
-        hourly_data: список из 24 чисел
-        compact: компактный режим (группировка по 4 часа)
-    
-    Returns:
-        Строка с графиком
-    """
+def generate_hourly_chart(hourly_data, compact=False):
     if not hourly_data or len(hourly_data) != 24:
         return "⏰ Нет данных по часам"
     
     if compact:
-        # Компактный режим: группируем по 4 часа
         chart_lines = ["⏰ *Активность по часам (компактно):*"]
         
         for block_start in range(0, 24, 4):
@@ -191,7 +152,6 @@ def generate_hourly_chart(hourly_data: List[int], compact: bool = False) -> str:
             block_data = hourly_data[block_start:block_end+1]
             block_total = sum(block_data)
             
-            # Находим максимальное значение для масштабирования
             max_total = max([sum(hourly_data[i:i+4]) for i in range(0, 24, 4)])
             
             if max_total > 0:
@@ -208,7 +168,6 @@ def generate_hourly_chart(hourly_data: List[int], compact: bool = False) -> str:
         
         return "\n".join(chart_lines)
     else:
-        # Подробный режим: каждый час отдельно
         chart_lines = ["⏰ *Активность по часам:*"]
         
         max_value = max(hourly_data)
@@ -230,24 +189,21 @@ def generate_hourly_chart(hourly_data: List[int], compact: bool = False) -> str:
         
         return "\n".join(chart_lines)
 
-def get_hour_emoji(hour: int) -> str:
-    """Возвращает эмодзи для часа суток"""
+def get_hour_emoji(hour):
     if 0 <= hour < 6:
-        return "🌙"  # Ночь
+        return "🌙"
     elif 6 <= hour < 12:
-        return "🌅"  # Утро
+        return "🌅"
     elif 12 <= hour < 18:
-        return "☀️"  # День
+        return "☀️"
     else:
-        return "🌆"  # Вечер
+        return "🌆"
 
-def get_day_of_week_emoji(date: datetime) -> str:
-    """Возвращает эмодзи для дня недели"""
+def get_day_of_week_emoji(date):
     weekdays = ["😴", "😞", "😐", "🙂", "😊", "🎉", "🎊"]
     return weekdays[date.weekday()]
 
-def format_statistics_summary(stats: Dict[str, Any]) -> str:
-    """Форматирует сводку статистики"""
+def format_statistics_summary(stats):
     lines = []
     
     if 'total' in stats:
@@ -267,29 +223,18 @@ def format_statistics_summary(stats: Dict[str, Any]) -> str:
     
     return "\n".join(lines)
 
-def safe_division(numerator: float, denominator: float, default: float = 0.0) -> float:
-    """Безопасное деление с обработкой нуля"""
+def safe_division(numerator, denominator, default=0.0):
     if denominator == 0:
         return default
     return numerator / denominator
 
-def generate_random_id(length: int = 8) -> str:
-    """Генерирует случайный ID"""
+def generate_random_id(length=8):
     import string
     import secrets
     alphabet = string.ascii_letters + string.digits
     return ''.join(secrets.choice(alphabet) for _ in range(length))
 
-def parse_time_range(time_range: str) -> Tuple[datetime, datetime]:
-    """
-    Парсит строку временного диапазона
-    
-    Args:
-        time_range: "today", "week", "month", "year" или "all"
-    
-    Returns:
-        Кортеж (начало, конец)
-    """
+def parse_time_range(time_range):
     now = get_moscow_time()
     
     if time_range == "today":
@@ -304,14 +249,13 @@ def parse_time_range(time_range: str) -> Tuple[datetime, datetime]:
     elif time_range == "year":
         start = now - timedelta(days=365)
         end = now
-    else:  # "all"
-        start = datetime(2020, 1, 1)  # Произвольная дата в прошлом
+    else:
+        start = datetime(2020, 1, 1)
         end = now
     
     return start, end
 
-def humanize_number(num: int) -> str:
-    """Преобразует большие числа в человекочитаемый формат"""
+def humanize_number(num):
     if num < 1000:
         return str(num)
     elif num < 1000000:
@@ -320,48 +264,3 @@ def humanize_number(num: int) -> str:
         return f"{num/1000000:.1f}M".replace(".0", "")
     else:
         return f"{num/1000000000:.1f}B".replace(".0", "")
-
-# ========== ТЕСТ ФУНКЦИЙ ==========
-if __name__ == "__main__":
-    print("🔍 Тестирование утилит...")
-    print("=" * 50)
-    
-    # Тест форматирования чисел
-    test_numbers = [0, 1, 100, 1000, 10000, 100000, 1000000]
-    print("1. Форматирование чисел:")
-    for num in test_numbers:
-        print(f"   {num:>9} -> {format_number(num):>12}")
-    
-    # Тест прогресс-бара
-    print("\n2. Прогресс-бары:")
-    tests = [(0, 100), (25, 100), (50, 100), (75, 100), (100, 100)]
-    for value, total in tests:
-        bar = create_progress_bar(value, total, 10)
-        print(f"   {value:3}/{total:3}: {bar}")
-    
-    # Тест времени назад
-    print("\n3. Формат времени назад:")
-    now = get_moscow_time()
-    test_times = [
-        now - timedelta(seconds=30),
-        now - timedelta(minutes=5),
-        now - timedelta(hours=2),
-        now - timedelta(days=3),
-        now - timedelta(days=40),
-        now - timedelta(days=400)
-    ]
-    for time in test_times:
-        print(f"   {format_time_ago(time)}")
-    
-    # Тест графиков
-    print("\n4. Генерация графиков:")
-    test_data = {"Пн": 10, "Вт": 25, "Ср": 15, "Чт": 30, "Пт": 20, "Сб": 35, "Вс": 5}
-    print(generate_chart(test_data, 20))
-    
-    # Тест почасового графика
-    print("\n5. Почасовой график (тестовые данные):")
-    hourly_test = [0]*6 + [5, 10, 15, 20, 25, 30, 35, 30, 25, 20, 15, 10, 5] + [0]*5
-    print(generate_hourly_chart(hourly_test, compact=True))
-    
-    print("\n" + "=" * 50)
-    print("✅ Все утилиты работают корректно!")
