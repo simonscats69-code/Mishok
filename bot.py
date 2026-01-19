@@ -112,19 +112,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg:
         return
     
-    text = f"""👋 *Привет, {update.effective_user.first_name}!*
-Я — *Мишок Лысый* 👴✨
-*Команды:*
+    text = f"""👋 <b>Привет, {update.effective_user.first_name}!</b>
+Я — <b>Мишок Лысый</b> 👴✨
+<b>Команды:</b>
 /shlep — Шлёпнуть
 /stats — Статистика  
 /level — Уровень
 /my_stats — Детально
 /trends — Тренды
-*Для чатов:* /chat_stats, /chat_top, /vote, /duel
-*Начни:* /shlep"""
+<b>Для чатов:</b> /chat_stats, /chat_top, /vote, /duel
+<b>Начни:</b> /shlep"""
     
     kb = get_inline_keyboard() if update.effective_chat.type != "private" else None
-    await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=kb)
+    await msg.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
 
 @command_handler
 async def shlep(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -152,19 +152,19 @@ async def shlep(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat.type != "private":
         await cache.delete(f"chat_stats_{chat.id}")
     
-    rec = f"\n🏆 *НОВЫЙ РЕКОРД!*\n" if dmg > max_dmg else ""
+    rec = f"\n🏆 <b>НОВЫЙ РЕКОРД!</b>\n" if dmg > max_dmg else ""
     lvl = calc_level(cnt)
     title, _ = level_title(lvl['level'])
     
-    text = f"""{get_reaction()}{rec}💥 *Урон:* {dmg}
-👤 *{user.first_name}*: {cnt} шлёпков
-🎯 *Уровень {lvl['level']}* ({title})
-📊 *До уровня:* {lvl['next']}
-⚡ *Диапазон урона:* {lvl['min']}-{lvl['max']}
-📈 *Всего шлёпков в игре:* {format_num(total)}"""
+    text = f"""{get_reaction()}{rec}💥 <b>Урон:</b> {dmg}
+👤 <b>{user.first_name}</b>: {cnt} шлёпков
+🎯 <b>Уровень {lvl['level']}</b> ({title})
+📊 <b>До уровня:</b> {lvl['next']}
+⚡ <b>Диапазон урона:</b> {lvl['min']}-{lvl['max']}
+📈 <b>Всего шлёпков в игре:</b> {format_num(total)}"""
     
     kb = get_chat_quick_actions() if chat.type != "private" else None
-    await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=kb)
+    await msg.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
 
 @command_handler 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -181,15 +181,18 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     top = get_top_users(10)
     
-    text = f"""📊 *ГЛОБАЛЬНАЯ СТАТИСТИКА*
-👑 *РЕКОРД УРОНА:* {maxd} единиц
-👤 *Рекордсмен:* {maxu or 'Нет'}
-📅 *Дата рекорда:* {maxdt.strftime('%d.%m.%Y %H:%M') if maxdt else '—'}
-🔢 *Всего шлёпков:* {format_num(total)}
-⏰ *Последний шлёпок:* {last.strftime('%d.%m.%Y %H:%M') if last else 'нет'}"""
+    maxdt_formatted = maxdt.strftime('%d.%m.%Y %H:%M') if maxdt else '—'
+    last_formatted = last.strftime('%d.%m.%Y %H:%M') if last else 'нет'
+    
+    text = f"""📊 <b>ГЛОБАЛЬНАЯ СТАТИСТИКА</b>
+👑 <b>РЕКОРД УРОНА:</b> {maxd} единиц
+👤 <b>Рекордсмен:</b> {maxu or 'Нет'}
+📅 <b>Дата рекорда:</b> {maxdt_formatted}
+🔢 <b>Всего шлёпков:</b> {format_num(total)}
+⏰ <b>Последний шлёпок:</b> {last_formatted}"""
     
     if top:
-        text += "\n\n🏆 *ТОП ШЛЁПАТЕЛЕЙ:*\n"
+        text += "\n\n🏆 <b>ТОП ШЛЁПАТЕЛЕЙ:</b>\n"
         for i, (u, c) in enumerate(top[:5], 1):
             lvl = calc_level(c)
             medal = ["🥇", "🥈", "🥉"][i-1] if i <= 3 else ""
@@ -197,7 +200,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += f"\n   📊 {format_num(c)} | Ур. {lvl['level']}"
             text += f"\n   ⚡ Урон: {lvl['min']}-{lvl['max']}"
     
-    await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    await msg.reply_text(text, parse_mode=ParseMode.HTML)
 
 @command_handler 
 async def level(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -218,19 +221,19 @@ async def level(update: Update, context: ContextTypes.DEFAULT_TYPE):
     title, advice = level_title(lvl['level'])
     bar = "█" * min(lvl['progress'] // 10, 10) + "░" * (10 - min(lvl['progress'] // 10, 10))
     
-    text = f"""🎯 *ТВОЙ УРОВЕНЬ*
-👤 *Игрок:* {user.first_name}
-📊 *Шлёпков:* {format_num(cnt)}
-🎯 *Уровень:* {lvl['level']} ({title})
+    text = f"""🎯 <b>ТВОЙ УРОВЕНЬ</b>
+👤 <b>Игрок:</b> {user.first_name}
+📊 <b>Шлёпков:</b> {format_num(cnt)}
+🎯 <b>Уровень:</b> {lvl['level']} ({title})
 {bar} {lvl['progress']}%
-⚡ *Диапазон урона:* {lvl['min']}-{lvl['max']}
-🎯 *До след. уровня:* {lvl['next']} шлёпков
-💡 *{advice}*"""
+⚡ <b>Диапазон урона:</b> {lvl['min']}-{lvl['max']}
+🎯 <b>До след. уровня:</b> {lvl['next']} шлёпков
+💡 <b>{advice}</b>"""
     
     if last:
-        text += f"\n⏰ *Последний шлёпок:* {last.strftime('%d.%m.%Y %H:%M')}"
+        text += f"\n⏰ <b>Последний шлёпок:</b> {last.strftime('%d.%m.%Y %H:%M')}"
     
-    await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    await msg.reply_text(text, parse_mode=ParseMode.HTML)
 
 @command_handler
 async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -244,24 +247,27 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lvl = calc_level(cnt)
     compare_stats = get_comparison_stats(user.id)
     
-    text = f"""📈 *ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА*
-👤 *Игрок:* {user.first_name}
-📊 *Всего шлёпков:* {format_num(cnt)}
-🎯 *Уровень:* {lvl['level']}
-⚡ *Диапазон урона:* {lvl['min']}-{lvl['max']}
-{get_favorite_time(user.id)}
-📊 *Сравнение с другими:*
-👥 *Всего игроков:* {compare_stats.get('total_users', 0)}
-📈 *Среднее на игрока:* {compare_stats.get('avg_shleps', 0)}
-🏆 *Твой ранг:* {compare_stats.get('rank', 1)}
-📊 *Лучше чем:* {compare_stats.get('percentile', 0)}% игроков
-📅 *Активность за неделю:*
-{format_daily_activity_chart(user.id, 7)}"""
+    favorite_time = get_favorite_time(user.id)
+    daily_chart = format_daily_activity_chart(user.id, 7)
+    
+    text = f"""📈 <b>ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА</b>
+👤 <b>Игрок:</b> {user.first_name}
+📊 <b>Всего шlёпков:</b> {format_num(cnt)}
+🎯 <b>Уровень:</b> {lvl['level']}
+⚡ <b>Диапазон урона:</b> {lvl['min']}-{lvl['max']}
+{favorite_time}
+📊 <b>Сравнение с другими:</b>
+👥 <b>Всего игроков:</b> {compare_stats.get('total_users', 0)}
+📈 <b>Среднее на игрока:</b> {compare_stats.get('avg_shleps', 0)}
+🏆 <b>Твой ранг:</b> {compare_stats.get('rank', 1)}
+📊 <b>Лучше чем:</b> {compare_stats.get('percentile', 0)}% игроков
+📅 <b>Активность за неделю:</b>
+{daily_chart}"""
     
     if last:
-        text += f"\n⏰ *Последний шлёпок:* {last.strftime('%d.%m.%Y %H:%M')}"
+        text += f"\n⏰ <b>Последний шлёпок:</b> {last.strftime('%d.%m.%Y %H:%M')}"
     
-    await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    await msg.reply_text(text, parse_mode=ParseMode.HTML)
 
 @command_handler
 async def trends(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -275,15 +281,15 @@ async def trends(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("📊 Данные временно недоступны")
         return
     
-    text = f"""📊 *ГЛОБАЛЬНЫЕ ТРЕНДЫ*
-👥 *Активных за 24 часа:* {trends_data.get('active_users_24h', 0)}
-👊 *Шлёпков за 24 часа:* {trends_data.get('shleps_24h', 0)}
-📈 *Среднее на игрока:* {trends_data.get('avg_per_user_24h', 0)}
-🔥 *Активных сегодня:* {trends_data.get('active_today', 0)}
-⏰ *Текущий час:* {trends_data.get('current_hour', 0):02d}:00
-👊 *Шлёпков в этом часу:* {trends_data.get('shleps_this_hour', 0)}"""
+    text = f"""📊 <b>ГЛОБАЛЬНЫЕ ТРЕНДЫ</b>
+👥 <b>Активных за 24 часа:</b> {trends_data.get('active_users_24h', 0)}
+👊 <b>Шлёпков за 24 часа:</b> {trends_data.get('shleps_24h', 0)}
+📈 <b>Среднее на игрока:</b> {trends_data.get('avg_per_user_24h', 0)}
+🔥 <b>Активных сегодня:</b> {trends_data.get('active_today', 0)}
+⏰ <b>Текущий час:</b> {trends_data.get('current_hour', 0):02d}:00
+👊 <b>Шлёпков в этом часу:</b> {trends_data.get('shleps_this_hour', 0)}"""
     
-    await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    await msg.reply_text(text, parse_mode=ParseMode.HTML)
 
 @command_handler
 async def detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -295,20 +301,23 @@ async def detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     _, cnt, _ = get_user_stats(user.id)
     
-    text = f"""📊 *РАСШИРЕННАЯ СТАТИСТИКА*
-👤 *Игрок:* {user.first_name}
-📊 *Шлёпков:* {format_num(cnt)}
+    daily_chart = format_daily_activity_chart(user.id, 14)
+    hourly_chart = format_hourly_distribution_chart(user.id)
+    
+    text = f"""📊 <b>РАСШИРЕННАЯ СТАТИСТИКА</b>
+👤 <b>Игрок:</b> {user.first_name}
+📊 <b>Шлёпков:</b> {format_num(cnt)}
 {get_favorite_time(user.id)}
-📅 *Активность за 2 недели:*
-{format_daily_activity_chart(user.id, 14)}
-{format_hourly_distribution_chart(user.id)}
-*Команды статистики:*
+📅 <b>Активность за 2 недели:</b>
+{daily_chart}
+{hourly_chart}
+<b>Команды статистики:</b>
 /my_stats — Краткая статистика
 /trends — Глобальные тренды
 /stats — Общая статистика
 /level — Уровень"""
     
-    await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    await msg.reply_text(text, parse_mode=ParseMode.HTML)
 
 @command_handler
 @chat_only
@@ -327,15 +336,15 @@ async def chat_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cache.set(f"chat_stats_{chat.id}", cs)
     
     if not cs:
-        text = "📊 *СТАТИСТИКА ЧАТА*\n\nВ этом чате ещё не было шлёпков!\nИспользуй /shlep чтобы стать первым! 🎯"
+        text = "<b>СТАТИСТИКА ЧАТА</b>\n\nВ этом чате ещё не было шлёпков!\nИспользуй /shlep чтобы стать первым! 🎯"
     else:
-        text = f"""📊 *СТАТИСТИКА ЧАТА*
-👥 *Участников:* {cs.get('total_users', 0)}
-👊 *Всего шlёпков:* {format_num(cs.get('total_shleps', 0))}
-🏆 *Рекорд урона:* {cs.get('max_damage', 0)} единиц
-👑 *Рекордсмен:* {cs.get('max_damage_user', 'Нет')}"""
+        text = f"""<b>СТАТИСТИКА ЧАТА</b>
+👥 <b>Участников:</b> {cs.get('total_users', 0)}
+👊 <b>Всего шlёпков:</b> {format_num(cs.get('total_shleps', 0))}
+🏆 <b>Рекорд урона:</b> {cs.get('max_damage', 0)} единиц
+👑 <b>Рекордсмен:</b> {cs.get('max_damage_user', 'Нет')}"""
     
-    await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    await msg.reply_text(text, parse_mode=ParseMode.HTML)
 
 @command_handler
 @chat_only
@@ -348,10 +357,10 @@ async def chat_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     top = get_chat_top_users(chat.id, 10)
     
     if not top:
-        await msg.reply_text("🏆 *ТОП ЧАТА*\n\nВ этом чате пока никто не шлёпал Мишка! Будь первым!")
+        await msg.reply_text("<b>ТОП ЧАТА</b>\n\nВ этом чате пока никто не шлёпал Мишка! Будь первым!")
         return
     
-    text = "🏆 *ТОП ШЛЁПАТЕЛЕЙ ЧАТА:*\n\n"
+    text = "<b>ТОП ШЛЁПАТЕЛЕЙ ЧАТА:</b>\n\n"
     for i, (u, c) in enumerate(top, 1):
         lvl = calc_level(c)
         medal = ["🥇", "🥈", "🥉"][i-1] if i <= 3 else ""
@@ -359,7 +368,7 @@ async def chat_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += f"   📊 {format_num(c)} | Ур. {lvl['level']}\n"
         text += f"   ⚡ Урон: {lvl['min']}-{lvl['max']}\n\n"
     
-    await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    await msg.reply_text(text, parse_mode=ParseMode.HTML)
 
 @command_handler
 @chat_only
@@ -372,8 +381,8 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = get_chat_vote_keyboard()
     
     await msg.reply_text(
-        f"🗳️ *ГОЛОСОВАНИЕ*\n\n{question}\n\nГолосование длится 5 минут!",
-        parse_mode=ParseMode.MARKDOWN,
+        f"🗳️ <b>ГОЛОСОВАНИЕ</b>\n\n{question}\n\nГолосование длится 5 минут!",
+        parse_mode=ParseMode.HTML,
         reply_markup=kb
     )
     
@@ -390,21 +399,21 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if context.args:
         target = ' '.join(context.args)
-        text = f"""⚔️ *ВЫЗОВ НА ДУЭЛЬ!*
+        text = f"""⚔️ <b>ВЫЗОВ НА ДУЭЛЬ!</b>
 {user.first_name} вызывает {target} на дуэль шлёпков!
-📜 *Правила:*
+📜 <b>Правила:</b>
 • 5 минут на дуэль
 • Побеждает тот, кто сделает больше шлёпков
 • Победитель получает бонус"""
     else:
-        text = """⚔️ *СИСТЕМА ДУЭЛЕЙ*
-Используй `/duel @username` чтобы вызвать кого-то на дуэль!
-📜 *Правила:*
+        text = """⚔️ <b>СИСТЕМА ДУЭЛЕЙ</b>
+Используй <code>/duel @username</code> чтобы вызвать кого-то на дуэль!
+📜 <b>Правила:</b>
 • Дуэль длится 5 минут
 • Побеждает тот, кто сделает больше шлёпков
 • Победитель получает специальную роль"""
     
-    await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    await msg.reply_text(text, parse_mode=ParseMode.HTML)
 
 @command_handler
 @chat_only
@@ -413,14 +422,14 @@ async def roles(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg:
         return
     
-    text = """👑 *РОЛИ В ЧАТЕ*
-*Как получить роли:*
+    text = """👑 <b>РОЛИ В ЧАТЕ</b>
+<b>Как получить роли:</b>
 • 👑 Король шлёпков — быть топ-1 в чате
 • 🎯 Самый меткий — нанести максимальный урон  
 • ⚡ Спринтер — сделать 10+ шлёпков за 5 минут
 • 💪 Силач — нанести урон 40+ единиц
-*Используй /chat_top чтобы увидеть текущих лидеров!*"""
-    await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+<b>Используй /chat_top чтобы увидеть текущих лидеров!</b>"""
+    await msg.reply_text(text, parse_mode=ParseMode.HTML)
 
 @command_handler
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -428,8 +437,8 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg:
         return
     
-    text = """🆘 *ПОМОЩЬ*
-*Основные команды:*
+    text = """🆘 <b>ПОМОЩЬ</b>
+<b>Основные команды:</b>
 /start — Начало работы
 /shlep — Шлёпнуть Мишка  
 /stats — Глобальная статистика
@@ -438,14 +447,14 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /detailed_stats — Расширенная статистика
 /trends — Глобальные тренды
 /mishok — О Мишке
-*Для чатов:*
+<b>Для чатов:</b>
 /chat_stats — Статистика чата
 /chat_top — Топ игроков чата
 /vote — Голосование
 /duel — Дуэль
 /roles — Роли в чате
-*Теперь с сохранением прогресса!* 💾"""
-    await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+<b>Теперь с сохранением прогресса!</b> 💾"""
+    await msg.reply_text(text, parse_mode=ParseMode.HTML)
 
 @command_handler
 async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -456,7 +465,7 @@ async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await msg.reply_text(
             MISHOK_INTRO,
-            parse_mode=ParseMode.MARKDOWN,
+            parse_mode=ParseMode.HTML,
             disable_web_page_preview=True
         )
         logger.info(f"Команда 'О Мишке' выполнена для пользователя {update.effective_user.id}")
@@ -466,13 +475,13 @@ async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if update.message:
                 await update.message.reply_text(
-                    "ℹ️ *Информация о Мишке:*\n\nЯ — Мишок Лысый, бот для шлёпок! Используй /help для команд.",
-                    parse_mode=ParseMode.MARKDOWN
+                    "ℹ️ <b>Информация о Мишке:</b>\n\nЯ — Мишок Лысый, бот для шлёпок! Используй /help для команд.",
+                    parse_mode=ParseMode.HTML
                 )
             elif update.callback_query:
                 await update.callback_query.message.reply_text(
-                    "ℹ️ *Информация о Мишке:*\n\nЯ — Мишок Лысый, бот для шлёпок!",
-                    parse_mode=ParseMode.MARKDOWN
+                    "ℹ️ <b>Информация о Мишке:</b>\n\nЯ — Мишок Лысый, бот для шлёпок!",
+                    parse_mode=ParseMode.HTML
                 )
         except Exception as e2:
             logger.error(f"Не удалось отправить сообщение об ошибке: {e2}")
@@ -498,7 +507,7 @@ async def storage(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     import os
-    text = "📂 **Информация о хранилище:**\n"
+    text = "<b>Информация о хранилище:</b>\n"
     
     paths = [
         ("/root", "Основная папка"),
@@ -513,12 +522,12 @@ async def storage(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ex = os.path.exists(p)
         if ex and os.path.isfile(p):
             sz = os.path.getsize(p)
-            text += f"{'✅' if ex else '❌'} {d}: `{p}` ({sz/1024:.1f} KB)\n"
+            text += f"{'✅' if ex else '❌'} {d}: <code>{p}</code> ({sz/1024:.1f} KB)\n"
         else:
-            text += f"{'✅' if ex else '❌'} {d}: `{p}`\n"
+            text += f"{'✅' if ex else '❌'} {d}: <code>{p}</code>\n"
     
-    text += f"\n💾 **Версия Бота:** Bothost Storage Ready"
-    await msg.reply_text(text, parse_mode="Markdown")
+    text += f"\n💾 <b>Версия Бота:</b> Bothost Storage Ready"
+    await msg.reply_text(text, parse_mode=ParseMode.HTML)
 
 async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_type: str):
     try:
@@ -541,7 +550,7 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
         vote_line = f"• {username}: {vote_text}"
         
         if "Результаты:" not in original_text:
-            new_text = original_text + f"\n\n📊 *Результаты:*\n{vote_line}"
+            new_text = original_text + f"\n\n📊 <b>Результаты:</b>\n{vote_line}"
         else:
             lines = original_text.split('\n')
             results_start = -1
@@ -564,11 +573,11 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
                 
                 new_text = '\n'.join(lines)
             else:
-                new_text = original_text + f"\n\n📊 *Результаты:*\n{vote_line}"
+                new_text = original_text + f"\n\n📊 <b>Результаты:</b>\n{vote_line}"
         
         await query.message.edit_text(
             new_text,
-            parse_mode=ParseMode.MARKDOWN,
+            parse_mode=ParseMode.HTML,
             reply_markup=get_chat_vote_keyboard()
         )
         
@@ -638,7 +647,7 @@ async def quick_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, data
     elif data == "quick_duel":
         await duel(update, context)
     elif data == "quick_daily_top":
-        await query.message.reply_text("📊 *ТОП ДНЯ*\n\nСобираем статистику...")
+        await query.message.reply_text("📊 <b>ТОП ДНЯ</b>\n\nСобираем статистику...", parse_mode=ParseMode.HTML)
     else:
         await query.message.reply_text("⚙️ В разработке")
 
@@ -671,13 +680,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.warning(f"Неизвестная кнопка: {text}")
             await update.message.reply_text(
                 "Неизвестная команда. Используйте /help для списка команд.",
-                parse_mode=ParseMode.MARKDOWN
+                parse_mode=ParseMode.HTML
             )
     except Exception as e:
         logger.error(f"Ошибка в button_handler: {e}", exc_info=True)
         await update.message.reply_text(
             "⚠️ Произошла ошибка при обработке команды. Попробуйте ещё раз.",
-            parse_mode=ParseMode.MARKDOWN
+            parse_mode=ParseMode.HTML
         )
 
 async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -685,20 +694,20 @@ async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for m in update.message.new_chat_members:
             if m.id == context.bot.id:
                 await update.message.reply_text(
-                    "👴 *Мишок Лысый в чате!*\n\n"
+                    "👴 <b>Мишок Лысый в чате!</b>\n\n"
                     "Теперь можно шлёпать меня по лысине прямо здесь!\n"
-                    "*Основные команды:*\n"
+                    "<b>Основные команды:</b>\n"
                     "/shlep — шлёпнуть Мишка\n"
                     "/stats — статистика\n"
                     "/level — уровень\n"
                     "/my_stats — детальная статистика\n"
-                    "*Для чата:*\n"
+                    "<b>Для чата:</b>\n"
                     "/chat_stats — статистика чата\n"
                     "/chat_top — топ игроков\n"
                     "/vote — голосование\n"
                     "/duel — дуэль\n"
-                    "*Прогресс сохраняется!* 💾",
-                    parse_mode=ParseMode.MARKDOWN
+                    "<b>Прогресс сохраняется!</b> 💾",
+                    parse_mode=ParseMode.HTML
                 )
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
