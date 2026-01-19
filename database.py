@@ -12,6 +12,35 @@ DATA_FILE = "data/mishok_data.json"
 BACKUP_DIR = "data/backups"
 VOTES_FILE = "data/votes.json"
 
+# ========== Вспомогательные функции для безопасного доступа ==========
+
+def get_active_duels_safe(data: Dict) -> Dict:
+    """Безопасно получает активные дуэли"""
+    try:
+        if "duels" not in data:
+            return {}
+        return data["duels"].get("active", {})
+    except:
+        return {}
+
+def get_duel_invites_safe(data: Dict) -> Dict:
+    """Безопасно получает приглашения на дуэли"""
+    try:
+        if "duels" not in data:
+            return {}
+        return data["duels"].get("invites", {})
+    except:
+        return {}
+
+def get_duel_history_safe(data: Dict) -> List:
+    """Безопасно получает историю дуэлей"""
+    try:
+        if "duels" not in data:
+            return []
+        return data["duels"].get("history", [])
+    except:
+        return []
+
 # ========== Функции для работы с голосованиями ==========
 
 def ensure_votes_file():
@@ -739,7 +768,15 @@ def create_duel_invite(challenger_id: int, challenger_name: str,
             "status": "pending"
         }
         
-        data.setdefault("duels", {}).setdefault("invites", {})[duel_id] = invite
+        # Инициализируем структуру duels если её нет
+        if "duels" not in data:
+            data["duels"] = {
+                "active": {},
+                "invites": {},
+                "history": []
+            }
+        
+        data["duels"].setdefault("invites", {})[duel_id] = invite
         save_data(data)
         
         logger.info(f"Создано приглашение на дуэль: {duel_id}, challenger: {challenger_name}, target: {target_name}")
@@ -753,11 +790,14 @@ def accept_duel_invite(duel_id: str, target_id: int = None, target_name: str = N
     try:
         data = load_data()
         
-        if "duels" not in data or duel_id not in data["duels"]["invites"]:
+        # Используем безопасные функции
+        invites = get_duel_invites_safe(data)
+        
+        if duel_id not in invites:
             logger.warning(f"Приглашение на дуэль не найдено: {duel_id}")
             return None
         
-        invite = data["duels"]["invites"][duel_id]
+        invite = invites[duel_id]
         
         # Обновляем информацию о цели если передана
         if target_id:
@@ -777,7 +817,12 @@ def accept_duel_invite(duel_id: str, target_id: int = None, target_name: str = N
             # Автоматически перемещаем в историю как просроченное
             invite["status"] = "expired"
             invite["ended_at"] = datetime.now().isoformat()
-            data.setdefault("duels", {}).setdefault("history", []).append(invite)
+            
+            # Инициализируем историю если её нет
+            if "history" not in data.setdefault("duels", {}):
+                data["duels"]["history"] = []
+            
+            data["duels"]["history"].append(invite)
             del data["duels"]["invites"][duel_id]
             save_data(data)
             return None
@@ -801,8 +846,12 @@ def accept_duel_invite(duel_id: str, target_id: int = None, target_name: str = N
             "history": []
         }
         
+        # Инициализируем структуру active если её нет
         data.setdefault("duels", {}).setdefault("active", {})[duel_id] = active_duel
-        del data["duels"]["invites"][duel_id]
+        
+        # Удаляем из invites
+        if duel_id in data["duels"].get("invites", {}):
+            del data["duels"]["invites"][duel_id]
         
         save_data(data)
         
@@ -817,11 +866,14 @@ def decline_duel_invite(duel_id: str, user_id: int = None, user_name: str = None
     try:
         data = load_data()
         
-        if "duels" not in data or duel_id not in data["duels"]["invites"]:
+        # Используем безопасные функции
+        invites = get_duel_invites_safe(data)
+        
+        if duel_id not in invites:
             logger.warning(f"Приглашение на дуэль не найдено для отклонения: {duel_id}")
             return False
         
-        invite = data["duels"]["invites"][duel_id]
+        invite = invites[duel_id]
         invite["status"] = "declined"
         invite["ended_at"] = datetime.now().isoformat()
         
@@ -830,8 +882,14 @@ def decline_duel_invite(duel_id: str, user_id: int = None, user_name: str = None
         if user_name:
             invite["declined_by"] = user_name
         
-        data.setdefault("duels", {}).setdefault("history", []).append(invite)
-        del data["duels"]["invites"][duel_id]
+        # Инициализируем историю если её нет
+        history = get_duel_history_safe(data)
+        history.append(invite)
+        data.setdefault("duels", {})["history"] = history
+        
+        # Удаляем из invites
+        if duel_id in data["duels"].get("invites", {}):
+            del data["duels"]["invites"][duel_id]
         
         save_data(data)
         logger.info(f"Дуэль отклонена: {duel_id}")
@@ -845,10 +903,9 @@ def get_active_duel(duel_id: str):
     try:
         data = load_data()
         
-        if "duels" not in data or duel_id not in data["duels"]["active"]:
-            return None
-        
-        return data["duels"]["active"][duel_id]
+        # Используем безопасные функции
+        active_duels = get_active_duels_safe(data)
+        return active_duels.get(duel_id)
     except Exception as e:
         logger.error(f"Ошибка получения активной дуэли: {e}")
         return None
@@ -858,10 +915,13 @@ def add_shlep_to_duel(duel_id: str, user_id: int, damage: int):
     try:
         data = load_data()
         
-        if "duels" not in data or duel_id not in data["duels"]["active"]:
+        # Используем безопасные функции
+        active_duels = get_active_duels_safe(data)
+        
+        if duel_id not in active_duels:
             return None
         
-        duel = data["duels"]["active"][duel_id]
+        duel = active_duels[duel_id]
         
         action = {
             "user_id": user_id,
@@ -905,10 +965,13 @@ def finish_duel(duel_id: str):
     try:
         data = load_data()
         
-        if "duels" not in data or duel_id not in data["duels"]["active"]:
+        # Используем безопасные функции
+        active_duels = get_active_duels_safe(data)
+        
+        if duel_id not in active_duels:
             return None
         
-        duel = data["duels"]["active"][duel_id]
+        duel = active_duels[duel_id]
         
         if duel["challenger_damage"] > duel["target_damage"]:
             winner_id = duel["challenger_id"]
@@ -951,8 +1014,14 @@ def finish_duel(duel_id: str):
             "is_draw": winner_id is None
         }
         
-        data.setdefault("duels", {}).setdefault("history", []).append(duel)
-        del data["duels"]["active"][duel_id]
+        # Инициализируем историю если её нет
+        history = get_duel_history_safe(data)
+        history.append(duel)
+        data.setdefault("duels", {})["history"] = history
+        
+        # Удаляем из активных
+        if duel_id in data["duels"].get("active", {}):
+            del data["duels"]["active"][duel_id]
         
         save_data(data)
         
@@ -967,10 +1036,13 @@ def surrender_duel(duel_id: str, user_id: int):
     try:
         data = load_data()
         
-        if "duels" not in data or duel_id not in data["duels"]["active"]:
+        # Используем безопасные функции
+        active_duels = get_active_duels_safe(data)
+        
+        if duel_id not in active_duels:
             return None
         
-        duel = data["duels"]["active"][duel_id]
+        duel = active_duels[duel_id]
         
         if user_id == duel["challenger_id"]:
             winner_id = duel["target_id"]
@@ -1007,8 +1079,14 @@ def surrender_duel(duel_id: str, user_id: int):
         duel["finished_at"] = datetime.now().isoformat()
         duel["ended_by"] = "surrender"
         
-        data.setdefault("duels", {}).setdefault("history", []).append(duel)
-        del data["duels"]["active"][duel_id]
+        # Инициализируем историю если её нет
+        history = get_duel_history_safe(data)
+        history.append(duel)
+        data.setdefault("duels", {})["history"] = history
+        
+        # Удаляем из активных
+        if duel_id in data["duels"].get("active", {}):
+            del data["duels"]["active"][duel_id]
         
         save_data(data)
         
@@ -1023,16 +1101,16 @@ def get_user_active_duel(user_id: int):
     try:
         data = load_data()
         
-        if "duels" not in data:
-            return None
+        # Используем безопасные функции
+        active_duels = get_active_duels_safe(data)
         
-        for duel_id, duel in data["duels"]["active"].items():
-            if duel["challenger_id"] == user_id or duel["target_id"] == user_id:
+        for duel_id, duel in active_duels.items():
+            if duel.get("challenger_id") == user_id or duel.get("target_id") == user_id:
                 return duel
         
         return None
     except Exception as e:
-        logger.error(f"Ошибка получения активной дуэли пользователя: {e}")
+        logger.error(f"Ошибка получения активной дуэли пользователя: {e}", exc_info=True)
         return None
 
 def cleanup_expired_duels():
@@ -1046,23 +1124,33 @@ def cleanup_expired_duels():
         now = datetime.now()
         cleaned = 0
         
+        # Используем безопасные функции
+        invites = get_duel_invites_safe(data)
+        active_duels = get_active_duels_safe(data)
+        
         # Очистка просроченных приглашений
         expired_invites = []
-        for duel_id, invite in data["duels"].get("invites", {}).items():
+        for duel_id, invite in invites.items():
             expires_at = datetime.fromisoformat(invite["expires_at"])
             if now >= expires_at:
                 invite["status"] = "expired"
                 invite["ended_at"] = now.isoformat()
-                data.setdefault("duels", {}).setdefault("history", []).append(invite)
+                
+                # Инициализируем историю если её нет
+                history = get_duel_history_safe(data)
+                history.append(invite)
+                data.setdefault("duels", {})["history"] = history
+                
                 expired_invites.append(duel_id)
                 cleaned += 1
         
         for duel_id in expired_invites:
-            del data["duels"]["invites"][duel_id]
+            if duel_id in data["duels"].get("invites", {}):
+                del data["duels"]["invites"][duel_id]
         
         # Очистка просроченных дуэлей
         expired_duels = []
-        for duel_id, duel in data["duels"].get("active", {}).items():
+        for duel_id, duel in active_duels.items():
             ends_at = datetime.fromisoformat(duel["ends_at"])
             if now >= ends_at:
                 finish_duel(duel_id)
@@ -1070,7 +1158,7 @@ def cleanup_expired_duels():
                 cleaned += 1
         
         for duel_id in expired_duels:
-            if duel_id in data["duels"]["active"]:
+            if duel_id in data["duels"].get("active", {}):
                 del data["duels"]["active"][duel_id]
         
         if cleaned > 0:
@@ -1087,7 +1175,10 @@ def update_duel_message_id(duel_id: str, message_id: int):
     try:
         data = load_data()
         
-        if "duels" not in data or duel_id not in data["duels"]["active"]:
+        # Используем безопасные функции
+        active_duels = get_active_duels_safe(data)
+        
+        if duel_id not in active_duels:
             return False
         
         data["duels"]["active"][duel_id]["message_id"] = message_id
