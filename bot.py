@@ -24,10 +24,7 @@ def command_handler(func):
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
-            message = update.message or (update.callback_query and update.callback_query.message)
-            if not message:
-                return
-            return await func(update, context, message)
+            return await func(update, context)
         except Exception as e:
             logger.error(f"Ошибка в {func.__name__}: {e}", exc_info=True)
             try:
@@ -41,11 +38,13 @@ def command_handler(func):
 
 def chat_only(func):
     @wraps(func)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update.effective_chat.type == "private":
-            await message.reply_text("Эта команда работает только в группах!")
+            message = update.message or (update.callback_query and update.callback_query.message)
+            if message:
+                await message.reply_text("Эта команда работает только в группах!")
             return
-        return await func(update, context, message)
+        return await func(update, context)
     return wrapper
 
 def format_num(num): 
@@ -85,7 +84,7 @@ def level_title(lvl):
     if lvl >= 750: return ("💎 БОЖЕСТВЕННЫЙ АРХИТЕКТОР", "Ты строишь реальность шлёпками!")
     if lvl >= 700: return ("⭐ ВЕЧНЫЙ ИМПЕРАТОР", "Твоя империя будет существовать вечно!")
     if lvl >= 650: return ("🌠 КОСМИЧЕСКИЙ ДЕМИУРГ", "Создаёшь звёзды одним шлёпком!")
-    if lvl >= 600: return ("⚡ ПРЕВОСХОДНЫЙ БОГО-ЦАРЬ", "Ты — высшая форма существования!")
+    if lvl >= 600: return ("⚡ ПРЕВОСХОДНЫЙ БОГО ЦАРЬ", "Ты — высшая форма существования!")
     if lvl >= 550: return ("🔥 МИРОТВОРЕЦ ВСЕЛЕННОЙ", "Твоим шлёпком устанавливается мир!")
     if lvl >= 500: return ("🌟 ВЕРХОВНЫЙ БОГ ШЛЁПКОВ", "Тебе поклоняются миллионы!")
     if lvl >= 450: return ("👑 НЕБЕСНЫЙ ПАТРИАРХ", "Твоя династия будет править вечно!")
@@ -105,8 +104,16 @@ def level_title(lvl):
 def get_reaction(): 
     return random.choice(MISHOK_REACTIONS)
 
+async def get_message_from_update(update: Update):
+    """Получаем сообщение из update"""
+    return update.message or (update.callback_query and update.callback_query.message)
+
 @command_handler
-async def start(update, context, msg):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
     text = f"""👋 *Привет, {update.effective_user.first_name}!*
 Я — *Мишок Лысый* 👴✨
 *Команды:*
@@ -122,7 +129,11 @@ async def start(update, context, msg):
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=kb)
 
 @command_handler
-async def shlep(update, context, msg):
+async def shlep(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
     user = update.effective_user
     chat = update.effective_chat
     
@@ -158,7 +169,11 @@ async def shlep(update, context, msg):
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN, reply_markup=kb)
 
 @command_handler 
-async def stats(update, context, msg):
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
     cached = await cache.get("global_stats")
     if cached:
         total, last, maxd, maxu, maxdt = cached
@@ -187,7 +202,11 @@ async def stats(update, context, msg):
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
 @command_handler 
-async def level(update, context, msg):
+async def level(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
     user = update.effective_user
     
     cached = await cache.get(f"user_stats_{user.id}")
@@ -216,7 +235,11 @@ async def level(update, context, msg):
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
 @command_handler
-async def my_stats(update, context, msg):
+async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
     user = update.effective_user
     
     _, cnt, last = get_user_stats(user.id)
@@ -243,7 +266,11 @@ async def my_stats(update, context, msg):
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
 @command_handler
-async def trends(update, context, msg):
+async def trends(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
     trends_data = get_global_trends_info()
     
     if not trends_data:
@@ -261,7 +288,11 @@ async def trends(update, context, msg):
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
 @command_handler
-async def detailed_stats(update, context, msg):
+async def detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
     user = update.effective_user
     
     _, cnt, _ = get_user_stats(user.id)
@@ -283,7 +314,11 @@ async def detailed_stats(update, context, msg):
 
 @command_handler
 @chat_only
-async def chat_stats(update, context, msg):
+async def chat_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
     chat = update.effective_chat
     
     cached = await cache.get(f"chat_stats_{chat.id}")
@@ -306,7 +341,11 @@ async def chat_stats(update, context, msg):
 
 @command_handler
 @chat_only
-async def chat_top(update, context, msg):
+async def chat_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
     chat = update.effective_chat
     top = get_chat_top_users(chat.id, 10)
     
@@ -326,13 +365,21 @@ async def chat_top(update, context, msg):
 
 @command_handler
 @chat_only
-async def vote(update, context, msg):
+async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
     q = " ".join(context.args) if context.args else "Шлёпнуть Мишка?"
     await msg.reply_text(f"🗳️ *ГОЛОСОВАНИЕ*\n\n{q}\n\nГолосование длится 5 минут!", parse_mode=ParseMode.MARKDOWN)
 
 @command_handler
 @chat_only
-async def duel(update, context, msg):
+async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
     user = update.effective_user
     
     if context.args:
@@ -355,7 +402,11 @@ async def duel(update, context, msg):
 
 @command_handler
 @chat_only
-async def roles(update, context, msg):
+async def roles(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
     text = """👑 *РОЛИ В ЧАТЕ*
 *Как получить роли:*
 • 👑 Король шлёпков — быть топ-1 в чате
@@ -366,7 +417,11 @@ async def roles(update, context, msg):
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
 @command_handler
-async def help_cmd(update, context, msg):
+async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
     text = """🆘 *ПОМОЩЬ*
 *Основные команды:*
 /start — Начало работы
@@ -387,11 +442,19 @@ async def help_cmd(update, context, msg):
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
 @command_handler
-async def mishok(update, context, msg):
+async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
     await msg.reply_text(MISHOK_INTRO, parse_mode=ParseMode.MARKDOWN)
 
 @command_handler
-async def backup(update, context, msg):
+async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
     ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
     if update.effective_user.id != ADMIN_ID:
         await msg.reply_text("⚠️ Эта команда только для администраторов!")
@@ -401,7 +464,11 @@ async def backup(update, context, msg):
     await msg.reply_text("✅ Бэкап создан!" if ok else f"❌ Ошибка: {result}")
 
 @command_handler
-async def storage(update, context, msg):
+async def storage(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
     import os
     text = "📂 **Информация о хранилище:**\n"
     
@@ -437,25 +504,25 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Обработчики для inline кнопок
     if data == "shlep_mishok":
-        await shlep(update, context, query.message)
+        await shlep(update, context)
     elif data == "stats_inline":
-        await stats(update, context, query.message)
+        await stats(update, context)
     elif data == "level_inline":
-        await level(update, context, query.message)
+        await level(update, context)
     elif data == "chat_top":
-        await chat_top(update, context, query.message)
+        await chat_top(update, context)
     elif data == "my_stats":
-        await my_stats(update, context, query.message)
+        await my_stats(update, context)
     elif data == "trends":
-        await trends(update, context, query.message)
+        await trends(update, context)
     elif data == "help_inline":
-        await help_cmd(update, context, query.message)
+        await help_cmd(update, context)
     elif data.startswith("quick_"):
         await quick_handler(update, context, data)
     else:
         await query.message.reply_text("⚙️ Эта функция в разработке")
 
-async def quick_handler(update, context, data):
+async def quick_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, data: str):
     query = update.callback_query
     if not query:
         return
@@ -463,27 +530,30 @@ async def quick_handler(update, context, data):
     await query.answer()
     
     if data == "quick_shlep":
-        await shlep(update, context, query.message)
+        await shlep(update, context)
     elif data == "quick_stats":
-        await chat_stats(update, context, query.message)
+        await chat_stats(update, context)
     elif data == "quick_level":
-        await level(update, context, query.message)
+        await level(update, context)
     elif data == "quick_my_stats":
-        await my_stats(update, context, query.message)
+        await my_stats(update, context)
     elif data == "quick_trends":
-        await trends(update, context, query.message)
+        await trends(update, context)
     elif data == "quick_vote":
-        await vote(update, context, query.message)
+        await vote(update, context)
     elif data == "quick_duel":
-        await duel(update, context, query.message)
+        await duel(update, context)
     elif data == "quick_daily_top":
         await query.message.reply_text("📊 *ТОП ДНЯ*\n\nСобираем статистику...")
     else:
         await query.message.reply_text("⚙️ В разработке")
 
-@command_handler
-async def button_handler(update, context, msg):
+# ВАЖНО: button_handler не использует @command_handler, потому что это не команда!
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
+        return
+    
+    if not update.message:
         return
     
     text = update.message.text
@@ -491,29 +561,28 @@ async def button_handler(update, context, msg):
     
     # Проверяем все возможные варианты
     if text == "👊 Шлёпнуть Мишка" or text == "👊 Шлёпнуть" or "Шлёпнуть" in text:
-        await shlep(update, context, msg)
+        await shlep(update, context)
     elif text == "🎯 Уровень":
-        await level(update, context, msg)
+        await level(update, context)
     elif text == "📊 Статистика":
-        await stats(update, context, msg)
+        await stats(update, context)
     elif text == "📈 Моя статистика":
-        await my_stats(update, context, msg)
+        await my_stats(update, context)
     elif text == "📊 Тренды":
-        await trends(update, context, msg)
+        await trends(update, context)
     elif text == "❓ Помощь":
-        await help_cmd(update, context, msg)
+        await help_cmd(update, context)
     elif text == "👴 О Мишке":
-        await mishok(update, context, msg)
+        await mishok(update, context)
     else:
         logger.warning(f"Неизвестная кнопка: {text}")
-        await msg.reply_text("Неизвестная команда. Используйте /help для списка команд.")
+        await update.message.reply_text("Неизвестная команда. Используйте /help для списка команд.")
 
-@command_handler
-async def group_welcome(update, context, msg):
-    if update.message.new_chat_members:
+async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message and update.message.new_chat_members:
         for m in update.message.new_chat_members:
             if m.id == context.bot.id:
-                await msg.reply_text(
+                await update.message.reply_text(
                     "👴 *Мишок Лысый в чате!*\n\n"
                     "Теперь можно шлёпать меня по лысине прямо здесь!\n"
                     "*Основные команды:*\n"
@@ -530,7 +599,7 @@ async def group_welcome(update, context, msg):
                     parse_mode=ParseMode.MARKDOWN
                 )
 
-async def error_handler(update, context):
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Ошибка: {context.error}", exc_info=True)
 
 def main():
