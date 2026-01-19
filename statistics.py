@@ -1,3 +1,5 @@
+[file name]: statistics.py
+[file content begin]
 from datetime import datetime, timedelta
 
 # Убрали точку перед импортами - это вызывает ошибку
@@ -65,10 +67,10 @@ class Stats:
         else:
             desc = "вечером 🌆"
         
-        return f"""⏰ *Любимое время:* {desc} ({max_hour:02d}:00)
-📊 *В этот час:* {max_count}
-🎯 *Самое активное:* {best[2]}
-📈 *Всего {best[2].split()[0].lower()}:* {best[3]}"""
+        return f"""<b>Любимое время:</b> {desc} ({max_hour:02d}:00)
+<b>В этот час:</b> {max_count}
+<b>Самое активное:</b> {best[2]}
+<b>Всего {best[2].split()[0].lower()}:</b> {best[3]}"""
     
     def comparison(self, user_id):
         data = get_comparison_data()
@@ -146,7 +148,7 @@ class Stats:
         if not any(hours): 
             return "⏰ Нет данных"
         
-        lines = ["⏰ *Активность по часам:*"]
+        lines = ["<b>Активность по часам:</b>"]
         
         for i in range(0, 24, 4):
             total = sum(hours[i:i+4])
@@ -165,3 +167,4 @@ get_comparison_stats = stats.comparison
 get_global_trends_info = stats.global_trends
 format_daily_activity_chart = stats.daily_chart
 format_hourly_distribution_chart = stats.hourly_chart
+[file content end]
