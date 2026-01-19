@@ -18,7 +18,7 @@ from config import BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO
 from database import add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, get_chat_top_users, backup_database, check_data_integrity, repair_data_structure, create_duel_invite, accept_duel_invite, decline_duel_invite, get_active_duel, add_shlep_to_duel, finish_duel, surrender_duel, get_user_active_duel, cleanup_expired_duels, update_duel_message_id, save_vote_data, get_vote_data, delete_vote_data, get_user_vote
 from keyboard import get_shlep_session_keyboard, get_shlep_start_keyboard, get_chat_vote_keyboard, get_inline_keyboard, get_duel_invite_keyboard, get_duel_active_keyboard, get_duel_finished_keyboard
 from cache import cache
-from statistics import get_favorite_time, get_comparison_stats, get_global_trends_info, format_daily_activity_chart, format_hourly_distribution_chart
+from statistics import get_favorite_time, get_comparison_stats
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -391,7 +391,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📊 /stats — Глобальная статистика
 🎯 /level — Твой уровень и прогресс
 📈 /my_stats — Детальная статистика
-📊 /trends — Глобальные тренды
 ❓ /help — Помощь по командам
 👴 /mishok — О Мишке
 
@@ -496,40 +495,10 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lvl = calc_level(cnt)
     compare_stats = get_comparison_stats(user.id)
     
-    text = f"📈 ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Всего шлёпков: {format_num(cnt)}\n🎯 Уровень: {lvl['level']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n{get_favorite_time(user.id)}\n📊 Сравнение с другими:\n👥 Всего игроков: {compare_stats.get('total_users', 0)}\n📈 Среднее на игрока: {compare_stats.get('avg_shleps', 0)}\n🏆 Твой ранг: {compare_stats.get('rank', 1)}\n📊 Лучше чем: {compare_stats.get('percentile', 0)}% игроков\n📅 Активность за неделю:\n{format_daily_activity_chart(user.id, 7)}"
+    text = f"📈 ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Всего шлёпков: {format_num(cnt)}\n🎯 Уровень: {lvl['level']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n{get_favorite_time(user.id)}\n📊 Сравнение с другими:\n👥 Всего игроков: {compare_stats.get('total_users', 0)}\n📈 Среднее на игрока: {compare_stats.get('avg_shleps', 0)}\n🏆 Твой ранг: {compare_stats.get('rank', 1)}\n📊 Лучше чем: {compare_stats.get('percentile', 0)}% игроков"
     
     if last:
         text += f"\n⏰ Последний шлёпок: {last.strftime('%d.%m.%Y %H:%M')}"
-    
-    await msg.reply_text(text)
-
-@command_handler
-async def trends(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = get_message_from_update(update)
-    if not msg:
-        return
-    
-    trends_data = get_global_trends_info()
-    
-    if not trends_data:
-        await msg.reply_text("📊 Данные временно недоступны")
-        return
-    
-    text = f"📊 ГЛОБАЛЬНЫЕ ТРЕНДЫ\n👥 Активных за 24 часа: {trends_data.get('active_users_24h', 0)}\n👊 Шлёпков за 24 часа: {trends_data.get('shleps_24h', 0)}\n📈 Среднее на игрока: {trends_data.get('avg_per_user_24h', 0)}\n🔥 Активных сегодня: {trends_data.get('active_today', 0)}\n⏰ Текущий час: {trends_data.get('current_hour', 0):02d}:00\n👊 Шлёпков в этом часу: {trends_data.get('shleps_this_hour', 0)}"
-    
-    await msg.reply_text(text)
-
-@command_handler
-async def detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = get_message_from_update(update)
-    if not msg:
-        return
-    
-    user = update.effective_user
-    
-    _, cnt, _ = get_user_stats(user.id)
-    
-    text = f"📊 РАСШИРЕННАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Шлёпков: {format_num(cnt)}\n{get_favorite_time(user.id)}\n📅 Активность за 2 недели:\n{format_daily_activity_chart(user.id, 14)}\n{format_hourly_distribution_chart(user.id)}\n\nКоманды статистики:\n/my_stats — Краткая статистика\n/trends — Глобальные тренды\n/stats — Общая статистика\n/level — Уровень"
     
     await msg.reply_text(text)
 
@@ -1154,7 +1123,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg:
         return
     
-    text = "🆘 ПОМОЩЬ\n\nОсновные команды:\n/start — Начало работы\n/shlep — Шлёпнуть Мишка\n/stats — Глобальная статистика\n/level — Твой уровень\n/my_stats — Детальная статистика\n/detailed_stats — Расширенная статистика\n/trends — Глобальные тренды\n/mishok — О Мишке\n\nДля чатов:\n/chat_stats — Статистика чата\n/chat_top — Топ игроков чата\n/vote — Голосование\n/duel — Дуэль\n/roles — Роли в чате\n\nНовое: Шлёпай в одном окне без спама сообщений!"
+    text = "🆘 ПОМОЩЬ\n\nОсновные команды:\n/start — Начало работы\n/shlep — Шлёпнуть Мишка\n/stats — Глобальная статистика\n/level — Твой уровень\n/my_stats — Детальная статистика\n/mishok — О Мишке\n\nДля чатов:\n/chat_stats — Статистика чата\n/chat_top — Топ игроков чата\n/vote — Голосование\n/duel — Дуэль\n/roles — Роли в чате\n\nНовое: Шлёпай в одном окне без спама сообщений!"
     
     await msg.reply_text(text)
 
@@ -1396,14 +1365,6 @@ async def handle_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYP
         compare_stats = get_comparison_stats(user.id)
         
         text = f"📈 ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Всего шлёпков: {format_num(cnt)}\n🎯 Уровень: {lvl['level']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n{get_favorite_time(user.id)}\n📊 Сравнение с другими:\n👥 Всего игроков: {compare_stats.get('total_users', 0)}\n📈 Среднее на игрока: {compare_stats.get('avg_shleps', 0)}\n🏆 Твой ранг: {compare_stats.get('rank', 1)}\n📊 Лучше чем: {compare_stats.get('percentile', 0)}% игроков"
-        
-        await query.message.edit_text(text, reply_markup=get_shlep_session_keyboard())
-    elif action == "shlep_trends":
-        trends_data = get_global_trends_info()
-        if not trends_data:
-            text = "📊 Данные временно недоступны"
-        else:
-            text = f"📊 ГЛОБАЛЬНЫЕ ТРЕНДЫ\n👥 Активных за 24 часа: {trends_data.get('active_users_24h', 0)}\n👊 Шлёпков за 24 часа: {trends_data.get('shleps_24h', 0)}\n📈 Среднее на игрока: {trends_data.get('avg_per_user_24h', 0)}\n🔥 Активных сегодня: {trends_data.get('active_today', 0)}\n⏰ Текущий час: {trends_data.get('current_hour', 0):02d}:00\n👊 Шлёпков в этом часу: {trends_data.get('shleps_this_hour', 0)}"
         
         await query.message.edit_text(text, reply_markup=get_shlep_session_keyboard())
     elif action == "shlep_menu":
@@ -1694,7 +1655,7 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if data == "start_shlep_session":
         await start_shlep_session(update, context)
-    elif data in ["shlep_again", "shlep_level", "shlep_stats", "shlep_my_stats", "shlep_trends", "shlep_menu"]:
+    elif data in ["shlep_again", "shlep_level", "shlep_stats", "shlep_my_stats", "shlep_menu"]:
         await handle_shlep_session(update, context, data)
     elif data == "shlep_mishok":
         await perform_shlep(update, context)
@@ -1706,8 +1667,6 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await chat_top(update, context)
     elif data == "my_stats":
         await my_stats(update, context)
-    elif data == "trends":
-        await trends(update, context)
     elif data == "help_inline":
         await help_cmd(update, context)
     elif data == "mishok_info":
@@ -1737,8 +1696,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await stats(update, context)
         elif text == "📈 Моя статистика":
             await my_stats(update, context)
-        elif text == "📊 Тренды":
-            await trends(update, context)
         elif text == "❓ Помощь":
             await help_cmd(update, context)
         elif text in ["👴 О Мишке", "О Мишке"]:
@@ -1799,8 +1756,6 @@ def main():
         ("stats", stats),
         ("level", level),
         ("my_stats", my_stats),
-        ("trends", trends),
-        ("detailed_stats", detailed_stats),
         ("help", help_cmd),
         ("mishok", mishok),
         ("chat_stats", chat_stats),
