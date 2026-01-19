@@ -850,7 +850,8 @@ def cleanup_expired_duels():
     if cleaned > 0:
         save_data(data)
     
-    return cleanedimport json
+    return cleaned
+import json
 import os
 from datetime import datetime
 import logging
