@@ -16,6 +16,9 @@ def main_kb(for_chat=False):
             ],
             [
                 InlineKeyboardButton("📊 Тренды", callback_data="trends"),
+                InlineKeyboardButton("👴 О Мишке", callback_data="mishok_info")
+            ],
+            [
                 InlineKeyboardButton("❓ Помощь", callback_data="help_inline")
             ]
         ])
@@ -100,7 +103,7 @@ def get_chat_record_keyboard():
         [InlineKeyboardButton("📈 История рекордов", callback_data="record_history")]
     ])
 
-# Экспортируем функции
+# Экспортируем функции для использования в других модулях
 get_chat_quick_actions = quick_actions
 get_inline_keyboard = lambda: main_kb(for_chat=True)
 get_game_keyboard = lambda: main_kb(for_chat=False)
