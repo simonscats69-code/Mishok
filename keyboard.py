@@ -1,5 +1,3 @@
-[file name]: keyboard.py
-[file content begin]
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
 def main_kb(for_chat=False):
@@ -66,4 +64,3 @@ def get_chat_vote_keyboard():
     ])
 
 get_inline_keyboard = lambda: main_kb(for_chat=True)
-[file content end]
