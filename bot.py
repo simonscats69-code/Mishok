@@ -361,29 +361,52 @@ async def storage(update, context, msg):
     text += f"\n💾 **Версия Бота:** Bothost Storage Ready"
     await msg.reply_text(text, parse_mode="Markdown")
 
-async def inline_handler(update, context, msg):
+async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query: return
     await query.answer()
-    handlers = {"shlep_mishok":shlep,"stats_inline":stats,"level_inline":level,"mishok_info":mishok,"chat_stats":chat_stats,"chat_top":chat_top,"my_stats":my_stats,"trends":trends}
-    if query.data in handlers: await handlers[query.data](update, context)
-    elif query.data.startswith("quick_"): await quick_handler(update, context, query.data)
-    else: await msg.reply_text("⚙️ Эта функция в разработке")
+    data = query.data
+    handlers = {
+        "shlep_mishok": lambda u,c: shlep(u,c,query.message),
+        "stats_inline": lambda u,c: stats(u,c,query.message),
+        "level_inline": lambda u,c: level(u,c,query.message),
+        "mishok_info": lambda u,c: mishok(u,c,query.message),
+        "chat_stats": lambda u,c: chat_stats(u,c,query.message),
+        "chat_top": lambda u,c: chat_top(u,c,query.message),
+        "my_stats": lambda u,c: my_stats(u,c,query.message),
+        "trends": lambda u,c: trends(u,c,query.message),
+    }
+    if data in handlers:
+        await handlers[data](update, context)
+    elif data.startswith("quick_"):
+        await quick_handler(update, context, data)
+    else:
+        await query.message.reply_text("⚙️ В разработке")
 
 async def quick_handler(update, context, data):
     query = update.callback_query
     if not query: return
     await query.answer()
-    handlers = {"quick_shlep":shlep,"quick_stats":chat_stats,"quick_level":level,"quick_my_stats":my_stats,"quick_trends":trends}
-    if data in handlers: await handlers[data](update, context)
-    elif data=="quick_daily_top": await query.message.reply_text("📊 *ТОП ДНЯ*\n\nСобираем статистику...")
-    elif data in ["quick_vote","quick_duel"]: await query.message.reply_text(f"Используй /{data[6:]}")
+    handlers = {
+        "quick_shlep": lambda u,c: shlep(u,c,query.message),
+        "quick_stats": lambda u,c: chat_stats(u,c,query.message),
+        "quick_level": lambda u,c: level(u,c,query.message),
+        "quick_my_stats": lambda u,c: my_stats(u,c,query.message),
+        "quick_trends": lambda u,c: trends(u,c,query.message),
+    }
+    if data in handlers:
+        await handlers[data](update, context)
+    elif data=="quick_daily_top":
+        await query.message.reply_text("📊 *ТОП ДНЯ*\n\nСобираем статистику...")
+    elif data in ["quick_vote","quick_duel"]:
+        await query.message.reply_text(f"Используй /{data[6:]}")
 
 @command_handler
 async def button_handler(update, context, msg):
     if update.effective_chat.type!="private": return
     acts = {"👊 Шлёпнуть":shlep,"🎯 Уровень":level,"📊 Статистика":stats,"📈 Моя статистика":my_stats,"👴 О Мишке":mishok}
-    if update.message.text in acts: await acts[update.message.text](update, context)
+    if update.message.text in acts:
+        await acts[update.message.text](update, context, update.message)
 
 @command_handler
 async def group_welcome(update, context, msg):
