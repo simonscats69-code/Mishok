@@ -57,19 +57,33 @@ def get_stats_module():
             _STATS = {'time': lambda _: "📊 Нет данных", 'compare': lambda _: {'total':0,'avg':0,'rank':1}, 'trends': lambda: {}, 'daily': lambda *_: "📊 Нет", 'hourly': lambda _: "⏰ Нет"}
     return _STATS
 
+# ========== ИСПРАВЛЕННЫЕ ДЕКОРАТОРЫ ==========
 def command_handler(func):
     @wraps(func)
-    async def wrapper(update, context, *args, **kwargs):
-        try: return await func(update, context, update.message or update.callback_query.message, *args, **kwargs)
-        except Exception as e: logger.error(f"{func.__name__}: {e}")
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        try:
+            message = update.message or (update.callback_query and update.callback_query.message)
+            if not message:
+                return
+            return await func(update, context, message, *args, **kwargs)
+        except Exception as e:
+            logger.error(f"Ошибка в {func.__name__}: {e}")
+            try:
+                if update.message:
+                    await update.message.reply_text("⚠️ Ошибка выполнения команды")
+            except:
+                pass
     return wrapper
 
 def chat_only(func):
     @wraps(func)
-    async def wrapper(update, context, message, *args, **kwargs):
-        if update.effective_chat.type == "private": await message.reply_text("Только в группах!"); return
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, message, *args, **kwargs):
+        if update.effective_chat.type == "private":
+            await message.reply_text("Эта команда работает только в группах!")
+            return
         return await func(update, context, message, *args, **kwargs)
     return wrapper
+# ============================================
 
 def format_num(num): return f"{num:,}".replace(",", " ")
 def calc_level(cnt):
@@ -198,7 +212,8 @@ async def detailed_stats(update, context, msg):
 {stats['hourly'](user.id)}"""
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
-@command_handler @chat_only
+@command_handler
+@chat_only
 async def chat_stats(update, context, msg):
     db, cache, chat = get_db(), get_cache(), update.effective_chat
     cached = await cache.get(f"chat_stats_{chat.id}")
@@ -211,7 +226,8 @@ async def chat_stats(update, context, msg):
 🏆 *Рекорд:* {cs.get('max_damage',0)} ({cs.get('max_damage_user','Нет')})"""
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
-@command_handler @chat_only
+@command_handler
+@chat_only
 async def chat_top(update, context, msg):
     db, chat = get_db(), update.effective_chat
     top = db['chat_top'](chat.id, 10)
@@ -222,18 +238,21 @@ async def chat_top(update, context, msg):
         text += f"{medal}{i}. {u}\n   📊 {format_num(c)} | Ур. {lvl['level']}\n\n"
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
-@command_handler @chat_only
+@command_handler
+@chat_only
 async def vote(update, context, msg):
     q = " ".join(context.args) if context.args else "Шлёпнуть Мишка?"
     await msg.reply_text(f"🗳️ *ГОЛОСОВАНИЕ*\n\n{q}\n\n5 минут!", parse_mode=ParseMode.MARKDOWN)
 
-@command_handler @chat_only
+@command_handler
+@chat_only
 async def duel(update, context, msg):
     if context.args: text = f"⚔️ *ДУЭЛЬ!*\n\n{update.effective_user.first_name} вызывает {' '.join(context.args)}!\n\n5 минут, больше шлёпков - победа!"
     else: text = "⚔️ *ДУЭЛЬ*\n\n`/duel @имя` чтобы вызвать\n\n5 минут, больше шлёпков - победа!"
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
-@command_handler @chat_only
+@command_handler
+@chat_only
 async def roles(update, context, msg):
     text = """👑 *РОЛИ В ЧАТЕ*
 • 👑 Король — топ-1 в чате
