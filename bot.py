@@ -1,4 +1,4 @@
-import logging, random, sys, os, asyncio
+import logging, random, sys, os
 from datetime import datetime
 from functools import wraps
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -57,7 +57,6 @@ def get_stats_module():
             _STATS = {'time': lambda _: "📊 Нет данных", 'compare': lambda _: {'total':0,'avg':0,'rank':1}, 'trends': lambda: {}, 'daily': lambda *_: "📊 Нет", 'hourly': lambda _: "⏰ Нет"}
     return _STATS
 
-# ========== ИСПРАВЛЕННЫЕ ДЕКОРАТОРЫ ==========
 def command_handler(func):
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
@@ -83,7 +82,6 @@ def chat_only(func):
             return
         return await func(update, context, message, *args, **kwargs)
     return wrapper
-# ============================================
 
 def format_num(num): return f"{num:,}".replace(",", " ")
 def calc_level(cnt):
