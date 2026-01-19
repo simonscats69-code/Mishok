@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import logging
 import random
 import sys
@@ -10,7 +8,6 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ParseMode
 
-# ========== НАСТРОЙКА ЛОГИРОВАНИЯ ==========
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO,
@@ -21,7 +18,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ========== ЛЕНИВЫЕ ИМПОРТЫ ==========
 _CONFIG = None
 _DB = None
 _KEYBOARD = None
@@ -39,7 +35,6 @@ def get_config():
                 'MISHOK_INTRO': MISHOK_INTRO
             }
         except ImportError:
-            # Запасные значения для разработки
             _CONFIG = {
                 'BOT_TOKEN': os.getenv("BOT_TOKEN", ""),
                 'MISHOK_REACTIONS': ["Ой, больно! 😠", "Эй, не шлёпай! 👴💢"],
@@ -66,10 +61,9 @@ def get_db():
                 'get_chat_top_users': get_chat_top_users,
                 'backup': backup_database
             }
-            _DB['init_db']()  # Инициализация базы при первом использовании
+            _DB['init_db']()
         except ImportError as e:
             logger.error(f"Ошибка импорта database: {e}")
-            # Аварийный заглушечный режим
             _DB = {
                 'add_shlep': lambda *args: (0, 0, 0),
                 'get_stats': lambda: (0, None, 0, None, None),
@@ -138,7 +132,6 @@ def get_stats_module():
             }
     return _STATS
 
-# ========== ДЕКОРАТОРЫ ==========
 def command_handler(func):
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
@@ -168,16 +161,10 @@ def chat_only(func):
         return await func(update, context, message, *args, **kwargs)
     return wrapper
 
-# ========== УТИЛИТЫ ==========
-def format_number(num: int) -> str:
-    """Форматирует числа с пробелами: 1000000 -> 1 000 000"""
+def format_number(num):
     return f"{num:,}".replace(",", " ")
 
-def calculate_level(shlep_count: int) -> dict:
-    """
-    Рассчитывает уровень игрока на основе количества шлёпков.
-    Простая система: каждые 10 шлёпков = 1 уровень
-    """
+def calculate_level(shlep_count):
     if shlep_count <= 0:
         return {
             'level': 1,
@@ -190,22 +177,20 @@ def calculate_level(shlep_count: int) -> dict:
     level = (shlep_count // 10) + 1
     progress = (shlep_count % 10) * 10
     
-    # Урон растёт с уровнем
     base_damage = 10
     damage_per_level = 0.5
     min_damage = int(base_damage + (level - 1) * damage_per_level)
     max_damage = min_damage + 5
     
     return {
-        'level': min(level, 100),  # Максимум 100 уровень
+        'level': min(level, 100),
         'progress': progress,
         'min_damage': min_damage,
         'max_damage': max_damage,
         'next_level_in': 10 - (shlep_count % 10) if (shlep_count % 10) < 10 else 0
     }
 
-def get_damage_reaction(damage: int) -> str:
-    """Возвращает реакцию в зависимости от нанесённого урона"""
+def get_damage_reaction(damage):
     if damage < 15: 
         return "Легкий шлёпок! 😌"
     if damage < 25: 
@@ -216,8 +201,7 @@ def get_damage_reaction(damage: int) -> str:
         return "Ай-яй-яй! 🤕"
     return "КОНТРА!!! 🚨"
 
-def get_level_title(level: int) -> tuple:
-    """Возвращает титул и совет для уровня"""
+def get_level_title(level):
     if level >= 50: 
         return ("👑 ЛЕГЕНДА ШЛЁПКОВ", "Ты - мастер! Твой шлёпок слышен в соседних чатах!")
     if level >= 30: 
@@ -228,18 +212,15 @@ def get_level_title(level: int) -> tuple:
         return ("🔥 АКТИВНЫЙ ШЛЁПАТЕЛЬ", "Продолжай шлёпать, чтобы увеличить свою силу!")
     return ("👊 НОВИЧОК", "Шлёпай больше, чтобы стать сильнее!")
 
-def get_random_reaction() -> str:
-    """Возвращает случайную реакцию Мишка"""
+def get_random_reaction():
     config = get_config()
     reactions = config.get('MISHOK_REACTIONS', [])
     if reactions:
         return random.choice(reactions)
     return "Ой! 👴"
 
-# ========== ОСНОВНЫЕ КОМАНДЫ ==========
 @command_handler
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Обработчик команды /start"""
     user = update.effective_user
     chat = update.effective_chat
     
@@ -273,20 +254,16 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE, mess
 
 @command_handler
 async def shlep_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Обработчик команды /shlep - основной игровой цикл"""
     db = get_db()
     cache = get_cache()
     user = update.effective_user
     chat = update.effective_chat
     
-    # Получаем текущую статистику пользователя
     username, user_count, _ = db['get_user_stats'](user.id)
     level_info = calculate_level(user_count)
     
-    # Генерируем урон в пределах уровня
     damage = random.randint(level_info['min_damage'], level_info['max_damage'])
     
-    # Добавляем шлёпок в базу
     total_shleps, user_count, current_max_damage = db['add_shlep'](
         user.id, 
         user.username or user.first_name, 
@@ -294,20 +271,16 @@ async def shlep_command(update: Update, context: ContextTypes.DEFAULT_TYPE, mess
         chat.id if chat.type != "private" else None
     )
     
-    # Инвалидируем кеш
     await cache.delete("global_stats")
     await cache.delete(f"user_stats_{user.id}")
     if chat.type != "private":
         await cache.delete(f"chat_stats_{chat.id}")
     
-    # Проверяем рекорд
     record_msg = f"\n🏆 *НОВЫЙ РЕКОРД!* 🏆\n" if damage > current_max_damage else ""
     
-    # Обновляем информацию об уровне после добавления шлёпка
     level_info = calculate_level(user_count)
     title, _ = get_level_title(level_info['level'])
     
-    # Формируем сообщение
     text = f"""{get_random_reaction()}{record_msg}
 💥 *Урон:* {damage} единиц
 👤 *{user.first_name}*: {user_count} шлёпков
@@ -326,11 +299,9 @@ async def shlep_command(update: Update, context: ContextTypes.DEFAULT_TYPE, mess
 
 @command_handler
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Показывает глобальную статистику"""
     db = get_db()
     cache = get_cache()
     
-    # Пробуем получить из кеша
     cache_key = "global_stats"
     cached = await cache.get(cache_key)
     
@@ -366,12 +337,10 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE, mess
 
 @command_handler 
 async def level_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Показывает уровень и прогресс пользователя"""
     db = get_db()
     cache = get_cache()
     user = update.effective_user
     
-    # Пробуем получить из кеша
     cache_key = f"user_stats_{user.id}"
     cached = await cache.get(cache_key)
     
@@ -385,7 +354,6 @@ async def level_command(update: Update, context: ContextTypes.DEFAULT_TYPE, mess
     level_info = calculate_level(user_count)
     title, advice = get_level_title(level_info['level'])
     
-    # Прогресс-бар
     progress_bar_length = 10
     filled = min(level_info['progress'] // 10, progress_bar_length)
     empty = progress_bar_length - filled
@@ -409,25 +377,17 @@ async def level_command(update: Update, context: ContextTypes.DEFAULT_TYPE, mess
     
     await message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
-# ========== НОВЫЕ КОМАНДЫ СТАТИСТИКИ ==========
 @command_handler
 async def my_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Детальная статистика пользователя"""
     user = update.effective_user
     stats = get_stats_module()
     
-    # Основная статистика
     db = get_db()
     username, user_count, last_shlep = db['get_user_stats'](user.id)
     level_info = calculate_level(user_count)
     
-    # Любимое время
     favorite_time = stats['favorite_time'](user.id)
-    
-    # Сравнение с другими
     comparison = stats['comparison'](user.id)
-    
-    # Активность за неделю
     daily_chart = stats['daily_chart'](user.id, 7)
     
     text = f"""📈 *ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА*
@@ -457,7 +417,6 @@ async def my_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE, m
 
 @command_handler
 async def trends_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Глобальные тренды и активность"""
     stats = get_stats_module()
     trends = stats['global_trends']()
     
@@ -476,11 +435,10 @@ async def trends_command(update: Update, context: ContextTypes.DEFAULT_TYPE, mes
 👊 *Шлёпков в этом часу:* {trends.get('shleps_this_hour', 0)}
 📈 *Прогноз на сегодня:* {trends.get('projected_today', 0)}"""
 
-    # Добавляем распределение по часам для первого пользователя из топа
     db = get_db()
     top_users = db['get_top_users'](1)
     if top_users:
-        top_user_id = 1  # Заглушка - нужен реальный user_id
+        top_user_id = 1
         hourly_chart = stats['hourly_chart'](top_user_id)
         text += f"\n\n⏰ *Распределение активности (топ-игрок):*\n{hourly_chart}"
     
@@ -490,17 +448,15 @@ async def trends_command(update: Update, context: ContextTypes.DEFAULT_TYPE, mes
 
 @command_handler
 async def detailed_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Расширенная статистика с графиками"""
     user = update.effective_user
     stats = get_stats_module()
     
-    # Получаем все данные
     db = get_db()
     username, user_count, last_shlep = db['get_user_stats'](user.id)
     level_info = calculate_level(user_count)
     
     favorite_time = stats['favorite_time'](user.id)
-    daily_chart = stats['daily_chart'](user.id, 14)  # 2 недели
+    daily_chart = stats['daily_chart'](user.id, 14)
     hourly_chart = stats['hourly_chart'](user.id)
     
     text = f"""📊 *РАСШИРЕННАЯ СТАТИСТИКА*
@@ -524,16 +480,13 @@ async def detailed_stats_command(update: Update, context: ContextTypes.DEFAULT_T
     
     await message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
-# ========== КОМАНДЫ ДЛЯ ЧАТОВ ==========
 @command_handler
 @chat_only
 async def chat_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Показывает статистику чата"""
     db = get_db()
     cache = get_cache()
     chat = update.effective_chat
     
-    # Пробуем получить из кеша
     cache_key = f"chat_stats_{chat.id}"
     cached = await cache.get(cache_key)
     
@@ -562,7 +515,6 @@ async def chat_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE,
 @command_handler
 @chat_only
 async def chat_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Показывает топ игроков в чате"""
     db = get_db()
     chat = update.effective_chat
     
@@ -588,7 +540,6 @@ async def chat_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE, m
 @command_handler
 @chat_only
 async def vote_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Создаёт голосование в чате"""
     chat = update.effective_chat
     user = update.effective_user
     question = " ".join(context.args) if context.args else "Шлёпнуть Мишка?"
@@ -601,7 +552,6 @@ async def vote_command(update: Update, context: ContextTypes.DEFAULT_TYPE, messa
 @command_handler
 @chat_only
 async def duel_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Вызов на дуэль"""
     user = update.effective_user
     
     if context.args:
@@ -629,7 +579,6 @@ async def duel_command(update: Update, context: ContextTypes.DEFAULT_TYPE, messa
 @command_handler
 @chat_only
 async def roles_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Показывает роли в чате"""
     text = """👑 *РОЛИ В ЧАТЕ*
 
 *Как получить роли:*
@@ -642,10 +591,8 @@ async def roles_command(update: Update, context: ContextTypes.DEFAULT_TYPE, mess
     
     await message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
-# ========== ВСПОМОГАТЕЛЬНЫЕ КОМАНДЫ ==========
 @command_handler
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Показывает помощь по командам"""
     text = """🆘 *ПОМОЩЬ*
 
 *Основные команды:*
@@ -671,16 +618,13 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE, messa
 
 @command_handler
 async def mishok_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Показывает информацию о Мишке"""
     config = get_config()
     await message.reply_text(config['MISHOK_INTRO'], parse_mode=ParseMode.MARKDOWN)
 
 @command_handler
 async def backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Создаёт бэкап базы данных (только для админов)"""
     db = get_db()
     
-    # Простая проверка на админа
     user = update.effective_user
     from config import ADMIN_ID
     
@@ -695,10 +639,41 @@ async def backup_command(update: Update, context: ContextTypes.DEFAULT_TYPE, mes
     else:
         await message.reply_text("❌ Ошибка при создании бэкапа")
 
-# ========== CALLBACK ОБРАБОТЧИКИ ==========
 @command_handler
+async def storage_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
+    import os
+    
+    info = []
+    info.append("📂 **Информация о хранилище:**")
+    
+    paths_to_check = [
+        ("/root", "Основная папка"),
+        ("/bothost", "Корень Bothost"),
+        ("/bothost/storage", "Постоянное хранилище"),
+        ("/bothost/storage/mishok_data.json", "Файл данных"),
+        ("/bothost/storage/backups", "Папка бэкапов")
+    ]
+    
+    for path, description in paths_to_check:
+        exists = os.path.exists(path)
+        size = 0
+        if exists and os.path.isfile(path):
+            size = os.path.getsize(path)
+        elif exists and os.path.isdir(path):
+            try:
+                size = sum(os.path.getsize(os.path.join(path, f)) 
+                          for f in os.listdir(path) if os.path.isfile(os.path.join(path, f)))
+            except:
+                size = 0
+        
+        status = "✅" if exists else "❌"
+        size_str = f" ({size/1024:.1f} KB)" if size > 0 else ""
+        info.append(f"{status} {description}: `{path}`{size_str}")
+    
+    info.append(f"\n💾 **Версия Бота:** Bothost Storage Ready")
+    await message.reply_text("\n".join(info), parse_mode="Markdown")
+
 async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Обработчик inline-кнопок"""
     query = update.callback_query
     if not query:
         return
@@ -725,7 +700,6 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, mes
         await message.reply_text("⚙️ Эта функция в разработке")
 
 async def handle_quick_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, data: str):
-    """Обработчик быстрых действий"""
     query = update.callback_query
     if not query:
         return
@@ -751,7 +725,6 @@ async def handle_quick_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
 @command_handler
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Обработчик текстовых кнопок (для ЛС)"""
     if update.effective_chat.type != "private":
         return
     
@@ -771,7 +744,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, mes
 
 @command_handler
 async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE, message):
-    """Приветствие бота в группе"""
     if update.message.new_chat_members:
         for member in update.message.new_chat_members:
             if member.id == context.bot.id:
@@ -796,12 +768,9 @@ async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE, mess
                 await message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик ошибок"""
     logger.error(f"Ошибка: {context.error}", exc_info=True)
 
-# ========== ИНИЦИАЛИЗАЦИЯ ==========
 def main():
-    """Основная функция запуска бота"""
     config = get_config()
     
     if not config['BOT_TOKEN']:
@@ -816,7 +785,6 @@ def main():
     
     app = Application.builder().token(config['BOT_TOKEN']).build()
     
-    # Регистрируем команды
     commands = [
         ("start", start_command),
         ("shlep", shlep_command),
@@ -833,24 +801,24 @@ def main():
         ("duel", duel_command),
         ("roles", roles_command),
         ("backup", backup_command),
+        ("storage", storage_info_command),
     ]
     
     for name, handler in commands:
         app.add_handler(CommandHandler(name, handler))
     
-    # Регистрируем обработчики
     app.add_handler(CallbackQueryHandler(inline_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, group_welcome))
     app.add_error_handler(error_handler)
     
-    logger.info("✅ Бот запущен с сохранением данных в SQLite")
+    logger.info("✅ Бот запущен с сохранением данных в Bothost Storage")
     print("\n" + "="*50)
-    print("МИШОК ЛЫСЫЙ ЗАПУЩЕН!")
+    print("МИШОК ЛЫСЫЙ ЗАПУЩЕН НА BHOST!")
     print("="*50)
-    print(f"• Данные сохраняются в: mishok.db")
-    print(f"• Бэкапы создаются в: db_backups/")
-    print(f"• Статистика: включена")
+    print(f"• Данные сохраняются в: /bothost/storage/mishok_data.json")
+    print(f"• Бэкапы создаются в: /bothost/storage/backups/")
+    print(f"• Проверить хранилище: /storage")
     print(f"• Бот готов к работе!")
     print("="*50)
     
