@@ -28,6 +28,33 @@ def main_kb(for_chat=False):
             [KeyboardButton("❓ Помощь"), KeyboardButton("👴 О Мишке")]
         ], resize_keyboard=True, one_time_keyboard=False, selective=True)
 
+def get_shlep_session_keyboard():
+    """Клавиатура для сессии шлёпания"""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("👊 Ещё раз!", callback_data="shlep_again"),
+            InlineKeyboardButton("🎯 Уровень", callback_data="shlep_level")
+        ],
+        [
+            InlineKeyboardButton("📊 Статистика", callback_data="shlep_stats"),
+            InlineKeyboardButton("📈 Моя стата", callback_data="shlep_my_stats")
+        ],
+        [
+            InlineKeyboardButton("📊 Тренды", callback_data="shlep_trends"),
+            InlineKeyboardButton("🔙 Меню", callback_data="shlep_menu")
+        ]
+    ])
+
+def get_shlep_start_keyboard():
+    """Клавиатура для начала шлёпания"""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("👊 НАЧАТЬ ШЛЁПАТЬ!", callback_data="start_shlep_session")],
+        [
+            InlineKeyboardButton("📊 Статистика", callback_data="stats_inline"),
+            InlineKeyboardButton("🎯 Уровень", callback_data="level_inline")
+        ]
+    ])
+
 def quick_actions():
     return InlineKeyboardMarkup([
         [
