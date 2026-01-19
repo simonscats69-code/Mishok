@@ -5,6 +5,7 @@ import logging
 from typing import Optional, Tuple, List, Any, Dict
 import shutil
 from datetime import timedelta
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,12 @@ def ensure_data_file():
                 "total_users": 0
             },
             "timestamps": {},
-            "records": []
+            "records": [],
+            "duels": {
+                "active": {},
+                "invites": {},
+                "history": []
+            }
         }
         save_data(default_data)
         logger.info(f"Создан новый файл данных: {DATA_FILE}")
@@ -67,7 +73,12 @@ def create_new_data_file():
             "total_users": 0
         },
         "timestamps": {},
-        "records": []
+        "records": [],
+        "duels": {
+            "active": {},
+            "invites": {},
+            "history": []
+        }
     }
     save_data(default_data)
     logger.info(f"Создан новый файл данных: {DATA_FILE}")
@@ -88,6 +99,11 @@ def repair_data_structure():
     })
     data.setdefault("timestamps", {})
     data.setdefault("records", [])
+    data.setdefault("duels", {
+        "active": {},
+        "invites": {},
+        "history": []
+    })
     
     for user_id, user_data in data["users"].items():
         user_data.setdefault("username", f"User_{user_id}")
@@ -557,5 +573,294 @@ def check_data_integrity():
             "total_shleps": data.get("global_stats", {}).get("total_shleps", 0)
         }
     }
+
+def create_duel_invite(challenger_id: int, challenger_name: str, 
+                       target_id: int, target_name: str, chat_id: int = None):
+    data = load_data()
+    
+    duel_id = f"{challenger_id}_{target_id}_{int(datetime.now().timestamp())}"
+    
+    invite = {
+        "id": duel_id,
+        "challenger_id": challenger_id,
+        "challenger_name": challenger_name,
+        "target_id": target_id,
+        "target_name": target_name,
+        "chat_id": chat_id,
+        "created_at": datetime.now().isoformat(),
+        "expires_at": (datetime.now() + timedelta(minutes=5)).isoformat(),
+        "status": "pending"
+    }
+    
+    data.setdefault("duels", {}).setdefault("invites", {})[duel_id] = invite
+    save_data(data)
+    
+    return duel_id
+
+def accept_duel_invite(duel_id: str):
+    data = load_data()
+    
+    if "duels" not in data or duel_id not in data["duels"]["invites"]:
+        return None
+    
+    invite = data["duels"]["invites"][duel_id]
+    
+    active_duel = {
+        "id": duel_id,
+        "challenger_id": invite["challenger_id"],
+        "challenger_name": invite["challenger_name"],
+        "challenger_damage": 0,
+        "challenger_shleps": 0,
+        "target_id": invite["target_id"],
+        "target_name": invite["target_name"],
+        "target_damage": 0,
+        "target_shleps": 0,
+        "chat_id": invite["chat_id"],
+        "message_id": None,
+        "started_at": datetime.now().isoformat(),
+        "ends_at": (datetime.now() + timedelta(minutes=5)).isoformat(),
+        "winner": None,
+        "reward": random.randint(15, 40),
+        "history": []
+    }
+    
+    data["duels"]["active"][duel_id] = active_duel
+    del data["duels"]["invites"][duel_id]
+    
+    save_data(data)
+    
+    return active_duel
+
+def decline_duel_invite(duel_id: str):
+    data = load_data()
+    
+    if "duels" not in data or duel_id not in data["duels"]["invites"]:
+        return False
+    
+    invite = data["duels"]["invites"][duel_id]
+    invite["status"] = "declined"
+    invite["ended_at"] = datetime.now().isoformat()
+    
+    data.setdefault("duels", {}).setdefault("history", []).append(invite)
+    del data["duels"]["invites"][duel_id]
+    
+    save_data(data)
+    return True
+
+def get_active_duel(duel_id: str):
+    data = load_data()
+    
+    if "duels" not in data or duel_id not in data["duels"]["active"]:
+        return None
+    
+    return data["duels"]["active"][duel_id]
+
+def add_shlep_to_duel(duel_id: str, user_id: int, damage: int):
+    data = load_data()
+    
+    if "duels" not in data or duel_id not in data["duels"]["active"]:
+        return None
+    
+    duel = data["duels"]["active"][duel_id]
+    
+    action = {
+        "user_id": user_id,
+        "damage": damage,
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    if user_id == duel["challenger_id"]:
+        duel["challenger_damage"] += damage
+        duel["challenger_shleps"] += 1
+        action["user_name"] = duel["challenger_name"]
+        action["side"] = "challenger"
+    elif user_id == duel["target_id"]:
+        duel["target_damage"] += damage
+        duel["target_shleps"] += 1
+        action["user_name"] = duel["target_name"]
+        action["side"] = "target"
+    else:
+        return None
+    
+    duel["history"].append(action)
+    if len(duel["history"]) > 50:
+        duel["history"] = duel["history"][-50:]
+    
+    ends_at = datetime.fromisoformat(duel["ends_at"])
+    if datetime.now() >= ends_at:
+        return finish_duel(duel_id)
+    
+    save_data(data)
+    
+    return {
+        "duel": duel,
+        "is_finished": False
+    }
+
+def finish_duel(duel_id: str):
+    data = load_data()
+    
+    if "duels" not in data or duel_id not in data["duels"]["active"]:
+        return None
+    
+    duel = data["duels"]["active"][duel_id]
+    
+    if duel["challenger_damage"] > duel["target_damage"]:
+        winner_id = duel["challenger_id"]
+        winner_name = duel["challenger_name"]
+        loser_id = duel["target_id"]
+        winner_damage = duel["challenger_damage"]
+        loser_damage = duel["target_damage"]
+    elif duel["target_damage"] > duel["challenger_damage"]:
+        winner_id = duel["target_id"]
+        winner_name = duel["target_name"]
+        loser_id = duel["challenger_id"]
+        winner_damage = duel["target_damage"]
+        loser_damage = duel["challenger_damage"]
+    else:
+        winner_id = None
+        winner_name = None
+        winner_damage = duel["challenger_damage"]
+        loser_damage = duel["target_damage"]
+    
+    if winner_id and str(winner_id) in data["users"]:
+        user = data["users"][str(winner_id)]
+        user.setdefault("bonus_damage", 0)
+        user["bonus_damage"] = user.get("bonus_damage", 0) + duel["reward"]
+    
+    duel["winner_id"] = winner_id
+    duel["winner_name"] = winner_name if winner_id else None
+    duel["finished_at"] = datetime.now().isoformat()
+    duel["winner_damage"] = winner_damage if winner_id else winner_damage
+    duel["loser_damage"] = loser_damage if winner_id else loser_damage
+    
+    result = {
+        "winner_id": winner_id,
+        "winner_name": winner_name if winner_id else None,
+        "challenger_damage": duel["challenger_damage"],
+        "target_damage": duel["target_damage"],
+        "challenger_shleps": duel["challenger_shleps"],
+        "target_shleps": duel["target_shleps"],
+        "reward": duel["reward"] if winner_id else 0,
+        "is_draw": winner_id is None
+    }
+    
+    data.setdefault("duels", {}).setdefault("history", []).append(duel)
+    del data["duels"]["active"][duel_id]
+    
+    save_data(data)
+    
+    return result
+
+def surrender_duel(duel_id: str, user_id: int):
+    data = load_data()
+    
+    if "duels" not in data or duel_id not in data["duels"]["active"]:
+        return None
+    
+    duel = data["duels"]["active"][duel_id]
+    
+    if user_id == duel["challenger_id"]:
+        winner_id = duel["target_id"]
+        winner_name = duel["target_name"]
+        surrenderer_name = duel["challenger_name"]
+        winner_damage = duel["target_damage"]
+        surrenderer_damage = duel["challenger_damage"]
+    else:
+        winner_id = duel["challenger_id"]
+        winner_name = duel["challenger_name"]
+        surrenderer_name = duel["target_name"]
+        winner_damage = duel["challenger_damage"]
+        surrenderer_damage = duel["target_damage"]
+    
+    if str(winner_id) in data["users"]:
+        user = data["users"][str(winner_id)]
+        user.setdefault("bonus_damage", 0)
+        user["bonus_damage"] = user.get("bonus_damage", 0) + (duel["reward"] // 2)
+    
+    result = {
+        "winner_id": winner_id,
+        "winner_name": winner_name,
+        "surrenderer_name": surrenderer_name,
+        "winner_damage": winner_damage,
+        "surrenderer_damage": surrenderer_damage,
+        "reward": duel["reward"] // 2
+    }
+    
+    duel["winner_id"] = winner_id
+    duel["winner_name"] = winner_name
+    duel["surrenderer_id"] = user_id
+    duel["surrenderer_name"] = surrenderer_name
+    duel["finished_at"] = datetime.now().isoformat()
+    duel["ended_by"] = "surrender"
+    
+    data.setdefault("duels", {}).setdefault("history", []).append(duel)
+    del data["duels"]["active"][duel_id]
+    
+    save_data(data)
+    
+    return result
+
+def get_user_active_duel(user_id: int):
+    data = load_data()
+    
+    if "duels" not in data:
+        return None
+    
+    for duel_id, duel in data["duels"]["active"].items():
+        if duel["challenger_id"] == user_id or duel["target_id"] == user_id:
+            return duel
+    
+    return None
+
+def cleanup_expired_duels():
+    data = load_data()
+    
+    if "duels" not in data:
+        return 0
+    
+    now = datetime.now()
+    cleaned = 0
+    
+    expired_invites = []
+    for duel_id, invite in data["duels"].get("invites", {}).items():
+        expires_at = datetime.fromisoformat(invite["expires_at"])
+        if now >= expires_at:
+            invite["status"] = "expired"
+            invite["ended_at"] = now.isoformat()
+            data.setdefault("duels", {}).setdefault("history", []).append(invite)
+            expired_invites.append(duel_id)
+            cleaned += 1
+    
+    for duel_id in expired_invites:
+        del data["duels"]["invites"][duel_id]
+    
+    expired_duels = []
+    for duel_id, duel in data["duels"].get("active", {}).items():
+        ends_at = datetime.fromisoformat(duel["ends_at"])
+        if now >= ends_at:
+            finish_duel(duel_id)
+            expired_duels.append(duel_id)
+            cleaned += 1
+    
+    for duel_id in expired_duels:
+        if duel_id in data["duels"]["active"]:
+            del data["duels"]["active"][duel_id]
+    
+    if cleaned > 0:
+        save_data(data)
+    
+    return cleaned
+
+def update_duel_message_id(duel_id: str, message_id: int):
+    data = load_data()
+    
+    if "duels" not in data or duel_id not in data["duels"]["active"]:
+        return False
+    
+    data["duels"]["active"][duel_id]["message_id"] = message_id
+    save_data(data)
+    
+    return True
 
 logger.info("База данных готова к работе")
