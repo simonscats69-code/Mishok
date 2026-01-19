@@ -1,5 +1,3 @@
-[file name]: utils.py
-[file content begin]
 import pytz
 from datetime import datetime, timedelta
 
@@ -40,14 +38,14 @@ def percentile(data, p):
 def hourly_chart(hours, compact=False):
     if not hours or len(hours)!=24: return "⏰ Нет данных"
     if compact:
-        lines=["<b>Активность (компактно):</b>"]
+        lines=["⏰ *Активность (компактно):*"]
         for i in range(0,24,4):
             total=sum(hours[i:i+4]); mx=max([sum(hours[j:j+4]) for j in range(0,24,4)]) or 1
             bar_len=int((total/mx)*20); bar="█"*bar_len + "░"*(20-bar_len)
             lines.append(f"{i:02d}:00-{i+3:02d}:00: {bar} {total}")
         return "\n".join(lines)
     else:
-        lines=["<b>Активность:</b>"]; mx=max(hours)
+        lines=["⏰ *Активность:*"]; mx=max(hours)
         if mx==0: return "⏰ Нет активности"
         for h in range(24):
             val=hours[h]; bar_len=int((val/mx)*15); bar="█"*bar_len + "░"*(15-bar_len)
@@ -75,4 +73,3 @@ calculate_percentile = percentile
 generate_hourly_chart = hourly_chart
 get_hour_emoji = hour_emoji
 generate_random_id = random_id
-[file content end]
