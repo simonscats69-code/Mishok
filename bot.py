@@ -452,8 +452,7 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"*Вопрос:* {question_safe}\n\n"
         f"✅ *За:* 0\n"
         f"❌ *Против:* 0\n\n"
-        f"⏰ *Голосование длится 5 минут!*\n"
-        f"🆔 `{vote_id}`"
+        f"⏰ *Голосование длится 5 минут!*"
     )
     sent_message = await msg.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
     vote_data["message_id"] = sent_message.message_id
@@ -490,8 +489,7 @@ async def vote_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 no_count = len(vote.get("votes_no", []))
                 text += f"{i}. *{vote['question'][:30]}...*\n"
                 text += f"   ✅ {yes_count} | ❌ {no_count}\n"
-                text += f"   ⏰ Осталось: {minutes:02d}:{seconds:02d}\n"
-                text += f"   🆔 `{vote['id']}`\n\n"
+                text += f"   ⏰ Осталось: {minutes:02d}:{seconds:02d}\n\n"
         await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
     except Exception as e:
         logger.error(f"Ошибка получения информации о голосованиях: {e}")
@@ -504,23 +502,24 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
             return
         user = update.effective_user
         user_id = str(user.id)
-        message_text = query.message.text
+        
+        # Получаем vote_id из базы данных
         vote_id = None
-        match = re.search(r'🆔 `([^`]+)`', message_text)
-        if match:
-            vote_id = match.group(1)
-        if not vote_id:
-            lines = message_text.split('\n')
-            for line in lines:
-                if '🆔' in line or 'ID:' in line:
-                    parts = line.split()
-                    for part in parts:
-                        if len(part) > 10 and '_' in part:
-                            vote_id = part.strip('`')
-                            break
+        from database import load_data_raw
+        try:
+            all_votes = load_data_raw().get("votes", {})
+            for vid, vdata in all_votes.items():
+                if (vdata.get("message_id") == query.message.message_id and 
+                    vdata.get("chat_id") == query.message.chat_id):
+                    vote_id = vid
+                    break
+        except:
+            pass
+            
         if not vote_id:
             await query.answer("❌ Не удалось определить голосование", show_alert=True)
             return
+            
         vote_data = get_vote_data(vote_id)
         if not vote_data:
             await query.answer("❌ Голосование не найдено", show_alert=True)
@@ -560,8 +559,7 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
             f"✅ *За:* {yes_count}\n"
             f"❌ *Против:* {no_count}\n"
             f"👥 *Всего:* {total_votes}\n\n"
-            f"⏰ *Осталось:* {time_left}\n"
-            f"🆔 `{vote_id}`"
+            f"⏰ *Осталось:* {time_left}"
         )
         await query.message.edit_text(
             text,
