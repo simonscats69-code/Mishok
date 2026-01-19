@@ -12,12 +12,15 @@ from telegram.helpers import escape_markdown
 
 from config import BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO
 from database import add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, get_chat_top_users, backup_database, check_data_integrity, repair_data_structure
-from keyboard import get_chat_quick_actions, get_inline_keyboard, get_game_keyboard, get_chat_vote_keyboard
+from keyboard import get_shlep_session_keyboard, get_shlep_start_keyboard, get_chat_quick_actions, get_inline_keyboard, get_game_keyboard, get_chat_vote_keyboard
 from cache import cache
 from statistics import get_favorite_time, get_comparison_stats, get_global_trends_info, format_daily_activity_chart, format_hourly_distribution_chart
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Глобальный словарь для хранения сессий шлёпания
+shlep_sessions = {}
 
 def command_handler(func):
     @wraps(func)
@@ -80,11 +83,11 @@ def level_title(lvl):
     if lvl >= 900: return ("🔥 БЕССМЕРТНЫЙ ТИТАН", "Твоя сила преодолела смерть!")
     if lvl >= 850: return ("🌟 ХРАНИТЕЛЬ ГАЛАКТИКИ", "Целые галактики под твоей властью!")
     if lvl >= 800: return ("👑 ВЛАСТЕЛИН ВСЕХ ИЗМЕРЕНИЙ", "Пространство и время подчиняются тебе!")
-    if lvl >= 750: return ("💎 БОЖЕСТВЕННЫЙ АРХИТЕКТОР", "Ты строишь реальность шлёпками!")
+    if lvl >= 750: return ("💎 БОЖЕСТВЕННЫЙ АРХИТЕКТОР", "Ты строишь реальность шlёпками!")
     if lvl >= 700: return ("⭐ ВЕЧНЫЙ ИМПЕРАТОР", "Твоя империя будет существовать вечно!")
-    if lvl >= 650: return ("🌠 КОСМИЧЕСКИЙ ДЕМИУРГ", "Создаёшь звёзды одним шлёпком!")
+    if lvl >= 650: return ("🌠 КОСМИЧЕСКИЙ ДЕМИУРГ", "Создаёшь звёзды одним шlёпком!")
     if lvl >= 600: return ("⚡ ПРЕВОСХОДНЫЙ БОГО-ЦАРЬ", "Ты — высшая форма существования!")
-    if lvl >= 550: return ("🔥 МИРОТВОРЕЦ ВСЕЛЕННОЙ", "Твоим шлёпком устанавливается мир!")
+    if lvl >= 550: return ("🔥 МИРОТВОРЕЦ ВСЕЛЕННОЙ", "Твоим шlёпком устанавливается мир!")
     if lvl >= 500: return ("🌟 ВЕРХОВНЫЙ БОГ ШЛЁПКОВ", "Тебе поклоняются миллионы!")
     if lvl >= 450: return ("👑 НЕБЕСНЫЙ ПАТРИАРХ", "Твоя династия будет править вечно!")
     if lvl >= 400: return ("💎 ЗВЁЗДНЫЙ МОНАРХ", "Царствуешь среди звёзд!")
@@ -106,29 +109,8 @@ def get_reaction():
 async def get_message_from_update(update: Update):
     return update.message or (update.callback_query and update.callback_query.message)
 
-@command_handler
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
-    if not msg:
-        return
-    
-    safe_name = escape_markdown(update.effective_user.first_name, version=1)
-    
-    text = f"👋 Привет, {safe_name}!\nЯ — Мишок Лысый 👴✨\n\nКоманды:\n/shlep — Шлёпнуть\n/stats — Статистика\n/level — Уровень\n/my_stats — Детально\n/trends — Тренды\n\nДля чатов: /chat_stats, /chat_top, /vote, /duel\n\nНачни: /shlep"
-    
-    if update.effective_chat.type == "private":
-        kb = get_game_keyboard()
-    else:
-        kb = get_inline_keyboard()
-    
-    await msg.reply_text(text, reply_markup=kb)
-
-@command_handler
-async def shlep(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
-    if not msg:
-        return
-    
+async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_message=None):
+    """Основная функция выполнения шлёпа (используется и для команд, и для callback)"""
     try:
         user = update.effective_user
         chat = update.effective_chat
@@ -167,12 +149,81 @@ async def shlep(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         text = f"{get_reaction()}{rec}💥 Урон: {dmg}\n👤 {user.first_name}: {cnt} шлёпков\n🎯 Уровень {lvl['level']} ({title})\n📊 До уровня: {lvl['next']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n📈 Всего шлёпков в игре: {format_num(total)}"
         
-        kb = get_chat_quick_actions() if chat.type != "private" else None
-        await msg.reply_text(text, reply_markup=kb)
+        kb = get_shlep_session_keyboard()
+        
+        if edit_message:
+            # Редактируем существующее сообщение
+            try:
+                await edit_message.edit_text(text, reply_markup=kb)
+                return edit_message
+            except Exception as e:
+                logger.warning(f"Не удалось отредактировать сообщение: {e}")
+                # Если не удалось отредактировать, отправляем новое
+                return await edit_message.reply_text(text, reply_markup=kb)
+        else:
+            # Отправляем новое сообщение
+            msg = await get_message_from_update(update)
+            if msg:
+                return await msg.reply_text(text, reply_markup=kb)
         
     except Exception as e:
-        logger.error(f"Ошибка в shlep: {e}", exc_info=True)
-        await msg.reply_text("⚠️ Произошла ошибка при обработке шlёпка. Попробуйте еще раз.")
+        logger.error(f"Ошибка в perform_shlep: {e}", exc_info=True)
+        msg = await get_message_from_update(update)
+        if msg:
+            await msg.reply_text("⚠️ Произошла ошибка при обработке шlёпка. Попробуйте еще раз.")
+
+@command_handler
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
+    safe_name = escape_markdown(update.effective_user.first_name, version=1)
+    
+    text = f"👋 Привет, {safe_name}!\nЯ — Мишок Лысый 👴✨\n\n"
+    
+    if update.effective_chat.type == "private":
+        text += """*Начни шлёпать прямо сейчас!*
+
+Просто нажми кнопку ниже или используй команды:
+
+👊 /shlep — Шлёпнуть Мишка
+📊 /stats — Глобальная статистика
+🎯 /level — Твой уровень и прогресс
+📈 /my_stats — Детальная статистика
+📊 /trends — Глобальные тренды
+❓ /help — Помощь по командам
+👴 /mishok — О Мишке
+
+*Новая фича:* Теперь шлёпай в одном окне без спама!"""
+        
+        kb = get_shlep_start_keyboard()
+        await msg.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+    else:
+        text += """*Я бот для шлёпков!*
+
+*Команды для чата:*
+👊 /shlep — Шлёпнуть Мишка
+📊 /chat_stats — Статистика чата
+🏆 /chat_top — Топ игроков
+🗳️ /vote [вопрос] — Голосование
+⚔️ /duel @username — Дуэль
+👑 /roles — Роли в чате
+
+*Личные команды (в лс с ботом):*
+📊 /stats — Глобальная статистика
+🎯 /level — Твой уровень
+📈 /my_stats — Детальная статистика
+
+*Нажми кнопку ниже или введи команду!*"""
+        
+        kb = get_inline_keyboard()
+        await msg.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+
+@command_handler
+async def shlep(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /shlep - обычное шлёпание с новым сообщением"""
+    await perform_shlep(update, context)
 
 @command_handler 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -199,7 +250,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             u_safe = escape_markdown(u or f'Игрок{i}', version=1)
             lvl = calc_level(c)
             medal = ["🥇", "🥈", "🥉"][i-1] if i <= 3 else ""
-            text += f"\n{medal}{i}. {u_safe}"
+            text += f"\n{medad}{i}. {u_safe}"
             text += f"\n   📊 {format_num(c)} | Ур. {lvl['level']}"
             text += f"\n   ⚡ Урон: {lvl['min']}-{lvl['max']}"
     
@@ -386,7 +437,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg:
         return
     
-    text = "🆘 ПОМОЩЬ\n\nОсновные команды:\n/start — Начало работы\n/shlep — Шlёпнуть Мишка\n/stats — Глобальная статистика\n/level — Твой уровень\n/my_stats — Детальная статистика\n/detailed_stats — Расширенная статистика\n/trends — Глобальные тренды\n/mishok — О Мишке\n\nДля чатов:\n/chat_stats — Статистика чата\n/chat_top — Топ игроков чата\n/vote — Голосование\n/duel — Дуэль\n/roles — Роли в чате\n\nТеперь с сохранением прогресса! 💾"
+    text = "🆘 ПОМОЩЬ\n\nОсновные команды:\n/start — Начало работы\n/shlep — Шlёпнуть Мишка\n/stats — Глобальная статистика\n/level — Твой уровень\n/my_stats — Детальная статистика\n/detailed_stats — Расширенная статистика\n/trends — Глобальные тренды\n/mishok — О Мишке\n\nДля чатов:\n/chat_stats — Статистика чата\n/chat_top — Топ игроков чата\n/vote — Голосование\n/duel — Дуэль\n/roles — Роли в чате\n\n*Новое:* Шлёпай в одном окне без спама сообщений!"
     await msg.reply_text(text)
 
 @command_handler
@@ -641,6 +692,99 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
         except:
             pass
 
+async def start_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Начало сессии шлёпания в одном окне"""
+    query = update.callback_query
+    if not query:
+        return
+    
+    await query.answer()
+    
+    user = update.effective_user
+    safe_name = escape_markdown(user.first_name, version=1)
+    
+    text = f"👤 {safe_name}, начинаем сессию шлёпания!\n\nНажимай '👊 Ещё раз!' для следующего шлёпка\nТекущие результаты будут обновляться здесь"
+    
+    # Первый шлёп
+    await perform_shlep(update, context, edit_message=query.message)
+
+async def handle_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYPE, action: str):
+    """Обработка действий в сессии шлёпания"""
+    query = update.callback_query
+    if not query:
+        return
+    
+    await query.answer()
+    
+    if action == "shlep_again":
+        # Ещё один шлёп
+        await perform_shlep(update, context, edit_message=query.message)
+    
+    elif action == "shlep_level":
+        # Показать уровень
+        user = update.effective_user
+        cached = await cache.get(f"user_stats_{user.id}")
+        if cached:
+            u, cnt, last = cached
+        else:
+            u, cnt, last = get_user_stats(user.id)
+            await cache.set(f"user_stats_{user.id}", (u, cnt, last))
+        
+        lvl = calc_level(cnt)
+        title, advice = level_title(lvl['level'])
+        bar = "█" * min(lvl['progress'] // 10, 10) + "░" * (10 - min(lvl['progress'] // 10, 10))
+        
+        safe_name = escape_markdown(user.first_name, version=1)
+        safe_advice = escape_markdown(advice, version=1)
+        
+        text = f"🎯 ТВОЙ УРОВЕНЬ\n👤 Игрок: {safe_name}\n📊 Шlёпков: {format_num(cnt)}\n🎯 Уровень: {lvl['level']} ({title})\n{bar} {lvl['progress']}%\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n🎯 До след. уровня: {lvl['next']} шlёпков\n💡 {advice}"
+        
+        await query.message.edit_text(text, reply_markup=get_shlep_session_keyboard())
+    
+    elif action == "shlep_stats":
+        # Показать статистику
+        cached = await cache.get("global_stats")
+        if cached:
+            total, last, maxd, maxu, maxdt = cached
+        else:
+            total, last, maxd, maxu, maxdt = get_stats()
+            await cache.set("global_stats", (total, last, maxd, maxu, maxdt))
+        
+        maxu_safe = escape_markdown(maxu or 'Нет', version=1)
+        
+        text = f"📊 ГЛОБАЛЬНАЯ СТАТИСТИКА\n👑 РЕКОРД УРОНА: {maxd} единиц\n👤 Рекордсмен: {maxu_safe}\n📅 Дата рекорда: {maxdt.strftime('%d.%m.%Y %H:%M') if maxdt else '—'}\n🔢 Всего шlёпков: {format_num(total)}\n⏰ Последний шlёпок: {last.strftime('%d.%m.%Y %H:%M') if last else 'нет'}"
+        
+        await query.message.edit_text(text, reply_markup=get_shlep_session_keyboard())
+    
+    elif action == "shlep_my_stats":
+        # Показать мою статистику
+        user = update.effective_user
+        _, cnt, last = get_user_stats(user.id)
+        lvl = calc_level(cnt)
+        compare_stats = get_comparison_stats(user.id)
+        
+        text = f"📈 ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Всего шlёпков: {format_num(cnt)}\n🎯 Уровень: {lvl['level']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n{get_favorite_time(user.id)}\n📊 Сравнение с другими:\n👥 Всего игроков: {compare_stats.get('total_users', 0)}\n📈 Среднее на игрока: {compare_stats.get('avg_shleps', 0)}\n🏆 Твой ранг: {compare_stats.get('rank', 1)}\n📊 Лучше чем: {compare_stats.get('percentile', 0)}% игроков"
+        
+        await query.message.edit_text(text, reply_markup=get_shlep_session_keyboard())
+    
+    elif action == "shlep_trends":
+        # Показать тренды
+        trends_data = get_global_trends_info()
+        
+        if not trends_data:
+            text = "📊 Данные временно недоступны"
+        else:
+            text = f"📊 ГЛОБАЛЬНЫЕ ТРЕНДЫ\n👥 Активных за 24 часа: {trends_data.get('active_users_24h', 0)}\n👊 Шlёпков за 24 часа: {trends_data.get('shleps_24h', 0)}\n📈 Среднее на игрока: {trends_data.get('avg_per_user_24h', 0)}\n🔥 Активных сегодня: {trends_data.get('active_today', 0)}\n⏰ Текущий час: {trends_data.get('current_hour', 0):02d}:00\n👊 Шlёпков в этом часу: {trends_data.get('shleps_this_hour', 0)}"
+        
+        await query.message.edit_text(text, reply_markup=get_shlep_session_keyboard())
+    
+    elif action == "shlep_menu":
+        # Вернуться в меню
+        safe_name = escape_markdown(update.effective_user.first_name, version=1)
+        text = f"👋 Привет, {safe_name}!\nЯ — Мишок Лысый 👴✨\n\nНачни шлёпать прямо сейчас!"
+        
+        await query.message.edit_text(text, reply_markup=get_shlep_start_keyboard())
+
 async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
@@ -651,7 +795,14 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     logger.info(f"Callback received: {data}")
     
-    if data == "shlep_mishok":
+    # Обработка новой системы шлёпания
+    if data == "start_shlep_session":
+        await start_shlep_session(update, context)
+    elif data in ["shlep_again", "shlep_level", "shlep_stats", "shlep_my_stats", "shlep_trends", "shlep_menu"]:
+        await handle_shlep_session(update, context, data)
+    
+    # Старые обработчики
+    elif data == "shlep_mishok":
         await shlep(update, context)
     elif data == "stats_inline":
         await stats(update, context)
