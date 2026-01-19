@@ -1,5 +1,3 @@
-[file name]: app.py
-[file content begin]
 import os
 import logging
 import asyncio
@@ -32,4 +30,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-[file content end]
