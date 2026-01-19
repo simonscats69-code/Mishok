@@ -1,5 +1,3 @@
-[file name]: database.py
-[file content begin]
 import json
 import os
 from datetime import datetime, timedelta
@@ -708,4 +706,3 @@ def check_data_integrity():
 
 # ========== Инициализация ==========
 logger.info("База данных готова к работе")
-[file content end]
