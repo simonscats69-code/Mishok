@@ -43,8 +43,7 @@ def quick_actions():
             InlineKeyboardButton("🗳️ Голосование", callback_data="quick_vote")
         ],
         [
-            InlineKeyboardButton("⚔️ Дуэль", callback_data="quick_duel"),
-            InlineKeyboardButton("📈 Топ дня", callback_data="quick_daily_top")
+            InlineKeyboardButton("⚔️ Дуэль", callback_data="quick_duel")
         ]
     ])
 
