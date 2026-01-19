@@ -11,7 +11,7 @@ from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 
 from config import BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO
-from database import add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, get_chat_top_users, backup_database
+from database import add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, get_chat_top_users, backup_database, check_data_integrity
 from keyboard import get_chat_quick_actions, get_inline_keyboard, get_game_keyboard, get_chat_vote_keyboard
 from cache import cache
 from statistics import get_favorite_time, get_comparison_stats, get_global_trends_info, format_daily_activity_chart, format_hourly_distribution_chart
@@ -261,7 +261,7 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     text = f"""📈 ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА
 👤 Игрок: {safe_name}
-📊 Всего шлёпков: {format_num(cnt)}
+📊 Всего шlёпков: {format_num(cnt)}
 🎯 Уровень: {lvl['level']}
 ⚡ Диапазон урона: {lvl['min']}-{lvl['max']}
 {get_favorite_time(user.id)}
@@ -424,7 +424,7 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 Используй `/duel @username` чтобы вызвать кого-то на дуэль!
 📜 Правила:
 • Дуэль длится 5 минут
-• Побеждает тот, кто сделает больше шлёпков
+• Побеждает тот, кто сделает больше шlёпков
 • Победитель получает специальную роль"""
     
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
@@ -543,6 +543,133 @@ async def storage(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += f"{'✅' if ex else '❌'} {d}: {p}\n"
     
     text += f"\n💾 Версия Бота: Bothost Storage Ready"
+    await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+
+@command_handler
+async def check_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Проверить целостность данных"""
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
+    try:
+        result = check_data_integrity()
+        
+        text = "🔍 ПРОВЕРКА ЦЕЛОСТНОСТИ ДАННЫХ\n\n"
+        text += f"📊 Статистика:\n"
+        text += f"👥 Пользователей: {result['stats']['users']}\n"
+        text += f"💬 Чатов: {result['stats']['chats']}\n"
+        text += f"👊 Всего шлёпков: {result['stats']['total_shleps']}\n\n"
+        
+        if result['errors']:
+            text += "❌ КРИТИЧЕСКИЕ ОШИБКИ:\n"
+            for error in result['errors']:
+                text += f"• {error}\n"
+            text += "\n"
+        else:
+            text += "✅ Критических ошибок нет\n\n"
+        
+        if result['warnings']:
+            text += "⚠️ ПРЕДУПРЕЖДЕНИЯ:\n"
+            for warning in result['warnings'][:5]:  # Показываем первые 5
+                text += f"• {warning}\n"
+            if len(result['warnings']) > 5:
+                text += f"... и ещё {len(result['warnings']) - 5} предупреждений\n"
+        else:
+            text += "✅ Предупреждений нет\n"
+        
+        await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+        
+    except Exception as e:
+        await msg.reply_text(f"❌ Ошибка проверки: {str(e)}")
+
+@command_handler
+async def fix_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Исправить структуру данных"""
+    from database import ensure_data_file
+    
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
+    # Только для админа
+    ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
+    if update.effective_user.id != ADMIN_ID:
+        await msg.reply_text("⚠️ Эта команда только для администраторов!")
+        return
+    
+    try:
+        await msg.reply_text("🔄 Исправление структуры данных...")
+        
+        # Вызываем функцию исправления
+        ensure_data_file()
+        
+        # Проверяем результат
+        from database import load_data, get_stats
+        data = load_data()
+        total, last, maxd, maxu, maxdt = get_stats()
+        
+        text = "✅ СТРУКТУРА ДАННЫХ ИСПРАВЛЕНА\n\n"
+        text += f"👥 Пользователей: {len(data.get('users', {}))}\n"
+        text += f"💬 Чатов: {len(data.get('chats', {}))}\n"
+        text += f"👊 Всего шлёпков: {total}\n"
+        text += f"💥 Максимальный урон: {maxd}\n"
+        text += f"👑 Рекордсмен: {maxu or 'Нет'}\n\n"
+        text += "Бот теперь будет работать корректно с файлом /data/mishok_data.json"
+        
+        await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+        
+    except Exception as e:
+        await msg.reply_text(f"❌ Ошибка исправления: {str(e)}")
+
+@command_handler
+async def data_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Информация о файле данных"""
+    import os
+    import json
+    from datetime import datetime
+    
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
+    DATA_FILE = "/data/mishok_data.json"
+    
+    text = "📁 ИНФОРМАЦИЯ О ФАЙЛЕ ДАННЫХ\n\n"
+    
+    if os.path.exists(DATA_FILE):
+        size = os.path.getsize(DATA_FILE)
+        modified = datetime.fromtimestamp(os.path.getmtime(DATA_FILE))
+        
+        text += f"📍 Путь: {DATA_FILE}\n"
+        text += f"📏 Размер: {size:,} байт\n".replace(",", " ")
+        text += f"📅 Изменен: {modified.strftime('%d.%m.%Y %H:%M:%S')}\n"
+        
+        try:
+            with open(DATA_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                
+                text += f"\n📊 СОДЕРЖИМОЕ:\n"
+                text += f"• Пользователей: {len(data.get('users', {}))}\n"
+                text += f"• Чатов: {len(data.get('chats', {}))}\n"
+                text += f"• Всего шлёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n"
+                text += f"• Макс. урон: {data.get('global_stats', {}).get('max_damage', 0)}\n"
+                text += f"• Записей в истории: {len(data.get('records', []))}\n"
+                
+                # Проверяем структуру
+                required_keys = ["users", "chats", "global_stats", "timestamps", "records"]
+                missing_keys = [k for k in required_keys if k not in data]
+                if missing_keys:
+                    text += f"\n⚠️ Отсутствуют ключи: {missing_keys}\n"
+                else:
+                    text += "\n✅ Структура корректна\n"
+                    
+        except Exception as e:
+            text += f"\n❌ Ошибка чтения файла: {str(e)}\n"
+    else:
+        text += f"❌ Файл не найден: {DATA_FILE}\n"
+        text += "Используйте /fix_data для создания файла с правильной структурой"
+    
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
 async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_type: str):
@@ -753,6 +880,9 @@ def main():
         ("roles", roles),
         ("backup", backup),
         ("storage", storage),
+        ("check_data", check_data),  # Новая команда
+        ("fix_data", fix_data),      # Новая команда
+        ("data_info", data_info),    # Новая команда
     ]
     
     for name, handler in commands:
