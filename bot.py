@@ -163,17 +163,14 @@ async def update_duel_message(context: ContextTypes.DEFAULT_TYPE, duel_id: str,
     
     if "finished_at" in duel or now >= ends_at:
         if duel.get("winner_name"):
-            result_text = (
-                f"🏆 *ПОБЕДИТЕЛЬ: {duel['winner_name']}!*\n"
-                f"🎯 Награда: +{duel.get('reward', 0)} к урону\n\n"
-            )
+            result_text = f"🏆 ПОБЕДИТЕЛЬ: {duel['winner_name']}!\n🎯 Награда: +{duel.get('reward', 0)} к урону\n\n"
         else:
-            result_text = "🤝 *НИЧЬЯ!*\n\n"
+            result_text = "🤝 НИЧЬЯ!\n\n"
         
         text = (
-            f"⚔️ *ДУЭЛЬ ЗАВЕРШЕНА*\n\n"
+            f"⚔️ ДУЭЛЬ ЗАВЕРШЕНА\n\n"
             f"{result_text}"
-            f"*Итоговый счёт:*\n"
+            f"Итоговый счёт:\n"
             f"👤 {duel['challenger_name']}:\n"
             f"   🔥 Урон: {format_damage(duel['challenger_damage'])}\n"
             f"   👊 Шлёпков: {duel['challenger_shleps']}\n"
@@ -189,9 +186,9 @@ async def update_duel_message(context: ContextTypes.DEFAULT_TYPE, duel_id: str,
         kb = get_duel_finished_keyboard(duel_id)
     else:
         text = (
-            f"⚔️ *ДУЭЛЬ В РЕАЛЬНОМ ВРЕМЕНИ*\n\n"
+            f"⚔️ ДУЭЛЬ В РЕАЛЬНОМ ВРЕМЕНИ\n\n"
             f"{leader}\n\n"
-            f"*Прогресс:*\n"
+            f"Прогресс:\n"
             f"👤 {duel['challenger_name']}:\n"
             f"   {challenger_bar} {challenger_percent:.1f}%\n"
             f"   🔥 Урон: {format_damage(duel['challenger_damage'])}\n"
@@ -200,13 +197,13 @@ async def update_duel_message(context: ContextTypes.DEFAULT_TYPE, duel_id: str,
             f"   {target_bar} {target_percent:.1f}%\n"
             f"   🔥 Урон: {format_damage(duel['target_damage'])}\n"
             f"   👊 Шлёпков: {duel['target_shleps']}\n\n"
-            f"⏱️ *Осталось времени:* {minutes:02d}:{seconds:02d}\n"
-            f"🎯 *Награда:* +{duel['reward']} к урону победителю\n"
-            f"📊 *Общий урон:* {format_damage(total_damage)}"
+            f"⏱️ Осталось времени: {minutes:02d}:{seconds:02d}\n"
+            f"🎯 Награда: +{duel['reward']} к урону победителю\n"
+            f"📊 Общий урон: {format_damage(total_damage)}"
         )
         
         if duel.get("history"):
-            text += "\n\n*Последние действия:*\n"
+            text += "\n\nПоследние действия:\n"
             for action in duel["history"][-3:]:
                 time_ago = (now - datetime.fromisoformat(action["timestamp"])).seconds
                 text += f"• {action['user_name']}: {format_damage(action['damage'])} урона ({time_ago} сек назад)\n"
@@ -219,8 +216,7 @@ async def update_duel_message(context: ContextTypes.DEFAULT_TYPE, duel_id: str,
                 chat_id=chat_id,
                 message_id=message_id,
                 text=text,
-                reply_markup=kb,
-                parse_mode=ParseMode.MARKDOWN
+                reply_markup=kb
             )
             return True
         elif chat_id and duel.get("message_id"):
@@ -228,8 +224,7 @@ async def update_duel_message(context: ContextTypes.DEFAULT_TYPE, duel_id: str,
                 chat_id=chat_id,
                 message_id=duel["message_id"],
                 text=text,
-                reply_markup=kb,
-                parse_mode=ParseMode.MARKDOWN
+                reply_markup=kb
             )
             return True
     except Exception as e:
@@ -295,7 +290,7 @@ async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit
         duel_info = ""
         if active_duel:
             opponent = active_duel["target_name"] if user.id == active_duel["challenger_id"] else active_duel["challenger_name"]
-            duel_info = f"\n⚔️ *Дуэль с {opponent}:* +{total_damage} урона"
+            duel_info = f"\n⚔️ Дуэль с {opponent}: +{total_damage} урона"
             if bonus_damage > 0:
                 duel_info += f" ({base_dmg} + {bonus_damage} бонус)"
         
@@ -305,21 +300,21 @@ async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit
         
         if edit_message:
             try:
-                await edit_message.edit_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+                await edit_message.edit_text(text, reply_markup=kb)
                 return edit_message
             except Exception as e:
                 logger.warning(f"Не удалось отредактировать сообщение: {e}")
-                return await edit_message.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+                return await edit_message.reply_text(text, reply_markup=kb)
         else:
             msg = await get_message_from_update(update)
             if msg:
-                return await msg.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+                return await msg.reply_text(text, reply_markup=kb)
         
     except Exception as e:
         logger.error(f"Ошибка в perform_shlep: {e}", exc_info=True)
         msg = await get_message_from_update(update)
         if msg:
-            await msg.reply_text("⚠️ Произошла ошибка при обработке шлёпка. Попробуйте еще раз.", parse_mode=ParseMode.MARKDOWN)
+            await msg.reply_text("⚠️ Произошла ошибка при обработке шлёпка. Попробуйте еще раз.")
 
 @command_handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -332,7 +327,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = f"👋 Привет, {safe_name}!\nЯ — Мишок Лысый 👴✨\n\n"
     
     if update.effective_chat.type == "private":
-        text += """*Начни шлёпать прямо сейчас!*
+        text += """Начни шлёпать прямо сейчас!
 
 Просто нажми кнопку ниже или используй команды:
 
@@ -344,14 +339,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ❓ /help — Помощь по командам
 👴 /mishok — О Мишке
 
-*Новая фича:* Теперь шлёпай в одном окне без спама!"""
+Новая фича: Теперь шлёпай в одном окне без спама сообщений!"""
         
         kb = get_shlep_start_keyboard()
-        await msg.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+        await msg.reply_text(text, reply_markup=kb)
     else:
-        text += """*Я бот для шлёпков!*
+        text += """Я бот для шлёпков!
 
-*Команды для чата:*
+Команды для чата:
 👊 /shlep — Шлёпнуть Мишка
 📊 /chat_stats — Статистика чата
 🏆 /chat_top — Топ игроков
@@ -359,15 +354,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ⚔️ /duel @username — Дуэль
 👑 /roles — Роли в чате
 
-*Личные команды (в лс с ботом):*
+Личные команды (в лс с ботом):
 📊 /stats — Глобальная статистика
 🎯 /level — Твой уровень
 📈 /my_stats — Детальная статистика
 
-*Нажми кнопку ниже или введи команду!*"""
+Нажми кнопку ниже или введи команду!"""
         
         kb = get_inline_keyboard()
-        await msg.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+        await msg.reply_text(text, reply_markup=kb)
 
 @command_handler
 async def shlep(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -567,26 +562,25 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text(
             f"⚔️ Вы уже участвуете в дуэли с {opponent}!\n"
             f"Осталось времени: {remaining} минут\n"
-            f"Закончите текущую дуэль перед началом новой.",
-            parse_mode=ParseMode.MARKDOWN
+            f"Закончите текущую дуэль перед началом новой."
         )
         return
     
     if not context.args:
         text = (
-            "⚔️ *СИСТЕМА ДУЭЛЕЙ*\n\n"
-            "*Как вызвать на дуэль:*\n"
-            "`/duel @username` - вызвать игрока\n"
-            "`/duel accept` - принять вызов\n"
-            "`/duel list` - список вызовов\n"
-            "`/duel cancel` - отменить свой вызов\n\n"
-            "*Правила:*\n"
+            "⚔️ СИСТЕМА ДУЭЛЕЙ\n\n"
+            "Как вызвать на дуэль:\n"
+            "/duel @username - вызвать игрока\n"
+            "/duel accept - принять вызов\n"
+            "/duel list - список вызовов\n"
+            "/duel cancel - отменить свой вызов\n\n"
+            "Правила:\n"
             "• Дуэль длится 5 минут\n"
             "• Побеждает тот, кто нанесет больше урона\n"
             "• Победитель получает бонус к урону (+15-40)\n"
             "• Можно сдаться, но бонус будет меньше\n"
             "• Прогресс обновляется в реальном времени\n\n"
-            "*Текущие дуэли:*\n"
+            "Текущие дуэли:\n"
         )
         
         from database import load_data
@@ -602,14 +596,14 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += "Нет активных дуэлей\n\n"
         
         if "duels" in data and data["duels"]["invites"]:
-            text += "*Ваши приглашения:*\n"
+            text += "Ваши приглашения:\n"
             for duel_id, invite in data["duels"]["invites"].items():
                 if (user.username and invite["target_name"].lower() in user.username.lower()) or \
                    (invite["target_name"].lower() in user.first_name.lower()):
                     expires = (datetime.fromisoformat(invite["expires_at"]) - datetime.now()).seconds // 60
                     text += f"• От {invite['challenger_name']} (истекает через {expires} мин)\n"
         
-        await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+        await msg.reply_text(text)
         return
     
     command = context.args[0].lower()
@@ -641,9 +635,9 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb = get_duel_invite_keyboard(user.id, 0, duel_id)
         
         text = (
-            f"⚔️ *ВЫЗОВ НА ДУЭЛЬ!*\n\n"
-            f"*{user.first_name}* вызывает *{target_username}* на дуэль!\n\n"
-            f"*Правила:*\n"
+            f"⚔️ ВЫЗОВ НА ДУЭЛЬ!\n\n"
+            f"{user.first_name} вызывает {target_username} на дуэль!\n\n"
+            f"Правила:\n"
             f"• 5 минут на принятие вызова\n"
             f"• Дуэль длится 5 минут\n"
             f"• Побеждает тот, кто нанесет больше урона\n"
@@ -651,7 +645,7 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Вызов действителен 5 минут!"
         )
         
-        sent_message = await msg.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+        sent_message = await msg.reply_text(text, reply_markup=kb)
         
         from database import update_duel_message_id
         update_duel_message_id(duel_id, sent_message.message_id)
@@ -659,11 +653,10 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await msg.reply_text(
             "Используйте:\n"
-            "`/duel @username` - вызвать игрока\n"
-            "`/duel accept` - принять вызов\n"
-            "`/duel list` - список вызовов\n"
-            "`/duel stats` - ваша статистика дуэлей",
-            parse_mode=ParseMode.MARKDOWN
+            "/duel @username - вызвать игрока\n"
+            "/duel accept - принять вызов\n"
+            "/duel list - список вызовов\n"
+            "/duel stats - ваша статистика дуэлей"
         )
 
 async def accept_duel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -693,11 +686,11 @@ async def accept_duel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     kb = get_duel_invite_keyboard(invite["challenger_id"], user.id, invite["id"])
     
     text = (
-        f"⚔️ У вас есть приглашение от *{invite['challenger_name']}*\n\n"
+        f"⚔️ У вас есть приглашение от {invite['challenger_name']}\n\n"
         f"Принять вызов?"
     )
     
-    await msg.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+    await msg.reply_text(text, reply_markup=kb)
 
 async def list_duels_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await get_message_from_update(update)
@@ -705,9 +698,9 @@ async def list_duels_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     from database import load_data
     data = load_data()
     
-    text = "⚔️ *ДУЭЛИ*\n\n"
+    text = "⚔️ ДУЭЛИ\n\n"
     
-    text += "*Активные дуэли:*\n"
+    text += "Активные дуэли:\n"
     if "duels" in data and data["duels"]["active"]:
         for duel_id, duel in data["duels"]["active"].items():
             remaining = (datetime.fromisoformat(duel["ends_at"]) - datetime.now()).seconds // 60
@@ -716,7 +709,7 @@ async def list_duels_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         text += "Нет активных дуэлей\n\n"
     
-    text += "*Приглашения:*\n"
+    text += "Приглашения:\n"
     if "duels" in data and data["duels"]["invites"]:
         for duel_id, invite in data["duels"]["invites"].items():
             expires = (datetime.fromisoformat(invite["expires_at"]) - datetime.now()).seconds // 60
@@ -724,7 +717,7 @@ async def list_duels_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         text += "Нет приглашений\n"
     
-    await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    await msg.reply_text(text)
 
 async def cancel_duel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await get_message_from_update(update)
@@ -783,17 +776,19 @@ async def duel_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     total_damage += duel["target_damage"]
     
     text = (
-        f"⚔️ *ВАША СТАТИСТИКА ДУЭЛЕЙ*\n\n"
-        f"📊 *Результаты:*\n"
+        f"⚔️ ВАША СТАТИСТИКА ДУЭЛЕЙ\n\n"
+        f"📊 Результаты:\n"
         f"🏆 Побед: {wins}\n"
         f"💀 Поражений: {losses}\n"
         f"🤝 Ничьих: {draws}\n\n"
-        f"🔥 *Урон в дуэлях:* {format_num(total_damage)}\n"
-        f"🎯 *Всего бонусного урона:* +{total_reward}\n\n"
-        f"📈 *Процент побед:* {wins/(wins+losses+draws)*100:.1f}%" if (wins+losses+draws) > 0 else ""
+        f"🔥 Урон в дуэлях: {format_num(total_damage)}\n"
+        f"🎯 Всего бонусного урона: +{total_reward}\n\n"
     )
     
-    await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+    if (wins+losses+draws) > 0:
+        text += f"📈 Процент побед: {wins/(wins+losses+draws)*100:.1f}%"
+    
+    await msg.reply_text(text)
 
 @command_handler
 @chat_only
@@ -811,7 +806,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg:
         return
     
-    text = "🆘 ПОМОЩЬ\n\nОсновные команды:\n/start — Начало работы\n/shlep — Шlёпнуть Мишка\n/stats — Глобальная статистика\n/level — Твой уровень\n/my_stats — Детальная статистика\n/detailed_stats — Расширенная статистика\n/trends — Глобальные тренды\n/mishok — О Мишке\n\nДля чатов:\n/chat_stats — Статистика чата\n/chat_top — Топ игроков чата\n/vote — Голосование\n/duel — Дуэль\n/roles — Роли в чате\n\n*Новое:* Шлёпай в одном окне без спама сообщений!"
+    text = "🆘 ПОМОЩЬ\n\nОсновные команды:\n/start — Начало работы\n/shlep — Шlёпнуть Мишка\n/stats — Глобальная статистика\n/level — Твой уровень\n/my_stats — Детальная статистика\n/detailed_stats — Расширенная статистика\n/trends — Глобальные тренды\n/mishok — О Мишке\n\nДля чатов:\n/chat_stats — Статистика чата\n/chat_top — Топ игроков чата\n/vote — Голосование\n/duel — Дуэль\n/roles — Роли в чате\n\nНовое: Шлёпай в одном окне без спама сообщений!"
     await msg.reply_text(text)
 
 @command_handler
@@ -1076,7 +1071,7 @@ async def start_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYPE
     user = update.effective_user
     safe_name = escape_markdown(user.first_name, version=1)
     
-    text = f"👤 {safe_name}, начинаем сессию шлёпания!\n\nНажимай '👊 Ещё раз!' для следующего шлёпка\nТекущие результаты будут обновляться здесь"
+    text = f"👤 {safe_name}, начинаем сессию шлёпания!\n\nНажимай '👊 Ещё раз!' для следующего шlёпка\nТекущие результаты будут обновляться здесь"
     
     await perform_shlep(update, context, edit_message=query.message)
 
@@ -1146,7 +1141,7 @@ async def handle_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYP
     
     elif action == "shlep_menu":
         safe_name = escape_markdown(update.effective_user.first_name, version=1)
-        text = f"👋 Привет, {safe_name}!\nЯ — Мишок Лысый 👴✨\n\nНачни шлёпать прямо сейчас!"
+        text = f"👋 Привет, {safe_name}!\nЯ — Мишок Лысый 👴✨\n\nНачни шlёпать прямо сейчас!"
         
         await query.message.edit_text(text, reply_markup=get_shlep_start_keyboard())
 
@@ -1164,7 +1159,6 @@ async def handle_duel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     
     if action == "accept":
         from database import accept_duel_invite, update_duel_message_id
-        from keyboard import get_duel_active_keyboard
         
         duel = accept_duel_invite(duel_id)
         
@@ -1188,9 +1182,8 @@ async def handle_duel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         success = decline_duel_invite(duel_id)
         if success:
             await query.message.edit_text(
-                f"❌ *ВЫЗОВ ОТКЛОНЁН*\n\n"
-                f"Пользователь {user.first_name} отклонил вызов на дуэль.",
-                parse_mode=ParseMode.MARKDOWN
+                f"❌ ВЫЗОВ ОТКЛОНЁН\n\n"
+                f"Пользователь {user.first_name} отклонил вызов на дуэль."
             )
             await query.answer("Вызов отклонён", show_alert=False)
         else:
@@ -1260,7 +1253,7 @@ async def handle_duel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 f"• Средний урон: {avg_challenger}\n\n"
                 f"{duel['target_name']}:\n"
                 f"• Урон: {duel['target_damage']}\n"
-                f"• Шлёпков: {duel['target_shleps']}\n"
+                f"• Шlёпков: {duel['target_shleps']}\n"
                 f"• Средний урон: {avg_target}\n\n"
                 f"Всего шлёпков: {total_shleps}",
                 show_alert=True
