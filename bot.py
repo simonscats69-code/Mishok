@@ -82,7 +82,7 @@ def calc_level(cnt):
     }
 
 def level_title(lvl):
-    if lvl >= 1000: return ("🌌 ВСЕЛЕНСКИЙ ШЛЁПКО-БОГ", "Ты создал свою вселенную шлёпков!")
+    if lvl >= 1000: return ("🌌 ВСЕЛЕНСКИЙ ШЛЁПКО -БОГ", "Ты создал свою вселенную шлёпков!")
     if lvl >= 950: return ("⚡ АБСОЛЮТНЫЙ ПОВЕЛИТЕЛЬ", "Даже боги трепещут перед тобой!")
     if lvl >= 900: return ("🔥 БЕССМЕРТНЫЙ ТИТАН", "Твоя сила преодолела смерть!")
     if lvl >= 850: return ("🌟 ХРАНИТЕЛЬ ГАЛАКТИКИ", "Целые галактики под твоей властью!")
@@ -111,7 +111,7 @@ def get_reaction():
     return random.choice(MISHOK_REACTIONS)
 
 def get_message_from_update(update: Update):
-    """ИСПРАВЛЕННАЯ ФУНКЦИЯ: Получает сообщение из update"""
+    """Получает сообщение из update"""
     if update.callback_query and update.callback_query.message:
         return update.callback_query.message
     return update.message
@@ -242,7 +242,6 @@ async def update_duel_message(context: ContextTypes.DEFAULT_TYPE, duel_id: str,
 
 async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_message=None):
     try:
-        # ИСПРАВЛЕНИЕ: Правильно получаем сообщение
         msg = get_message_from_update(update)
         if not msg:
             logger.error("Не удалось получить сообщение из update")
@@ -321,7 +320,6 @@ async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit
                 logger.warning(f"Не удалось отредактировать сообщение: {e}")
                 return await msg.reply_text(text, reply_markup=kb)
         else:
-            # Используем полученное сообщение
             return await msg.reply_text(text, reply_markup=kb)
         
     except Exception as e:
@@ -793,15 +791,24 @@ async def create_duel_invitation(update: Update, context: ContextTypes.DEFAULT_T
     msg = get_message_from_update(update)
     user = update.effective_user
     chat = update.effective_chat
-    duel_id = f"{user.id}_{target_username}_{int(datetime.now().timestamp())}"
+    
+    # Создаем ID дуэли
+    duel_id = f"{user.id}_{int(datetime.now().timestamp())}"
+    
     created_id = create_duel_invite(
         challenger_id=user.id,
         challenger_name=user.first_name,
-        target_id=0,
+        target_id=0,  # Будет установлен при принятии
         target_name=target_username,
         chat_id=chat.id
     )
+    
+    if not created_id:
+        await msg.reply_text("❌ Ошибка создания вызова на дуэль")
+        return
+    
     kb = get_duel_invite_keyboard(user.id, 0, created_id)
+    
     text = (
         f"⚔️ ВЫЗОВ НА ДУЭЛЬ!\n\n"
         f"👤 {user.first_name} вызывает @{target_username} на дуэль!\n\n"
@@ -811,9 +818,10 @@ async def create_duel_invitation(update: Update, context: ContextTypes.DEFAULT_T
         f"• Побеждает тот, кто нанесет больше урона\n"
         f"• Победитель получает бонус +15-40 к урону!\n\n"
         f"🆔 ID дуэли: `{created_id}`\n"
-        f"🔗 Чтобы принять: `/duel accept_id {created_id}`\n\n"
+        f"🔗 Чтобы принять: нажмите кнопку ниже\n\n"
         f"⏱️ Вызов действителен 5 минут!"
     )
+    
     sent_message = await msg.reply_text(text, reply_markup=kb)
     update_duel_message_id(created_id, sent_message.message_id)
 
@@ -1236,35 +1244,87 @@ async def handle_duel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     parts = data.split("_")
     action = parts[1] if len(parts) > 1 else None
     duel_id = parts[2] if len(parts) > 2 else None
+    
+    if not query:
+        return
+    
     if not duel_id:
         await query.answer("❌ Ошибка: ID дуэли не найден", show_alert=True)
         return
+    
     if action == "accept":
-        from database import accept_duel_invite, update_duel_message_id
+        from database import accept_duel_invite, update_duel_message_id, get_active_duel, load_data, save_data
+        
+        # Получаем данные приглашения
+        data_dict = load_data()
+        
+        if "duels" not in data_dict or duel_id not in data_dict["duels"]["invites"]:
+            await query.answer("❌ Приглашение не найдено или просрочено", show_alert=True)
+            return
+        
+        # Обновляем target_id в приглашении
+        invite = data_dict["duels"]["invites"][duel_id]
+        invite["target_id"] = user.id
+        invite["target_name"] = user.first_name
+        save_data(data_dict)
+        
+        # Принимаем дуэль
         duel = accept_duel_invite(duel_id)
+        
         if duel:
-            from database import load_data, save_data
-            data = load_data()
-            if duel_id in data["duels"]["active"]:
-                data["duels"]["active"][duel_id]["target_id"] = user.id
-                data["duels"]["active"][duel_id]["target_name"] = user.first_name
-                save_data(data)
-                duel = data["duels"]["active"][duel_id]
+            # Обновляем сообщение
             await update_duel_message(context, duel_id, query.message.chat_id, query.message.message_id)
             await query.answer(f"✅ Вы приняли вызов от {duel['challenger_name']}!", show_alert=True)
+            
+            # Отправляем уведомление в чат
+            try:
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=f"⚔️ Дуэль началась! {duel['challenger_name']} vs {duel['target_name']} сражаются 5 минут!"
+                )
+            except:
+                pass
         else:
-            await query.answer("❌ Приглашение не найдено или просрочено", show_alert=True)
+            await query.answer("❌ Не удалось начать дуэль", show_alert=True)
+    
     elif action == "decline":
-        from database import decline_duel_invite
+        from database import decline_duel_invite, load_data
+        
+        # Получаем данные приглашения
+        data_dict = load_data()
+        
+        if "duels" not in data_dict or duel_id not in data_dict["duels"]["invites"]:
+            await query.answer("❌ Приглашение не найдено", show_alert=True)
+            return
+        
+        invite = data_dict["duels"]["invites"][duel_id]
+        
+        # Проверяем, что отклоняет целевой пользователь
+        target_name_lower = invite["target_name"].lower().replace("@", "")
+        user_username_lower = (user.username or "").lower().replace("@", "")
+        user_first_name_lower = user.first_name.lower()
+        
+        is_target = (
+            target_name_lower in user_username_lower or 
+            target_name_lower in user_first_name_lower or
+            user_username_lower in target_name_lower or
+            user_first_name_lower in target_name_lower
+        )
+        
+        if not is_target:
+            await query.answer("❌ Только приглашенный пользователь может отклонить вызов", show_alert=True)
+            return
+        
         success = decline_duel_invite(duel_id)
         if success:
             await query.message.edit_text(
                 f"❌ ВЫЗОВ ОТКЛОНЁН\n\n"
-                f"Пользователь {user.first_name} отклонил вызов на дуэль."
+                f"Пользователь {user.first_name} отклонил вызов на дуэль от {invite['challenger_name']}."
             )
             await query.answer("Вызов отклонён", show_alert=False)
         else:
             await query.answer("❌ Приглашение не найдено", show_alert=True)
+    
     elif action == "shlep":
         if len(parts) >= 3:
             duel_id = parts[2]
@@ -1301,6 +1361,7 @@ async def handle_duel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                     await query.answer("🏆 Дуэль завершена! Смотрите результаты выше.", show_alert=True)
             else:
                 await query.answer("❌ Ошибка при добавлении шлёпка", show_alert=True)
+    
     elif action == "stats":
         from database import get_active_duel
         duel = get_active_duel(duel_id)
@@ -1323,6 +1384,7 @@ async def handle_duel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             )
         else:
             await query.answer("❌ Дуэль не найдена", show_alert=True)
+    
     elif action == "surrender":
         from database import get_active_duel, surrender_duel
         duel = get_active_duel(duel_id)
@@ -1338,9 +1400,11 @@ async def handle_duel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             await query.answer(f"🏳️ Вы сдались! {result['winner_name']} побеждает.", show_alert=True)
         else:
             await query.answer("❌ Ошибка при сдаче", show_alert=True)
+    
     elif action == "refresh":
         await update_duel_message(context, duel_id, query.message.chat_id, query.message.message_id)
         await query.answer("🔄 Сообщение обновлено", show_alert=False)
+    
     elif action == "details":
         from database import load_data
         data = load_data()
@@ -1357,9 +1421,11 @@ async def handle_duel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             await query.answer(history_text, show_alert=True)
         else:
             await query.answer("❌ История дуэли не найдена", show_alert=True)
+    
     elif action == "close":
         await query.message.delete()
         await query.answer("✅ Сообщение закрыто", show_alert=False)
+    
     else:
         await query.answer("⚙️ Функция в разработке", show_alert=False)
 
@@ -1377,7 +1443,6 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data in ["shlep_again", "shlep_level", "shlep_stats", "shlep_my_stats", "shlep_trends", "shlep_menu"]:
         await handle_shlep_session(update, context, data)
     elif data == "shlep_mishok":
-        # ИСПРАВЛЕНИЕ: Вызываем perform_shlep напрямую
         await perform_shlep(update, context)
     elif data == "stats_inline":
         await stats(update, context)
