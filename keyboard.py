@@ -14,7 +14,6 @@ def main_kb(for_chat=False):
                 InlineKeyboardButton("📈 Моя статистика", callback_data="my_stats")
             ],
             [
-                InlineKeyboardButton("📊 Тренды", callback_data="trends"),
                 InlineKeyboardButton("👴 О Мишке", callback_data="mishok_info")
             ],
             [
@@ -25,7 +24,7 @@ def main_kb(for_chat=False):
         return ReplyKeyboardMarkup([
             [KeyboardButton("👊 Шлёпнуть Мишка")],
             [KeyboardButton("🎯 Уровень"), KeyboardButton("📊 Статистика")],
-            [KeyboardButton("📈 Моя статистика"), KeyboardButton("📊 Тренды")],
+            [KeyboardButton("📈 Моя статистика")],
             [KeyboardButton("❓ Помощь"), KeyboardButton("👴 О Мишке")]
         ], resize_keyboard=True, one_time_keyboard=False, selective=True)
 
@@ -41,7 +40,6 @@ def get_shlep_session_keyboard():
             InlineKeyboardButton("📈 Моя стата", callback_data="shlep_my_stats")
         ],
         [
-            InlineKeyboardButton("📊 Тренды", callback_data="shlep_trends"),
             InlineKeyboardButton("🔙 Меню", callback_data="shlep_menu")
         ]
     ])
