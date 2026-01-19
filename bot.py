@@ -11,7 +11,7 @@ from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 
 from config import BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO
-from database import add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, get_chat_top_users, backup_database, check_data_integrity
+from database import add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, get_chat_top_users, backup_database, check_data_integrity, repair_data_structure
 from keyboard import get_chat_quick_actions, get_inline_keyboard, get_game_keyboard, get_chat_vote_keyboard
 from cache import cache
 from statistics import get_favorite_time, get_comparison_stats, get_global_trends_info, format_daily_activity_chart, format_hourly_distribution_chart
@@ -130,34 +130,50 @@ async def shlep(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg:
         return
     
-    user = update.effective_user
-    chat = update.effective_chat
-    
-    username = user.username or user.first_name
-    _, cnt, _ = get_user_stats(user.id)
-    lvl = calc_level(cnt)
-    
-    dmg = random.randint(lvl['min'], lvl['max'])
-    total, cnt, max_dmg = add_shlep(
-        user.id, 
-        username, 
-        dmg, 
-        chat.id if chat.type != "private" else None
-    )
-    
-    await cache.delete("global_stats")
-    await cache.delete(f"user_stats_{user.id}")
-    if chat.type != "private":
-        await cache.delete(f"chat_stats_{chat.id}")
-    
-    rec = "\n🏆 НОВЫЙ РЕКОРД!\n" if dmg > max_dmg else ""
-    lvl = calc_level(cnt)
-    title, _ = level_title(lvl['level'])
-    
-    text = f"{get_reaction()}{rec}💥 Урон: {dmg}\n👤 {user.first_name}: {cnt} шлёпков\n🎯 Уровень {lvl['level']} ({title})\n📊 До уровня: {lvl['next']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n📈 Всего шлёпков в игре: {format_num(total)}"
-    
-    kb = get_chat_quick_actions() if chat.type != "private" else None
-    await msg.reply_text(text, reply_markup=kb)
+    try:
+        user = update.effective_user
+        chat = update.effective_chat
+        
+        username = user.username or user.first_name
+        _, cnt, _ = get_user_stats(user.id)
+        lvl = calc_level(cnt)
+        
+        dmg = random.randint(lvl['min'], lvl['max'])
+        
+        try:
+            total, cnt, max_dmg = add_shlep(
+                user.id, 
+                username, 
+                dmg, 
+                chat.id if chat.type != "private" else None
+            )
+        except KeyError as e:
+            repair_data_structure()
+            
+            total, cnt, max_dmg = add_shlep(
+                user.id, 
+                username, 
+                dmg, 
+                chat.id if chat.type != "private" else None
+            )
+        
+        await cache.delete("global_stats")
+        await cache.delete(f"user_stats_{user.id}")
+        if chat.type != "private":
+            await cache.delete(f"chat_stats_{chat.id}")
+        
+        rec = "\n🏆 НОВЫЙ РЕКОРД!\n" if dmg > max_dmg else ""
+        lvl = calc_level(cnt)
+        title, _ = level_title(lvl['level'])
+        
+        text = f"{get_reaction()}{rec}💥 Урон: {dmg}\n👤 {user.first_name}: {cnt} шлёпков\n🎯 Уровень {lvl['level']} ({title})\n📊 До уровня: {lvl['next']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n📈 Всего шлёпков в игре: {format_num(total)}"
+        
+        kb = get_chat_quick_actions() if chat.type != "private" else None
+        await msg.reply_text(text, reply_markup=kb)
+        
+    except Exception as e:
+        logger.error(f"Ошибка в shlep: {e}", exc_info=True)
+        await msg.reply_text("⚠️ Произошла ошибка при обработке шлёпка. Попробуйте еще раз.")
 
 @command_handler 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -264,7 +280,7 @@ async def detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     _, cnt, _ = get_user_stats(user.id)
     
-    text = f"📊 РАСШИРЕННАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Шлёпков: {format_num(cnt)}\n{get_favorite_time(user.id)}\n📅 Активность за 2 недели:\n{format_daily_activity_chart(user.id, 14)}\n{format_hourly_distribution_chart(user.id)}\n\nКоманды статистики:\n/my_stats — Краткая статистика\n/trends — Глобальные тренды\n/stats — Общая статистика\n/level — Уровень"
+    text = f"📊 РАСШИРЕННАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Шlёпков: {format_num(cnt)}\n{get_favorite_time(user.id)}\n📅 Активность за 2 недели:\n{format_daily_activity_chart(user.id, 14)}\n{format_hourly_distribution_chart(user.id)}\n\nКоманды статистики:\n/my_stats — Краткая статистика\n/trends — Глобальные тренды\n/stats — Общая статистика\n/level — Уровень"
     
     await msg.reply_text(text)
 
@@ -446,7 +462,6 @@ async def storage(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @command_handler
 async def check_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Проверить целостность данных"""
     msg = await get_message_from_update(update)
     if not msg:
         return
@@ -484,27 +499,22 @@ async def check_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @command_handler
 async def fix_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Исправить структуру данных"""
-    from database import ensure_data_file
-    
     msg = await get_message_from_update(update)
     if not msg:
         return
     
-    # Только для админа
-    ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
+    from config import ADMIN_ID
     if update.effective_user.id != ADMIN_ID:
         await msg.reply_text("⚠️ Эта команда только для администраторов!")
         return
     
     try:
+        from database import load_data, get_stats
+        
         await msg.reply_text("🔄 Исправление структуры данных...")
         
-        # Вызываем функцию исправления
-        ensure_data_file()
+        repair_data_structure()
         
-        # Проверяем результат
-        from database import load_data, get_stats
         data = load_data()
         total, last, maxd, maxu, maxdt = get_stats()
         
@@ -515,18 +525,51 @@ async def fix_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"👊 Всего шлёпков: {total}\n"
             f"💥 Максимальный урон: {maxd}\n"
             f"👑 Рекордсмен: {maxu or 'Нет'}\n\n"
-            "Бот теперь будет работать корректно с файлом /data/mishok_data.json"
+            "Ошибки больше не должны возникать!"
         )
         
         await msg.reply_text(text)
         
     except Exception as e:
-        error_text = f"❌ Ошибка исправления: {str(e)}"
-        await msg.reply_text(error_text)
+        await msg.reply_text(f"❌ Ошибка: {str(e)}")
+
+@command_handler
+async def repair(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = await get_message_from_update(update)
+    if not msg:
+        return
+    
+    from config import ADMIN_ID
+    if update.effective_user.id != ADMIN_ID:
+        await msg.reply_text("⚠️ Эта команда только для администраторов!")
+        return
+    
+    try:
+        await msg.reply_text("🔄 Восстановление структуры данных...")
+        
+        success = repair_data_structure()
+        
+        if success:
+            from database import load_data
+            data = load_data()
+            
+            text = (
+                "✅ СТРУКТУРА ДАННЫХ ВОССТАНОВЛЕНА\n\n"
+                f"👥 Пользователей: {len(data.get('users', {}))}\n"
+                f"💬 Чатов: {len(data.get('chats', {}))}\n"
+                f"👊 Всего шлёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n\n"
+                "Ошибки больше не должны возникать!"
+            )
+        else:
+            text = "❌ Не удалось восстановить структуру данных"
+        
+        await msg.reply_text(text)
+        
+    except Exception as e:
+        await msg.reply_text(f"❌ Ошибка: {str(e)}")
 
 @command_handler
 async def data_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Информация о файле данных"""
     import os
     import json
     from datetime import datetime
@@ -558,7 +601,6 @@ async def data_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += f"• Макс. урон: {data.get('global_stats', {}).get('max_damage', 0)}\n"
             text += f"• Записей в истории: {len(data.get('records', []))}\n"
             
-            # Проверяем структуру
             required_keys = ["users", "chats", "global_stats", "timestamps", "records"]
             missing_keys = [k for k in required_keys if k not in data]
             if missing_keys:
@@ -570,7 +612,7 @@ async def data_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += f"\n❌ Ошибка чтения файла: {str(e)}\n"
     else:
         text += f"❌ Файл не найден: {DATA_FILE}\n"
-        text += "Используйте /fix_data для создания файла с правильной структурой"
+        text += "Используйте /repair для восстановления структуры данных"
     
     await msg.reply_text(text)
 
@@ -780,6 +822,7 @@ def main():
         ("storage", storage),
         ("check_data", check_data),
         ("fix_data", fix_data),
+        ("repair", repair),
         ("data_info", data_info),
     ]
     
