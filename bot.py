@@ -110,8 +110,11 @@ def level_title(lvl):
 def get_reaction(): 
     return random.choice(MISHOK_REACTIONS)
 
-async def get_message_from_update(update: Update):
-    return update.message or (update.callback_query and update.callback_query.message)
+def get_message_from_update(update: Update):
+    """ИСПРАВЛЕННАЯ ФУНКЦИЯ: Получает сообщение из update"""
+    if update.callback_query and update.callback_query.message:
+        return update.callback_query.message
+    return update.message
 
 async def update_duel_message(context: ContextTypes.DEFAULT_TYPE, duel_id: str, 
                             chat_id: int = None, message_id: int = None):
@@ -182,7 +185,7 @@ async def update_duel_message(context: ContextTypes.DEFAULT_TYPE, duel_id: str,
             f"   📊 Средний урон: {format_damage(duel['challenger_damage'] // max(duel['challenger_shleps'], 1))}\n\n"
             f"👤 {duel['target_name']}:\n"
             f"   🔥 Урон: {format_damage(duel['target_damage'])}\n"
-            f"   👊 Шлёпков: {duel['target_shleps']}\n"
+            f"   👊 Шlёпков: {duel['target_shleps']}\n"
             f"   📊 Средний урон: {format_damage(duel['target_damage'] // max(duel['target_shleps'], 1))}\n\n"
             f"⏱️ Длительность: 5 минут\n"
             f"📈 Общий урон: {format_damage(total_damage)}"
@@ -239,6 +242,12 @@ async def update_duel_message(context: ContextTypes.DEFAULT_TYPE, duel_id: str,
 
 async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_message=None):
     try:
+        # ИСПРАВЛЕНИЕ: Правильно получаем сообщение
+        msg = get_message_from_update(update)
+        if not msg:
+            logger.error("Не удалось получить сообщение из update")
+            return
+        
         user = update.effective_user
         chat = update.effective_chat
         
@@ -274,6 +283,7 @@ async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit
                 chat.id if chat.type != "private" else None
             )
         except KeyError as e:
+            logger.error(f"Ошибка KeyError при добавлении шлёпка: {e}")
             repair_data_structure()
             
             total, cnt, max_dmg = add_shlep(
@@ -309,21 +319,23 @@ async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit
                 return edit_message
             except Exception as e:
                 logger.warning(f"Не удалось отредактировать сообщение: {e}")
-                return await edit_message.reply_text(text, reply_markup=kb)
-        else:
-            msg = await get_message_from_update(update)
-            if msg:
                 return await msg.reply_text(text, reply_markup=kb)
+        else:
+            # Используем полученное сообщение
+            return await msg.reply_text(text, reply_markup=kb)
         
     except Exception as e:
         logger.error(f"Ошибка в perform_shlep: {e}", exc_info=True)
-        msg = await get_message_from_update(update)
-        if msg:
-            await msg.reply_text("⚠️ Произошла ошибка при обработке шлёпка. Попробуйте еще раз.")
+        try:
+            msg = get_message_from_update(update)
+            if msg:
+                await msg.reply_text("⚠️ Произошла ошибка при обработке шлёпка. Попробуйте еще раз.")
+        except Exception as e2:
+            logger.error(f"Не удалось отправить сообщение об ошибке: {e2}")
 
 @command_handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     if not msg:
         return
     
@@ -375,7 +387,7 @@ async def shlep(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @command_handler 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     if not msg:
         return
     
@@ -406,7 +418,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @command_handler 
 async def level(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     if not msg:
         return
     
@@ -435,7 +447,7 @@ async def level(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @command_handler
 async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     if not msg:
         return
     
@@ -454,7 +466,7 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @command_handler
 async def trends(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     if not msg:
         return
     
@@ -470,7 +482,7 @@ async def trends(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @command_handler
 async def detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     if not msg:
         return
     
@@ -485,7 +497,7 @@ async def detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @command_handler
 @chat_only
 async def chat_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     if not msg:
         return
     
@@ -509,7 +521,7 @@ async def chat_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @command_handler
 @chat_only
 async def chat_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     if not msg:
         return
     
@@ -590,7 +602,7 @@ async def finish_vote(vote_id, chat_id, message_id, context):
 @command_handler
 @chat_only
 async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     if not msg:
         return
     question = " ".join(context.args) if context.args else "Шлёпнуть Мишка?"
@@ -626,7 +638,7 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @command_handler
 @chat_only
 async def vote_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     if not msg:
         return
     chat_id = msg.chat_id
@@ -741,7 +753,7 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
             pass
 
 async def show_duel_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     user = update.effective_user
     from database import load_data
     data = load_data()
@@ -778,7 +790,7 @@ async def show_duel_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await msg.reply_text(text)
 
 async def create_duel_invitation(update: Update, context: ContextTypes.DEFAULT_TYPE, target_username: str):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     user = update.effective_user
     chat = update.effective_chat
     duel_id = f"{user.id}_{target_username}_{int(datetime.now().timestamp())}"
@@ -806,7 +818,7 @@ async def create_duel_invitation(update: Update, context: ContextTypes.DEFAULT_T
     update_duel_message_id(created_id, sent_message.message_id)
 
 async def accept_specific_duel(update: Update, context: ContextTypes.DEFAULT_TYPE, duel_id: str):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     user = update.effective_user
     from database import load_data
     data = load_data()
@@ -826,7 +838,7 @@ async def accept_specific_duel(update: Update, context: ContextTypes.DEFAULT_TYP
     await msg.reply_text(text, reply_markup=kb)
 
 async def accept_duel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     user = update.effective_user
     from database import load_data
     data = load_data()
@@ -859,7 +871,7 @@ async def accept_duel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
 @command_handler
 @chat_only
 async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     if not msg:
         return
     user = update.effective_user
@@ -903,7 +915,7 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 async def list_duels_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     from database import load_data
     data = load_data()
     text = "⚔️ ДУЭЛИ\n\n"
@@ -925,7 +937,7 @@ async def list_duels_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await msg.reply_text(text)
 
 async def cancel_duel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     user = update.effective_user
     from database import load_data, save_data
     data = load_data()
@@ -945,7 +957,7 @@ async def cancel_duel_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     await msg.reply_text(f"✅ Отменено {len(user_invites)} вызовов")
 
 async def duel_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     user = update.effective_user
     from database import load_data
     data = load_data()
@@ -984,15 +996,15 @@ async def duel_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 @command_handler
 @chat_only
 async def roles(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     if not msg:
         return
-    text = "👑 РОЛИ В ЧАТЕ\n\nКак получить роли:\n• 👑 Король шlёпков — быть топ-1 в чате\n• 🎯 Самый меткий — нанести максимальный урон\n• ⚡ Спринтер — сделать 10+ шlёпков за 5 минут\n• 💪 Силач — нанести урон 40+ единиц\n\nИспользуй /chat_top чтобы увидеть текущих лидеров!"
+    text = "👑 РОЛИ В ЧАТЕ\n\nКак получить роли:\n• 👑 Король шlёпков — быть топ-1 в чате\n• 🎯 Самый меткий — нанести максимальный урон\n• ⚡ Спринтер — сделать 10+ шлёпков за 5 минут\n• 💪 Силач — нанести урон 40+ единиц\n\nИспользуй /chat_top чтобы увидеть текущих лидеров!"
     await msg.reply_text(text)
 
 @command_handler
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     if not msg:
         return
     text = "🆘 ПОМОЩЬ\n\nОсновные команды:\n/start — Начало работы\n/shlep — Шlёпнуть Мишка\n/stats — Глобальная статистика\n/level — Твой уровень\n/my_stats — Детальная статистика\n/detailed_stats — Расширенная статистика\n/trends — Глобальные тренды\n/mishok — О Мишке\n\nДля чатов:\n/chat_stats — Статистика чата\n/chat_top — Топ игроков чата\n/vote — Голосование\n/duel — Дуэль\n/roles — Роли в чате\n\nНовое: Шлёпай в одном окне без спама сообщений!"
@@ -1001,7 +1013,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @command_handler
 async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        msg = await get_message_from_update(update)
+        msg = get_message_from_update(update)
         if not msg:
             return
         await msg.reply_text(
@@ -1025,7 +1037,7 @@ async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @command_handler
 async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     if not msg:
         return
     ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
@@ -1037,7 +1049,7 @@ async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @command_handler
 async def storage(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     if not msg:
         return
     import os
@@ -1062,7 +1074,7 @@ async def storage(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @command_handler
 async def check_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     if not msg:
         return
     try:
@@ -1093,7 +1105,7 @@ async def check_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @command_handler
 async def repair(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     if not msg:
         return
     from config import ADMIN_ID
@@ -1124,7 +1136,7 @@ async def data_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     import os
     import json
     from datetime import datetime
-    msg = await get_message_from_update(update)
+    msg = get_message_from_update(update)
     if not msg:
         return
     DATA_FILE = "/data/mishok_data.json"
@@ -1355,15 +1367,18 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return
+    
     await query.answer()
     data = query.data
     logger.info(f"Callback received: {data}")
+    
     if data == "start_shlep_session":
         await start_shlep_session(update, context)
     elif data in ["shlep_again", "shlep_level", "shlep_stats", "shlep_my_stats", "shlep_trends", "shlep_menu"]:
         await handle_shlep_session(update, context, data)
     elif data == "shlep_mishok":
-        await shlep(update, context)
+        # ИСПРАВЛЕНИЕ: Вызываем perform_shlep напрямую
+        await perform_shlep(update, context)
     elif data == "stats_inline":
         await stats(update, context)
     elif data == "level_inline":
@@ -1386,12 +1401,14 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("⚙️ Эта функция в разработке")
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.type != "private":
-        return
+    """ИСПРАВЛЕННЫЙ ОБРАБОТЧИК REPLY-КНОПОК"""
+    # Обрабатываем кнопки в личных сообщениях
     if not update.message:
         return
+    
     text = update.message.text
     logger.info(f"Button pressed: {text}")
+    
     try:
         if text == "👊 Шлёпнуть Мишка":
             await shlep(update, context)
@@ -1409,14 +1426,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await mishok(update, context)
         else:
             logger.warning(f"Неизвестная кнопка: {text}")
-            await update.message.reply_text(
-                "Неизвестная команда. Используйте /help для списка команд."
-            )
+            # В чатах не отправляем ответ на неизвестные кнопки
+            if update.effective_chat.type == "private":
+                await update.message.reply_text(
+                    "Неизвестная команда. Используйте /help для списка команд."
+                )
     except Exception as e:
         logger.error(f"Ошибка в button_handler: {e}", exc_info=True)
-        await update.message.reply_text(
-            "⚠️ Произошла ошибка при обработке команды. Попробуйте ещё раз."
-        )
+        if update.effective_chat.type == "private":
+            await update.message.reply_text(
+                "⚠️ Произошла ошибка при обработке команды. Попробуйте ещё раз."
+            )
 
 async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message and update.message.new_chat_members:
