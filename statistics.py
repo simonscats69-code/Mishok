@@ -7,7 +7,6 @@ from utils import format_number
 logger = logging.getLogger(__name__)
 
 def get_favorite_time(user_id: int) -> str:
-    """Возвращает любимое время пользователя для шлёпков"""
     try:
         data = load_data()
         user_data = data["users"].get(str(user_id))
@@ -15,7 +14,6 @@ def get_favorite_time(user_id: int) -> str:
         if not user_data or "damage_history" not in user_data:
             return "⏰ *Любимое время:* данных недостаточно"
         
-        # Анализируем время шлёпков
         hour_counts = {}
         for record in user_data["damage_history"]:
             try:
@@ -28,10 +26,8 @@ def get_favorite_time(user_id: int) -> str:
         if not hour_counts:
             return "⏰ *Любимое время:* данных недостаточно"
         
-        # Находим самое популярное время
         favorite_hour = max(hour_counts.items(), key=lambda x: x[1])[0]
         
-        # Форматируем время
         if 5 <= favorite_hour < 12:
             time_of_day = "утро"
             emoji = "🌅"
@@ -54,7 +50,6 @@ def get_favorite_time(user_id: int) -> str:
         return "⏰ *Любимое время:* ошибка расчета"
 
 def get_comparison_stats(user_id: int) -> Dict[str, Any]:
-    """Сравнивает пользователя с другими"""
     try:
         data = load_data()
         all_users = data.get("users", {})
@@ -67,11 +62,9 @@ def get_comparison_stats(user_id: int) -> Dict[str, Any]:
                 "percentile": 100
             }
         
-        # Статистика текущего пользователя
         user_data = all_users.get(str(user_id))
         user_shleps = user_data.get("total_shleps", 0) if user_data else 0
         
-        # Собираем статистику всех пользователей
         all_shleps = []
         for uid, udata in all_users.items():
             if "total_shleps" in udata:
@@ -85,11 +78,9 @@ def get_comparison_stats(user_id: int) -> Dict[str, Any]:
                 "percentile": 100
             }
         
-        # Рассчитываем статистику
         total_users = len(all_shleps)
         avg_shleps = sum(all_shleps) / total_users
         
-        # Определяем ранг
         sorted_shleps = sorted(all_shleps, reverse=True)
         
         try:
@@ -97,7 +88,6 @@ def get_comparison_stats(user_id: int) -> Dict[str, Any]:
         except ValueError:
             rank = total_users + 1
         
-        # Процентиль (сколько пользователей позади)
         if total_users > 1:
             behind = total_users - rank
             percentile = (behind / (total_users - 1)) * 100
@@ -121,7 +111,6 @@ def get_comparison_stats(user_id: int) -> Dict[str, Any]:
         }
 
 def get_global_trends_info() -> Dict[str, Any]:
-    """Возвращает информацию о глобальных трендах"""
     try:
         data = load_data()
         
@@ -131,7 +120,6 @@ def get_global_trends_info() -> Dict[str, Any]:
         timestamps = data["timestamps"]
         now = datetime.now()
         
-        # За последние 24 часа
         last_24h = []
         active_users_24h = set()
         
@@ -143,15 +131,12 @@ def get_global_trends_info() -> Dict[str, Any]:
         
         shleps_24h = sum(last_24h)
         
-        # Сегодня
         today_key = now.strftime("%Y-%m-%d")
         active_today = len(timestamps.get(today_key, {}).get("users", set())) if today_key in timestamps else 0
         
-        # Текущий час
         current_hour_key = now.strftime("%Y-%m-%d %H:00")
         shleps_this_hour = timestamps.get(current_hour_key, {}).get("count", 0) if current_hour_key in timestamps else 0
         
-        # Среднее на пользователя
         avg_per_user_24h = shleps_24h / len(active_users_24h) if active_users_24h else 0
         
         return {
@@ -168,7 +153,6 @@ def get_global_trends_info() -> Dict[str, Any]:
         return {}
 
 def format_daily_activity_chart(user_id: int, days: int = 7) -> str:
-    """Форматирует график ежедневной активности"""
     try:
         from database import get_user_activity
         
@@ -182,15 +166,13 @@ def format_daily_activity_chart(user_id: int, days: int = 7) -> str:
         if not daily_data:
             return "📅 *Активность:* данных нет"
         
-        # Находим максимум для масштабирования
         max_count = max([day["count"] for day in daily_data] + [1])
         
         chart_lines = []
-        for day in daily_data[-7:]:  # Последние 7 дней
+        for day in daily_data[-7:]:
             date_parts = day["date"].split("-")
             date_label = f"{date_parts[2]}.{date_parts[1]}"
             
-            # Простой ASCII график
             bar_length = int((day["count"] / max_count) * 10)
             bar = "█" * bar_length + "░" * (10 - bar_length)
             
@@ -204,11 +186,10 @@ def format_daily_activity_chart(user_id: int, days: int = 7) -> str:
         return "📅 *Активность:* ошибка отображения"
 
 def format_hourly_distribution_chart(user_id: int) -> str:
-    """Форматирует график распределения по часам"""
     try:
         from database import get_user_activity
         
-        activity = get_user_activity(user_id, 30)  # За 30 дней
+        activity = get_user_activity(user_id, 30)
         
         if not activity or "hourly" not in activity:
             return "⏰ *По часам:* данных нет"
@@ -218,7 +199,6 @@ def format_hourly_distribution_chart(user_id: int) -> str:
         if not hourly_data:
             return "⏰ *По часам:* данных нет"
         
-        # Группируем по времени суток
         time_blocks = {
             "🌙 Ночь (00-05)": 0,
             "🌅 Утро (06-11)": 0,
@@ -238,13 +218,12 @@ def format_hourly_distribution_chart(user_id: int) -> str:
             elif 18 <= hour <= 23:
                 time_blocks["🌆 Вечер (18-23)"] += count
         
-        # Находим максимум для масштабирования
         max_count = max(time_blocks.values()) or 1
         
         chart_lines = []
         for label, count in time_blocks.items():
             percentage = (count / max_count) * 100
-            bar_length = int(percentage / 10)  # 0-10 символов
+            bar_length = int(percentage / 10)
             
             bar = "█" * bar_length + "░" * (10 - bar_length)
             count_str = str(count).rjust(3)
@@ -258,7 +237,6 @@ def format_hourly_distribution_chart(user_id: int) -> str:
         return "⏰ *По часам:* ошибка отображения"
 
 def get_streak_info(user_id: int) -> Dict[str, Any]:
-    """Возвращает информацию о сериях (стриках)"""
     try:
         data = load_data()
         user_data = data["users"].get(str(user_id))
@@ -266,7 +244,6 @@ def get_streak_info(user_id: int) -> Dict[str, Any]:
         if not user_data or "damage_history" not in user_data:
             return {"current_streak": 0, "max_streak": 0, "last_activity": None}
         
-        # Сортируем историю по времени
         history = sorted(
             user_data["damage_history"],
             key=lambda x: datetime.fromisoformat(x["timestamp"]),
@@ -276,12 +253,6 @@ def get_streak_info(user_id: int) -> Dict[str, Any]:
         if not history:
             return {"current_streak": 0, "max_streak": 0, "last_activity": None}
         
-        # Анализируем стрики
-        current_streak = 0
-        max_streak = 0
-        last_date = None
-        
-        # Получаем все уникальные даты
         dates_set = set()
         for record in history:
             try:
@@ -293,27 +264,22 @@ def get_streak_info(user_id: int) -> Dict[str, Any]:
         if not dates_set:
             return {"current_streak": 0, "max_streak": 0, "last_activity": None}
         
-        # Сортируем даты
         dates = sorted(dates_set, reverse=True)
         
-        # Текущий стрик (последовательные дни)
         today = datetime.now().date()
         streak_days = 0
         
         for i, date in enumerate(dates):
             if i == 0:
-                # Проверяем, был ли сегодня
                 if date == today:
                     streak_days = 1
                 else:
-                    # Проверяем, был ли вчера
                     yesterday = today - timedelta(days=1)
                     if date == yesterday:
                         streak_days = 1
                     else:
                         break
             else:
-                # Проверяем последовательность дней
                 prev_date = dates[i-1]
                 expected_date = prev_date - timedelta(days=1)
                 
@@ -324,7 +290,6 @@ def get_streak_info(user_id: int) -> Dict[str, Any]:
         
         current_streak = streak_days
         
-        # Максимальный стрик (по всем данным)
         all_dates = sorted(dates_set)
         max_consecutive = 0
         current_consecutive = 1 if all_dates else 0
@@ -352,7 +317,6 @@ def get_streak_info(user_id: int) -> Dict[str, Any]:
         return {"current_streak": 0, "max_streak": 0, "last_activity": None}
 
 def get_achievements(user_id: int) -> List[Dict[str, Any]]:
-    """Возвращает достижения пользователя"""
     try:
         data = load_data()
         user_data = data["users"].get(str(user_id))
@@ -365,7 +329,6 @@ def get_achievements(user_id: int) -> List[Dict[str, Any]]:
         
         achievements = []
         
-        # Достижения по количеству шлёпков
         if total_shleps >= 1:
             achievements.append({
                 "title": "🎯 Первый шлёпок",
@@ -394,7 +357,6 @@ def get_achievements(user_id: int) -> List[Dict[str, Any]]:
                 "unlocked": True
             })
         
-        # Достижения по урону
         if max_damage >= 30:
             achievements.append({
                 "title": "💥 Силач",
@@ -416,7 +378,6 @@ def get_achievements(user_id: int) -> List[Dict[str, Any]]:
                 "unlocked": True
             })
         
-        # Специальные достижения
         streak_info = get_streak_info(user_id)
         if streak_info["current_streak"] >= 3:
             achievements.append({
