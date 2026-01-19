@@ -8,7 +8,7 @@ from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
-# ИЗМЕНЕНО: Путь к файлу данных
+# Путь к файлу данных
 DATA_FILE = "/data/mishok_data.json"
 BACKUP_DIR = "/data/backups"
 
@@ -34,6 +34,7 @@ def ensure_data_file():
         }
         save_data(default_data)
         logger.info(f"Создан новый файл данных: {DATA_FILE}")
+        return default_data
     else:
         # Проверяем структуру существующего файла
         try:
@@ -57,11 +58,12 @@ def ensure_data_file():
                 return fix_data_structure(data)
             else:
                 logger.info(f"Файл данных найден и структура корректна: {DATA_FILE}")
+                return data
                 
         except Exception as e:
             logger.error(f"Ошибка проверки файла данных: {e}")
             # Создаем новый файл при ошибке
-            create_new_data_file()
+            return create_new_data_file()
 
 def load_data_raw():
     """Загружает данные из файла без обработки"""
@@ -153,6 +155,11 @@ def fix_data_structure(old_data):
             "max_damage_date": old_data["global_stats"].get("max_damage_date"),
             "total_users": len(new_data["users"])
         }
+    else:
+        # Вычисляем total_shleps из пользователей
+        total_shleps = sum(user.get("total_shleps", 0) for user in new_data["users"].values())
+        new_data["global_stats"]["total_shleps"] = total_shleps
+        new_data["global_stats"]["total_users"] = len(new_data["users"])
     
     # Сохраняем исправленные данные
     save_data(new_data)
@@ -607,9 +614,13 @@ def check_data_integrity():
     # Проверяем структуру пользователей
     for user_id, user_data in data.get("users", {}).items():
         required_user_keys = ["username", "total_shleps", "max_damage", "last_shlep", "damage_history", "chat_stats"]
+        missing_keys = []
         for key in required_user_keys:
             if key not in user_data:
-                warnings.append(f"Пользователь {user_id}: отсутствует ключ {key}")
+                missing_keys.append(key)
+        
+        if missing_keys:
+            warnings.append(f"Пользователь {user_id}: отсутствуют ключи {missing_keys}")
     
     # Проверяем согласованность счетчиков
     total_from_users = sum(user.get("total_shleps", 0) for user in data.get("users", {}).values())
@@ -630,9 +641,9 @@ def check_data_integrity():
 
 def migrate_old_data():
     """Мигрирует данные из старого формата в новый"""
-    logger.info("Начало миграции данных...")
+    logger.info("Проверка структуры данных...")
     ensure_data_file()
-    logger.info("Миграция завершена")
+    logger.info("Проверка завершена")
 
 # Инициализация при импорте
 migrate_old_data()
