@@ -37,7 +37,7 @@ def command_handler(func):
                 if update.message:
                     await update.message.reply_text("⚠️ Ошибка выполнения команды")
                 elif update.callback_query:
-                    await update.callback_query.message.reply_text("⚠️ Ошибка выполнения команды")
+                    await update.callback_query.message.reply_text("⚠️ Ошибка выполнения команда")
             except:
                 pass
     return wrapper
@@ -82,16 +82,16 @@ def calc_level(cnt):
     }
 
 def level_title(lvl):
-    if lvl >= 1000: return ("🌌 ВСЕЛЕНСКИЙ ШЛЁПКО -БОГ", "Ты создал свою вселенную шлёпков!")
+    if lvl >= 1000: return ("🌌 ВСЕЛЕНСКИЙ ШЛЁПКО-БОГ", "Ты создал свою вселенную шлёпков!")
     if lvl >= 950: return ("⚡ АБСОЛЮТНЫЙ ПОВЕЛИТЕЛЬ", "Даже боги трепещут перед тобой!")
     if lvl >= 900: return ("🔥 БЕССМЕРТНЫЙ ТИТАН", "Твоя сила преодолела смерть!")
     if lvl >= 850: return ("🌟 ХРАНИТЕЛЬ ГАЛАКТИКИ", "Целые галактики под твоей властью!")
     if lvl >= 800: return ("👑 ВЛАСТЕЛИН ВСЕХ ИЗМЕРЕНИЙ", "Пространство и время подчиняются тебе!")
-    if lvl >= 750: return ("💎 БОЖЕСТВЕННЫЙ АРХИТЕКТОР", "Ты строишь реальность шlёпками!")
+    if lvl >= 750: return ("💎 БОЖЕСТВЕННЫЙ АРХИТЕКТОР", "Ты строишь реальность шлёпками!")
     if lvl >= 700: return ("⭐ ВЕЧНЫЙ ИМПЕРАТОР", "Твоя империя будет существовать вечно!")
-    if lvl >= 650: return ("🌠 КОСМИЧЕСКИЙ ДЕМИУРГ", "Создаёшь звёзды одним шlёпком!")
+    if lvl >= 650: return ("🌠 КОСМИЧЕСКИЙ ДЕМИУРГ", "Создаёшь звёзды одним шлёпком!")
     if lvl >= 600: return ("⚡ ПРЕВОСХОДНЫЙ БОГО-ЦАРЬ", "Ты — высшая форма существования!")
-    if lvl >= 550: return ("🔥 МИРОТВОРЕЦ ВСЕЛЕННОЙ", "Твоим шlёпком устанавливается мир!")
+    if lvl >= 550: return ("🔥 МИРОТВОРЕЦ ВСЕЛЕННОЙ", "Твоим шлёпком устанавливается мир!")
     if lvl >= 500: return ("🌟 ВЕРХОВНЫЙ БОГ ШЛЁПКОВ", "Тебе поклоняются миллионы!")
     if lvl >= 450: return ("👑 НЕБЕСНЫЙ ПАТРИАРХ", "Твоя династия будет править вечно!")
     if lvl >= 400: return ("💎 ЗВЁЗДНЫЙ МОНАРХ", "Царствуешь среди звёзд!")
@@ -185,7 +185,7 @@ async def update_duel_message(context: ContextTypes.DEFAULT_TYPE, duel_id: str,
             f"   📊 Средний урон: {format_damage(duel['challenger_damage'] // max(duel['challenger_shleps'], 1))}\n\n"
             f"👤 {duel['target_name']}:\n"
             f"   🔥 Урон: {format_damage(duel['target_damage'])}\n"
-            f"   👊 Шlёпков: {duel['target_shleps']}\n"
+            f"   👊 Шлёпков: {duel['target_shleps']}\n"
             f"   📊 Средний урон: {format_damage(duel['target_damage'] // max(duel['target_shleps'], 1))}\n\n"
             f"⏱️ Длительность: 5 минут\n"
             f"📈 Общий урон: {format_damage(total_damage)}"
@@ -400,7 +400,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     maxu_safe = escape_markdown(maxu or 'Нет', version=1)
     
-    text = f"📊 ГЛОБАЛЬНАЯ СТАТИСТИКА\n👑 РЕКОРД УРОНА: {maxd} единиц\n👤 Рекордсмен: {maxu_safe}\n📅 Дата рекорда: {maxdt.strftime('%d.%m.%Y %H:%M') if maxdt else '—'}\n🔢 Всего шlёпков: {format_num(total)}\n⏰ Последний шlёпок: {last.strftime('%d.%m.%Y %H:%M') if last else 'нет'}"
+    text = f"📊 ГЛОБАЛЬНАЯ СТАТИСТИКА\n👑 РЕКОРД УРОНА: {maxd} единиц\n👤 Рекордсмен: {maxu_safe}\n📅 Дата рекорда: {maxdt.strftime('%d.%m.%Y %H:%M') if maxdt else '—'}\n🔢 Всего шлёпков: {format_num(total)}\n⏰ Последний шлёпок: {last.strftime('%d.%m.%Y %H:%M') if last else 'нет'}"
     
     if top:
         text += "\n\n🏆 ТОП ШЛЁПАТЕЛЕЙ:\n"
@@ -436,10 +436,10 @@ async def level(update: Update, context: ContextTypes.DEFAULT_TYPE):
     safe_name = escape_markdown(user.first_name, version=1)
     safe_advice = escape_markdown(advice, version=1)
     
-    text = f"🎯 ТВОЙ УРОВЕНЬ\n👤 Игрок: {safe_name}\n📊 Шlёпков: {format_num(cnt)}\n🎯 Уровень: {lvl['level']} ({title})\n{bar} {lvl['progress']}%\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n🎯 До след. уровня: {lvl['next']} шlёпков\n💡 {advice}"
+    text = f"🎯 ТВОЙ УРОВЕНЬ\n👤 Игрок: {safe_name}\n📊 Шлёпков: {format_num(cnt)}\n🎯 Уровень: {lvl['level']} ({title})\n{bar} {lvl['progress']}%\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n🎯 До след. уровня: {lvl['next']} шлёпков\n💡 {advice}"
     
     if last:
-        text += f"\n⏰ Последний шlёпок: {last.strftime('%d.%m.%Y %H:%M')}"
+        text += f"\n⏰ Последний шлёпок: {last.strftime('%d.%m.%Y %H:%M')}"
     
     await msg.reply_text(text)
 
@@ -455,10 +455,10 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lvl = calc_level(cnt)
     compare_stats = get_comparison_stats(user.id)
     
-    text = f"📈 ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Всего шlёпков: {format_num(cnt)}\n🎯 Уровень: {lvl['level']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n{get_favorite_time(user.id)}\n📊 Сравнение с другими:\n👥 Всего игроков: {compare_stats.get('total_users', 0)}\n📈 Среднее на игрока: {compare_stats.get('avg_shleps', 0)}\n🏆 Твой ранг: {compare_stats.get('rank', 1)}\n📊 Лучше чем: {compare_stats.get('percentile', 0)}% игроков\n📅 Активность за неделю:\n{format_daily_activity_chart(user.id, 7)}"
+    text = f"📈 ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Всего шлёпков: {format_num(cnt)}\n🎯 Уровень: {lvl['level']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n{get_favorite_time(user.id)}\n📊 Сравнение с другими:\n👥 Всего игроков: {compare_stats.get('total_users', 0)}\n📈 Среднее на игрока: {compare_stats.get('avg_shleps', 0)}\n🏆 Твой ранг: {compare_stats.get('rank', 1)}\n📊 Лучше чем: {compare_stats.get('percentile', 0)}% игроков\n📅 Активность за неделю:\n{format_daily_activity_chart(user.id, 7)}"
     
     if last:
-        text += f"\n⏰ Последний шlёпок: {last.strftime('%d.%m.%Y %H:%M')}"
+        text += f"\n⏰ Последний шлёпок: {last.strftime('%d.%m.%Y %H:%M')}"
     
     await msg.reply_text(text)
 
@@ -474,7 +474,7 @@ async def trends(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("📊 Данные временно недоступны")
         return
     
-    text = f"📊 ГЛОБАЛЬНЫЕ ТРЕНДЫ\n👥 Активных за 24 часа: {trends_data.get('active_users_24h', 0)}\n👊 Шlёпков за 24 часа: {trends_data.get('shleps_24h', 0)}\n📈 Среднее на игрока: {trends_data.get('avg_per_user_24h', 0)}\n🔥 Активных сегодня: {trends_data.get('active_today', 0)}\n⏰ Текущий час: {trends_data.get('current_hour', 0):02d}:00\n👊 Шlёпков в этом часу: {trends_data.get('shleps_this_hour', 0)}"
+    text = f"📊 ГЛОБАЛЬНЫЕ ТРЕНДЫ\n👥 Активных за 24 часа: {trends_data.get('active_users_24h', 0)}\n👊 Шлёпков за 24 часа: {trends_data.get('shleps_24h', 0)}\n📈 Среднее на игрока: {trends_data.get('avg_per_user_24h', 0)}\n🔥 Активных сегодня: {trends_data.get('active_today', 0)}\n⏰ Текущий час: {trends_data.get('current_hour', 0):02d}:00\n👊 Шлёпков в этом часу: {trends_data.get('shleps_this_hour', 0)}"
     
     await msg.reply_text(text)
 
@@ -488,7 +488,7 @@ async def detailed_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     _, cnt, _ = get_user_stats(user.id)
     
-    text = f"📊 РАСШИРЕННАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Шlёпков: {format_num(cnt)}\n{get_favorite_time(user.id)}\n📅 Активность за 2 недели:\n{format_daily_activity_chart(user.id, 14)}\n{format_hourly_distribution_chart(user.id)}\n\nКоманды статистики:\n/my_stats — Краткая статистика\n/trends — Глобальные тренды\n/stats — Общая статистика\n/level — Уровень"
+    text = f"📊 РАСШИРЕННАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Шлёпков: {format_num(cnt)}\n{get_favorite_time(user.id)}\n📅 Активность за 2 недели:\n{format_daily_activity_chart(user.id, 14)}\n{format_hourly_distribution_chart(user.id)}\n\nКоманды статистики:\n/my_stats — Краткая статистика\n/trends — Глобальные тренды\n/stats — Общая статистика\n/level — Уровень"
     
     await msg.reply_text(text)
 
@@ -509,10 +509,10 @@ async def chat_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cache.set(f"chat_stats_{chat.id}", cs)
     
     if not cs:
-        text = "📊 СТАТИСТИКА ЧАТА\n\nВ этом чате ещё не было шlёпков!\nИспользуй /shlep чтобы стать первым! 🎯"
+        text = "📊 СТАТИСТИКА ЧАТА\n\nВ этом чате ещё не было шлёпков!\nИспользуй /shlep чтобы стать первым! 🎯"
     else:
         max_user_safe = escape_markdown(cs.get('max_damage_user', 'Нет'), version=1)
-        text = f"📊 СТАТИСТИКА ЧАТА\n👥 Участников: {cs.get('total_users', 0)}\n👊 Всего шlёпков: {format_num(cs.get('total_shleps', 0))}\n🏆 Рекорд урона: {cs.get('max_damage', 0)} единиц\n👑 Рекордсмен: {max_user_safe}"
+        text = f"📊 СТАТИСТИКА ЧАТА\n👥 Участников: {cs.get('total_users', 0)}\n👊 Всего шлёпков: {format_num(cs.get('total_shleps', 0))}\n🏆 Рекорд урона: {cs.get('max_damage', 0)} единиц\n👑 Рекордсмен: {max_user_safe}"
     
     await msg.reply_text(text)
 
@@ -527,7 +527,7 @@ async def chat_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     top = get_chat_top_users(chat.id, 10)
     
     if not top:
-        await msg.reply_text("🏆 ТОП ЧАТА\n\nВ этом чате пока никто не шlёпал Мишка! Будь первым!")
+        await msg.reply_text("🏆 ТОП ЧАТА\n\nВ этом чате пока никто не шлёпал Мишка! Будь первым!")
         return
     
     text = "🏆 ТОП ШЛЁПАТЕЛЕЙ ЧАТА:\n\n"
@@ -792,13 +792,27 @@ async def create_duel_invitation(update: Update, context: ContextTypes.DEFAULT_T
     user = update.effective_user
     chat = update.effective_chat
     
-    # Создаем ID дуэли
-    duel_id = f"{user.id}_{int(datetime.now().timestamp())}"
+    # Проверяем, не участвует ли пользователь уже в дуэли
+    active_duel = get_user_active_duel(user.id)
+    if active_duel:
+        opponent = active_duel["target_name"] if user.id == active_duel["challenger_id"] else active_duel["challenger_name"]
+        remaining = (datetime.fromisoformat(active_duel["ends_at"]) - datetime.now()).seconds // 60
+        await msg.reply_text(
+            f"⚔️ Вы уже участвуете в дуэли с {opponent}!\n"
+            f"Осталось времени: {remaining} минут\n"
+            f"Закончите текущую дуэль перед началом новой."
+        )
+        return
     
+    # Убираем @ если есть
+    if target_username.startswith("@"):
+        target_username = target_username[1:]
+    
+    # Создаем приглашение с target_id = 0 (будет установлен при принятии)
     created_id = create_duel_invite(
         challenger_id=user.id,
         challenger_name=user.first_name,
-        target_id=0,  # Будет установлен при принятии
+        target_id=0,
         target_name=target_username,
         chat_id=chat.id
     )
@@ -828,52 +842,78 @@ async def create_duel_invitation(update: Update, context: ContextTypes.DEFAULT_T
 async def accept_specific_duel(update: Update, context: ContextTypes.DEFAULT_TYPE, duel_id: str):
     msg = get_message_from_update(update)
     user = update.effective_user
-    from database import load_data
+    
+    from database import load_data, save_data
     data = load_data()
+    
     if "duels" not in data or duel_id not in data["duels"]["invites"]:
         await msg.reply_text("❌ Приглашение не найдено или просрочено")
         return
+    
     invite = data["duels"]["invites"][duel_id]
+    
+    # Обновляем target_id и сохраняем
     invite["target_id"] = user.id
+    invite["target_name"] = user.first_name
+    save_data(data)
+    
     from keyboard import get_duel_invite_keyboard
     kb = get_duel_invite_keyboard(invite["challenger_id"], user.id, duel_id)
+    
     text = (
         f"⚔️ ПРИГЛАШЕНИЕ НА ДУЭЛЬ\n\n"
         f"От: {invite['challenger_name']}\n"
         f"ID дуэли: `{duel_id}`\n\n"
         f"Принять вызов?"
     )
+    
     await msg.reply_text(text, reply_markup=kb)
 
 async def accept_duel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = get_message_from_update(update)
     user = update.effective_user
-    from database import load_data
+    
+    from database import load_data, save_data
     data = load_data()
+    
     if "duels" not in data or "invites" not in data["duels"]:
         await msg.reply_text("❌ У вас нет приглашений на дуэль")
         return
+    
     user_invites = []
     for duel_id, invite in data["duels"]["invites"].items():
         target_name_lower = invite["target_name"].lower().replace("@", "")
         user_username_lower = (user.username or "").lower().replace("@", "")
         user_first_name_lower = user.first_name.lower()
-        if (target_name_lower in user_username_lower or 
-            target_name_lower in user_first_name_lower or
-            user_username_lower in target_name_lower or
-            user_first_name_lower in target_name_lower):
+        
+        if (target_name_lower == user_username_lower or 
+            target_name_lower == user_first_name_lower or
+            user_username_lower == target_name_lower or
+            user_first_name_lower == target_name_lower or
+            target_name_lower in user_username_lower or 
+            target_name_lower in user_first_name_lower):
+            
+            # Обновляем invite
             invite["target_id"] = user.id
+            invite["target_name"] = user.first_name
             user_invites.append(invite)
+    
     if not user_invites:
         await msg.reply_text("❌ У вас нет приглашений на дуэль")
         return
+    
+    # Сохраняем изменения
+    save_data(data)
+    
     invite = user_invites[0]
     from keyboard import get_duel_invite_keyboard
     kb = get_duel_invite_keyboard(invite["challenger_id"], user.id, invite["id"])
+    
     text = (
         f"⚔️ У вас есть приглашение от {invite['challenger_name']}\n\n"
         f"Принять вызов?"
     )
+    
     await msg.reply_text(text, reply_markup=kb)
 
 @command_handler
@@ -882,8 +922,11 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = get_message_from_update(update)
     if not msg:
         return
+    
     user = update.effective_user
     chat = update.effective_chat
+    
+    # Проверяем активную дуэль
     active_duel = get_user_active_duel(user.id)
     if active_duel:
         opponent = active_duel["target_name"] if user.id == active_duel["challenger_id"] else active_duel["challenger_name"]
@@ -894,10 +937,13 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Закончите текущую дуэль перед началом новой."
         )
         return
+    
     if not context.args:
         await show_duel_info(update, context)
         return
+    
     command = context.args[0].lower()
+    
     if command == "accept":
         await accept_duel_command(update, context)
     elif command == "accept_id" and len(context.args) > 1:
@@ -926,8 +972,10 @@ async def list_duels_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     msg = get_message_from_update(update)
     from database import load_data
     data = load_data()
+    
     text = "⚔️ ДУЭЛИ\n\n"
     text += "Активные дуэли:\n"
+    
     if "duels" in data and data["duels"]["active"]:
         for duel_id, duel in data["duels"]["active"].items():
             remaining = (datetime.fromisoformat(duel["ends_at"]) - datetime.now()).seconds // 60
@@ -935,6 +983,7 @@ async def list_duels_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             text += f"  Счёт: {duel['challenger_damage']}-{duel['target_damage']}\n\n"
     else:
         text += "Нет активных дуэлей\n\n"
+    
     text += "Приглашения:\n"
     if "duels" in data and data["duels"]["invites"]:
         for duel_id, invite in data["duels"]["invites"].items():
@@ -942,38 +991,48 @@ async def list_duels_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             text += f"• {invite['challenger_name']} → {invite['target_name']} ({expires} мин)\n"
     else:
         text += "Нет приглашений\n"
+    
     await msg.reply_text(text)
 
 async def cancel_duel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = get_message_from_update(update)
     user = update.effective_user
+    
     from database import load_data, save_data
     data = load_data()
+    
     if "duels" not in data or "invites" not in data["duels"]:
         await msg.reply_text("❌ У вас нет активных вызовов")
         return
+    
     user_invites = []
     for duel_id, invite in data["duels"]["invites"].items():
         if invite["challenger_id"] == user.id:
             user_invites.append(duel_id)
+    
     if not user_invites:
         await msg.reply_text("❌ У вас нет активных вызовов")
         return
+    
     for duel_id in user_invites:
         del data["duels"]["invites"][duel_id]
+    
     save_data(data)
     await msg.reply_text(f"✅ Отменено {len(user_invites)} вызовов")
 
 async def duel_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = get_message_from_update(update)
     user = update.effective_user
+    
     from database import load_data
     data = load_data()
+    
     wins = 0
     losses = 0
     draws = 0
     total_damage = 0
     total_reward = 0
+    
     if "duels" in data and "history" in data["duels"]:
         for duel in data["duels"]["history"]:
             if duel["challenger_id"] == user.id or duel["target_id"] == user.id:
@@ -984,10 +1043,12 @@ async def duel_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     draws += 1
                 else:
                     losses += 1
+                
                 if duel["challenger_id"] == user.id:
                     total_damage += duel["challenger_damage"]
                 else:
                     total_damage += duel["target_damage"]
+    
     text = (
         f"⚔️ ВАША СТАТИСТИКА ДУЭЛЕЙ\n\n"
         f"📊 Результаты:\n"
@@ -997,8 +1058,11 @@ async def duel_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         f"🔥 Урон в дуэлях: {format_num(total_damage)}\n"
         f"🎯 Всего бонусного урона: +{total_reward}\n\n"
     )
-    if (wins+losses+draws) > 0:
-        text += f"📈 Процент побед: {wins/(wins+losses+draws)*100:.1f}%"
+    
+    if (wins + losses + draws) > 0:
+        win_rate = wins / (wins + losses + draws) * 100
+        text += f"📈 Процент побед: {win_rate:.1f}%"
+    
     await msg.reply_text(text)
 
 @command_handler
@@ -1007,7 +1071,9 @@ async def roles(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = get_message_from_update(update)
     if not msg:
         return
-    text = "👑 РОЛИ В ЧАТЕ\n\nКак получить роли:\n• 👑 Король шlёпков — быть топ-1 в чате\n• 🎯 Самый меткий — нанести максимальный урон\n• ⚡ Спринтер — сделать 10+ шлёпков за 5 минут\n• 💪 Силач — нанести урон 40+ единиц\n\nИспользуй /chat_top чтобы увидеть текущих лидеров!"
+    
+    text = "👑 РОЛИ В ЧАТЕ\n\nКак получить роли:\n• 👑 Король шлёпков — быть топ-1 в чате\n• 🎯 Самый меткий — нанести максимальный урон\n• ⚡ Спринтер — сделать 10+ шлёпков за 5 минут\n• 💪 Силач — нанести урон 40+ единиц\n\nИспользуй /chat_top чтобы увидеть текущих лидеров!"
+    
     await msg.reply_text(text)
 
 @command_handler
@@ -1015,7 +1081,9 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = get_message_from_update(update)
     if not msg:
         return
-    text = "🆘 ПОМОЩЬ\n\nОсновные команды:\n/start — Начало работы\n/shlep — Шlёпнуть Мишка\n/stats — Глобальная статистика\n/level — Твой уровень\n/my_stats — Детальная статистика\n/detailed_stats — Расширенная статистика\n/trends — Глобальные тренды\n/mishok — О Мишке\n\nДля чатов:\n/chat_stats — Статистика чата\n/chat_top — Топ игроков чата\n/vote — Голосование\n/duel — Дуэль\n/roles — Роли в чате\n\nНовое: Шлёпай в одном окне без спама сообщений!"
+    
+    text = "🆘 ПОМОЩЬ\n\nОсновные команды:\n/start — Начало работы\n/shlep — Шлёпнуть Мишка\n/stats — Глобальная статистика\n/level — Твой уровень\n/my_stats — Детальная статистика\n/detailed_stats — Расширенная статистика\n/trends — Глобальные тренды\n/mishok — О Мишке\n\nДля чатов:\n/chat_stats — Статистика чата\n/chat_top — Топ игроков чата\n/vote — Голосование\n/duel — Дуэль\n/roles — Роли в чате\n\nНовое: Шлёпай в одном окне без спама сообщений!"
+    
     await msg.reply_text(text)
 
 @command_handler
@@ -1024,6 +1092,7 @@ async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = get_message_from_update(update)
         if not msg:
             return
+        
         await msg.reply_text(
             MISHOK_INTRO,
             disable_web_page_preview=True
@@ -1034,11 +1103,11 @@ async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if update.message:
                 await update.message.reply_text(
-                    "ℹ️ Информация о Мишке:\n\nЯ — Мишок Лысый, бот для шlёпок! Используй /help для команд."
+                    "ℹ️ Информация о Мишке:\n\nЯ — Мишок Лысый, бот для шлёпок! Используй /help для команд."
                 )
             elif update.callback_query:
                 await update.callback_query.message.reply_text(
-                    "ℹ️ Информация о Мишке:\n\nЯ — Мишок Лысый, бот для шlёпок!"
+                    "ℹ️ Информация о Мишке:\n\nЯ — Мишок Лысый, бот для шлёпок!"
                 )
         except Exception as e2:
             logger.error(f"Не удалось отправить сообщение об ошибке: {e2}")
@@ -1048,10 +1117,12 @@ async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = get_message_from_update(update)
     if not msg:
         return
+    
     ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
     if update.effective_user.id != ADMIN_ID:
         await msg.reply_text("⚠️ Эта команда только для администраторов!")
         return
+    
     ok, result = backup_database()
     await msg.reply_text("✅ Бэкап создан!" if ok else f"❌ Ошибка: {result}")
 
@@ -1060,6 +1131,7 @@ async def storage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = get_message_from_update(update)
     if not msg:
         return
+    
     import os
     text = "📂 Информация о хранилище:\n"
     paths = [
@@ -1070,6 +1142,7 @@ async def storage(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ("/mnt/storage", "Основное хранилище (альтернативное)"),
         ("/data", "Общее хранилище")
     ]
+    
     for p, d in paths:
         ex = os.path.exists(p)
         if ex and os.path.isfile(p):
@@ -1077,6 +1150,7 @@ async def storage(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += f"{'✅' if ex else '❌'} {d}: {p} ({sz/1024:.1f} KB)\n"
         else:
             text += f"{'✅' if ex else '❌'} {d}: {p}\n"
+    
     text += f"\n💾 Версия Бота: Bothost Storage Ready"
     await msg.reply_text(text)
 
@@ -1085,13 +1159,15 @@ async def check_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = get_message_from_update(update)
     if not msg:
         return
+    
     try:
         result = check_data_integrity()
         text = "🔍 ПРОВЕРКА ЦЕЛОСТНОСТИ ДАННЫХ\n\n"
         text += f"📊 Статистика:\n"
         text += f"👥 Пользователей: {result['stats']['users']}\n"
         text += f"💬 Чатов: {result['stats']['chats']}\n"
-        text += f"👊 Всего шlёпков: {result['stats']['total_shleps']}\n\n"
+        text += f"👊 Всего шлёпков: {result['stats']['total_shleps']}\n\n"
+        
         if result['errors']:
             text += "❌ КРИТИЧЕСКИЕ ОШИБКИ:\n"
             for error in result['errors']:
@@ -1099,6 +1175,7 @@ async def check_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += "\n"
         else:
             text += "✅ Критических ошибок нет\n\n"
+        
         if result['warnings']:
             text += "⚠️ ПРЕДУПРЕЖДЕНИЯ:\n"
             for warning in result['warnings'][:5]:
@@ -1107,6 +1184,7 @@ async def check_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text += f"... и ещё {len(result['warnings']) - 5} предупреждений\n"
         else:
             text += "✅ Предупреждений нет\n"
+        
         await msg.reply_text(text)
     except Exception as e:
         await msg.reply_text(f"❌ Ошибка проверки: {str(e)}")
@@ -1116,13 +1194,16 @@ async def repair(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = get_message_from_update(update)
     if not msg:
         return
+    
     from config import ADMIN_ID
     if update.effective_user.id != ADMIN_ID:
         await msg.reply_text("⚠️ Эта команда только для администраторов!")
         return
+    
     try:
         await msg.reply_text("🔄 Восстановление структуры данных...")
         success = repair_data_structure()
+        
         if success:
             from database import load_data
             data = load_data()
@@ -1130,11 +1211,12 @@ async def repair(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "✅ СТРУКТУРА ДАННЫХ ВОССТАНОВЛЕНА\n\n"
                 f"👥 Пользователей: {len(data.get('users', {}))}\n"
                 f"💬 Чатов: {len(data.get('chats', {}))}\n"
-                f"👊 Всего шlёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n\n"
+                f"👊 Всего шлёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n\n"
                 "Ошибки больше не должны возникать!"
             )
         else:
             text = "❌ Не удалось восстановить структуру данных"
+        
         await msg.reply_text(text)
     except Exception as e:
         await msg.reply_text(f"❌ Ошибка: {str(e)}")
@@ -1144,11 +1226,14 @@ async def data_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     import os
     import json
     from datetime import datetime
+    
     msg = get_message_from_update(update)
     if not msg:
         return
+    
     DATA_FILE = "/data/mishok_data.json"
     text = "📁 ИНФОРМАЦИЯ О ФАЙЛЕ ДАННЫХ\n\n"
+    
     if os.path.exists(DATA_FILE):
         try:
             size = os.path.getsize(DATA_FILE)
@@ -1156,16 +1241,20 @@ async def data_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text += f"📍 Путь: {DATA_FILE}\n"
             text += f"📏 Размер: {size:,} байт\n".replace(",", " ")
             text += f"📅 Изменен: {modified.strftime('%d.%m.%Y %H:%M:%S')}\n"
+            
             with open(DATA_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+            
             text += f"\n📊 СОДЕРЖИМОЕ:\n"
             text += f"• Пользователей: {len(data.get('users', {}))}\n"
             text += f"• Чатов: {len(data.get('chats', {}))}\n"
-            text += f"• Всего шlёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n"
+            text += f"• Всего шлёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n"
             text += f"• Макс. урон: {data.get('global_stats', {}).get('max_damage', 0)}\n"
             text += f"• Записей в истории: {len(data.get('records', []))}\n"
+            
             required_keys = ["users", "chats", "global_stats", "timestamps", "records"]
             missing_keys = [k for k in required_keys if k not in data]
+            
             if missing_keys:
                 text += f"\n⚠️ Отсутствуют ключи: {missing_keys}\n"
             else:
@@ -1175,23 +1264,27 @@ async def data_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         text += f"❌ Файл не найден: {DATA_FILE}\n"
         text += "Используйте /repair для восстановления структуры данных"
+    
     await msg.reply_text(text)
 
 async def start_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
         return
+    
     await query.answer()
     user = update.effective_user
     safe_name = escape_markdown(user.first_name, version=1)
-    text = f"👤 {safe_name}, начинаем сессию шлёпания!\n\nНажимай '👊 Ещё раз!' для следующего шlёпка\nТекущие результаты будут обновляться здесь"
+    text = f"👤 {safe_name}, начинаем сессию шлёпания!\n\nНажимай '👊 Ещё раз!' для следующего шлёпка\nТекущие результаты будут обновляться здесь"
     await perform_shlep(update, context, edit_message=query.message)
 
 async def handle_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYPE, action: str):
     query = update.callback_query
     if not query:
         return
+    
     await query.answer()
+    
     if action == "shlep_again":
         await perform_shlep(update, context, edit_message=query.message)
     elif action == "shlep_level":
@@ -1202,12 +1295,15 @@ async def handle_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYP
         else:
             u, cnt, last = get_user_stats(user.id)
             await cache.set(f"user_stats_{user.id}", (u, cnt, last))
+        
         lvl = calc_level(cnt)
         title, advice = level_title(lvl['level'])
         bar = "█" * min(lvl['progress'] // 10, 10) + "░" * (10 - min(lvl['progress'] // 10, 10))
         safe_name = escape_markdown(user.first_name, version=1)
         safe_advice = escape_markdown(advice, version=1)
-        text = f"🎯 ТВОЙ УРОВЕНЬ\n👤 Игрок: {safe_name}\n📊 Шlёпков: {format_num(cnt)}\n🎯 Уровень: {lvl['level']} ({title})\n{bar} {lvl['progress']}%\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n🎯 До след. уровня: {lvl['next']} шlёпков\n💡 {advice}"
+        
+        text = f"🎯 ТВОЙ УРОВЕНЬ\n👤 Игрок: {safe_name}\n📊 Шлёпков: {format_num(cnt)}\n🎯 Уровень: {lvl['level']} ({title})\n{bar} {lvl['progress']}%\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n🎯 До след. уровня: {lvl['next']} шлёпков\n💡 {advice}"
+        
         await query.message.edit_text(text, reply_markup=get_shlep_session_keyboard())
     elif action == "shlep_stats":
         cached = await cache.get("global_stats")
@@ -1216,151 +1312,230 @@ async def handle_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYP
         else:
             total, last, maxd, maxu, maxdt = get_stats()
             await cache.set("global_stats", (total, last, maxd, maxu, maxdt))
+        
         maxu_safe = escape_markdown(maxu or 'Нет', version=1)
-        text = f"📊 ГЛОБАЛЬНАЯ СТАТИСТИКА\n👑 РЕКОРД УРОНА: {maxd} единиц\n👤 Рекордсмен: {maxu_safe}\n📅 Дата рекорда: {maxdt.strftime('%d.%m.%Y %H:%M') if maxdt else '—'}\n🔢 Всего шlёпков: {format_num(total)}\n⏰ Последний шlёпок: {last.strftime('%d.%m.%Y %H:%M') if last else 'нет'}"
+        text = f"📊 ГЛОБАЛЬНАЯ СТАТИСТИКА\n👑 РЕКОРД УРОНА: {maxd} единиц\n👤 Рекордсмен: {maxu_safe}\n📅 Дата рекорда: {maxdt.strftime('%d.%m.%Y %H:%M') if maxdt else '—'}\n🔢 Всего шлёпков: {format_num(total)}\n⏰ Последний шлёпок: {last.strftime('%d.%m.%Y %H:%M') if last else 'нет'}"
+        
         await query.message.edit_text(text, reply_markup=get_shlep_session_keyboard())
     elif action == "shlep_my_stats":
         user = update.effective_user
         _, cnt, last = get_user_stats(user.id)
         lvl = calc_level(cnt)
         compare_stats = get_comparison_stats(user.id)
-        text = f"📈 ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Всего шlёпков: {format_num(cnt)}\n🎯 Уровень: {lvl['level']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n{get_favorite_time(user.id)}\n📊 Сравнение с другими:\n👥 Всего игроков: {compare_stats.get('total_users', 0)}\n📈 Среднее на игрока: {compare_stats.get('avg_shleps', 0)}\n🏆 Твой ранг: {compare_stats.get('rank', 1)}\n📊 Лучше чем: {compare_stats.get('percentile', 0)}% игроков"
+        
+        text = f"📈 ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Всего шлёпков: {format_num(cnt)}\n🎯 Уровень: {lvl['level']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n{get_favorite_time(user.id)}\n📊 Сравнение с другими:\n👥 Всего игроков: {compare_stats.get('total_users', 0)}\n📈 Среднее на игрока: {compare_stats.get('avg_shleps', 0)}\n🏆 Твой ранг: {compare_stats.get('rank', 1)}\n📊 Лучше чем: {compare_stats.get('percentile', 0)}% игроков"
+        
         await query.message.edit_text(text, reply_markup=get_shlep_session_keyboard())
     elif action == "shlep_trends":
         trends_data = get_global_trends_info()
         if not trends_data:
             text = "📊 Данные временно недоступны"
         else:
-            text = f"📊 ГЛОБАЛЬНЫЕ ТРЕНДЫ\n👥 Активных за 24 часа: {trends_data.get('active_users_24h', 0)}\n👊 Шlёпков за 24 часа: {trends_data.get('shleps_24h', 0)}\n📈 Среднее на игрока: {trends_data.get('avg_per_user_24h', 0)}\n🔥 Активных сегодня: {trends_data.get('active_today', 0)}\n⏰ Текущий час: {trends_data.get('current_hour', 0):02d}:00\n👊 Шlёпков в этом часу: {trends_data.get('shleps_this_hour', 0)}"
+            text = f"📊 ГЛОБАЛЬНЫЕ ТРЕНДЫ\n👥 Активных за 24 часа: {trends_data.get('active_users_24h', 0)}\n👊 Шлёпков за 24 часа: {trends_data.get('shleps_24h', 0)}\n📈 Среднее на игрока: {trends_data.get('avg_per_user_24h', 0)}\n🔥 Активных сегодня: {trends_data.get('active_today', 0)}\n⏰ Текущий час: {trends_data.get('current_hour', 0):02d}:00\n👊 Шлёпков в этом часу: {trends_data.get('shleps_this_hour', 0)}"
+        
         await query.message.edit_text(text, reply_markup=get_shlep_session_keyboard())
     elif action == "shlep_menu":
         safe_name = escape_markdown(update.effective_user.first_name, version=1)
-        text = f"👋 Привет, {safe_name}!\nЯ — Мишок Лысый 👴✨\n\nНачни шlёпать прямо сейчас!"
+        text = f"👋 Привет, {safe_name}!\nЯ — Мишок Лысый 👴✨\n\nНачни шлёпать прямо сейчас!"
         await query.message.edit_text(text, reply_markup=get_shlep_start_keyboard())
 
-async def handle_duel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, data: str):
-    query = update.callback_query
-    user = update.effective_user
-    parts = data.split("_")
-    action = parts[1] if len(parts) > 1 else None
-    duel_id = parts[2] if len(parts) > 2 else None
+# Вспомогательные функции для проверки пользователя
+def is_user_target_invite(invite, user):
+    """Проверяет, является ли пользователь целевым для приглашения"""
+    target_name = invite["target_name"].lower().replace("@", "").strip()
+    username = (user.username or "").lower().replace("@", "").strip()
+    first_name = user.first_name.lower().strip()
     
-    if not query:
-        return
+    # Прямые сравнения
+    if target_name == username or target_name == first_name:
+        return True
     
-    if not duel_id:
-        await query.answer("❌ Ошибка: ID дуэли не найден", show_alert=True)
-        return
+    # Частичные совпадения
+    if username and target_name in username:
+        return True
+    if target_name in first_name:
+        return True
     
-    if action == "accept":
-        from database import accept_duel_invite, update_duel_message_id, get_active_duel, load_data, save_data
+    return False
+
+async def handle_duel_accept(query, duel_id, user, context):
+    """Обработка принятия дуэли"""
+    try:
+        from database import load_data, save_data, accept_duel_invite
         
-        # Получаем данные приглашения
-        data_dict = load_data()
+        # Загружаем данные
+        data = load_data()
         
-        if "duels" not in data_dict or duel_id not in data_dict["duels"]["invites"]:
-            await query.answer("❌ Приглашение не найдено или просрочено", show_alert=True)
-            return
-        
-        # Обновляем target_id в приглашении
-        invite = data_dict["duels"]["invites"][duel_id]
-        invite["target_id"] = user.id
-        invite["target_name"] = user.first_name
-        save_data(data_dict)
-        
-        # Принимаем дуэль
-        duel = accept_duel_invite(duel_id)
-        
-        if duel:
-            # Обновляем сообщение
-            await update_duel_message(context, duel_id, query.message.chat_id, query.message.message_id)
-            await query.answer(f"✅ Вы приняли вызов от {duel['challenger_name']}!", show_alert=True)
-            
-            # Отправляем уведомление в чат
-            try:
-                await context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text=f"⚔️ Дуэль началась! {duel['challenger_name']} vs {duel['target_name']} сражаются 5 минут!"
-                )
-            except:
-                pass
-        else:
-            await query.answer("❌ Не удалось начать дуэль", show_alert=True)
-    
-    elif action == "decline":
-        from database import decline_duel_invite, load_data
-        
-        # Получаем данные приглашения
-        data_dict = load_data()
-        
-        if "duels" not in data_dict or duel_id not in data_dict["duels"]["invites"]:
+        # Проверяем существование приглашения
+        if ("duels" not in data or 
+            "invites" not in data["duels"] or 
+            duel_id not in data["duels"]["invites"]):
             await query.answer("❌ Приглашение не найдено", show_alert=True)
             return
         
-        invite = data_dict["duels"]["invites"][duel_id]
+        invite = data["duels"]["invites"][duel_id]
         
-        # Проверяем, что отклоняет целевой пользователь
-        target_name_lower = invite["target_name"].lower().replace("@", "")
-        user_username_lower = (user.username or "").lower().replace("@", "")
-        user_first_name_lower = user.first_name.lower()
+        # Проверяем, является ли пользователь целевым
+        if not is_user_target_invite(invite, user):
+            await query.answer("❌ Это приглашение не для вас", show_alert=True)
+            return
         
-        is_target = (
-            target_name_lower in user_username_lower or 
-            target_name_lower in user_first_name_lower or
-            user_username_lower in target_name_lower or
-            user_first_name_lower in target_name_lower
-        )
+        # Проверяем время
+        expires_at = datetime.fromisoformat(invite["expires_at"])
+        if datetime.now() > expires_at:
+            await query.answer("❌ Приглашение просрочено", show_alert=True)
+            return
         
-        if not is_target:
+        # Проверяем, не участвует ли пользователь уже в дуэли
+        active_duel = get_user_active_duel(user.id)
+        if active_duel:
+            opponent = active_duel["target_name"] if user.id == active_duel["challenger_id"] else active_duel["challenger_name"]
+            await query.answer(f"❌ Вы уже участвуете в дуэли с {opponent}", show_alert=True)
+            return
+        
+        # Обновляем информацию о цели
+        invite["target_id"] = user.id
+        invite["target_name"] = user.first_name
+        
+        # Сохраняем изменения
+        data["duels"]["invites"][duel_id] = invite
+        save_data(data)
+        
+        # Принимаем дуэль
+        duel = accept_duel_invite(duel_id, user.id, user.first_name)
+        
+        if not duel:
+            await query.answer("❌ Не удалось начать дуэль", show_alert=True)
+            return
+        
+        # Обновляем сообщение
+        await update_duel_message(context, duel_id, query.message.chat_id, query.message.message_id)
+        await query.answer(f"✅ Вы приняли вызов от {duel['challenger_name']}!", show_alert=True)
+        
+        # Отправляем уведомление в чат
+        try:
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=f"⚔️ Дуэль началась! {duel['challenger_name']} vs {duel['target_name']} сражаются 5 минут!"
+            )
+        except Exception as e:
+            logger.error(f"Не удалось отправить уведомление: {e}")
+            
+    except Exception as e:
+        logger.error(f"Ошибка при принятии дуэли {duel_id}: {e}", exc_info=True)
+        await query.answer("❌ Ошибка при принятии дуэли", show_alert=True)
+
+async def handle_duel_decline(query, duel_id, user, context):
+    """Обработка отклонения дуэли"""
+    try:
+        from database import load_data, save_data, decline_duel_invite
+        
+        # Загружаем данные
+        data = load_data()
+        
+        # Проверяем существование приглашения
+        if ("duels" not in data or 
+            "invites" not in data["duels"] or 
+            duel_id not in data["duels"]["invites"]):
+            await query.answer("❌ Приглашение не найдено", show_alert=True)
+            return
+        
+        invite = data["duels"]["invites"][duel_id]
+        
+        # Проверяем, является ли пользователь целевым
+        if not is_user_target_invite(invite, user):
             await query.answer("❌ Только приглашенный пользователь может отклонить вызов", show_alert=True)
             return
         
-        success = decline_duel_invite(duel_id)
+        # Отклоняем дуэль
+        success = decline_duel_invite(duel_id, user.id, user.first_name)
+        
         if success:
+            # Обновляем сообщение
             await query.message.edit_text(
                 f"❌ ВЫЗОВ ОТКЛОНЁН\n\n"
                 f"Пользователь {user.first_name} отклонил вызов на дуэль от {invite['challenger_name']}."
             )
             await query.answer("Вызов отклонён", show_alert=False)
         else:
-            await query.answer("❌ Приглашение не найдено", show_alert=True)
+            await query.answer("❌ Ошибка при отклонении вызова", show_alert=True)
+            
+    except Exception as e:
+        logger.error(f"Ошибка при отклонении дуэли {duel_id}: {e}", exc_info=True)
+        await query.answer("❌ Ошибка при отклонении дуэли", show_alert=True)
+
+async def handle_duel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, data: str):
+    query = update.callback_query
+    user = update.effective_user
+    
+    if not query:
+        return
+    
+    await query.answer()
+    
+    parts = data.split("_")
+    
+    if len(parts) < 3:
+        await query.answer("❌ Неверный формат данных", show_alert=True)
+        return
+    
+    action = parts[1]
+    duel_id = parts[2]
+    
+    logger.info(f"Дуэль callback: action={action}, duel_id={duel_id}, user={user.id} {user.username}")
+    
+    if action == "accept":
+        await handle_duel_accept(query, duel_id, user, context)
+    
+    elif action == "decline":
+        await handle_duel_decline(query, duel_id, user, context)
     
     elif action == "shlep":
-        if len(parts) >= 3:
-            duel_id = parts[2]
-            from database import get_active_duel, add_shlep_to_duel
-            duel = get_active_duel(duel_id)
-            if not duel:
-                await query.answer("❌ Дуэль не найдена или завершена", show_alert=True)
-                return
-            if user.id not in [duel["challenger_id"], duel["target_id"]]:
-                await query.answer("❌ Вы не участник этой дуэли", show_alert=True)
-                return
-            from bot import calc_level
-            _, user_shleps, _ = get_user_stats(user.id)
-            lvl = calc_level(user_shleps)
-            damage = random.randint(lvl['min'], lvl['max'])
-            from database import load_data
-            data = load_data()
-            user_data = data["users"].get(str(user.id), {})
-            bonus = user_data.get("bonus_damage", 0)
-            total_damage = damage + bonus
-            result = add_shlep_to_duel(duel_id, user.id, total_damage)
-            if result:
-                await update_duel_message(context, duel_id, query.message.chat_id, query.message.message_id)
-                side = "challenger" if user.id == duel["challenger_id"] else "target"
-                opponent = duel["target_name"] if side == "challenger" else duel["challenger_name"]
-                await query.answer(
-                    f"👊 Вы нанесли {total_damage} урона {opponent}!\n"
-                    f"({damage} + {bonus} бонус)",
-                    show_alert=False
-                )
-                if isinstance(result, dict) and result.get("is_finished") is False:
-                    pass
-                else:
-                    await query.answer("🏆 Дуэль завершена! Смотрите результаты выше.", show_alert=True)
+        # Обработка шлёпка в дуэли
+        from database import get_active_duel, add_shlep_to_duel
+        
+        duel = get_active_duel(duel_id)
+        if not duel:
+            await query.answer("❌ Дуэль не найдена или завершена", show_alert=True)
+            return
+        
+        if user.id not in [duel["challenger_id"], duel["target_id"]]:
+            await query.answer("❌ Вы не участник этой дуэли", show_alert=True)
+            return
+        
+        # Рассчитываем урон
+        _, user_shleps, _ = get_user_stats(user.id)
+        lvl = calc_level(user_shleps)
+        damage = random.randint(lvl['min'], lvl['max'])
+        
+        # Добавляем бонусный урон
+        from database import load_data
+        data = load_data()
+        user_data = data["users"].get(str(user.id), {})
+        bonus = user_data.get("bonus_damage", 0)
+        total_damage = damage + bonus
+        
+        # Добавляем шлёпок в дуэль
+        result = add_shlep_to_duel(duel_id, user.id, total_damage)
+        
+        if result:
+            await update_duel_message(context, duel_id, query.message.chat_id, query.message.message_id)
+            
+            side = "challenger" if user.id == duel["challenger_id"] else "target"
+            opponent = duel["target_name"] if side == "challenger" else duel["challenger_name"]
+            
+            await query.answer(
+                f"👊 Вы нанесли {total_damage} урона {opponent}!\n"
+                f"({damage} + {bonus} бонус)",
+                show_alert=False
+            )
+            
+            if isinstance(result, dict) and result.get("is_finished") is False:
+                pass
             else:
-                await query.answer("❌ Ошибка при добавлении шлёпка", show_alert=True)
+                await query.answer("🏆 Дуэль завершена! Смотрите результаты выше.", show_alert=True)
+        else:
+            await query.answer("❌ Ошибка при добавлении шлёпка", show_alert=True)
     
     elif action == "stats":
         from database import get_active_duel
@@ -1369,6 +1544,7 @@ async def handle_duel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             total_shleps = duel["challenger_shleps"] + duel["target_shleps"]
             avg_challenger = duel["challenger_damage"] // max(duel["challenger_shleps"], 1)
             avg_target = duel["target_damage"] // max(duel["target_shleps"], 1)
+            
             await query.answer(
                 f"📊 Статистика дуэли:\n\n"
                 f"{duel['challenger_name']}:\n"
@@ -1377,7 +1553,7 @@ async def handle_duel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 f"• Средний урон: {avg_challenger}\n\n"
                 f"{duel['target_name']}:\n"
                 f"• Урон: {duel['target_damage']}\n"
-                f"• Шlёпков: {duel['target_shleps']}\n"
+                f"• Шлёпков: {duel['target_shleps']}\n"
                 f"• Средний урон: {avg_target}\n\n"
                 f"Всего шлёпков: {total_shleps}",
                 show_alert=True
@@ -1391,9 +1567,11 @@ async def handle_duel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         if not duel:
             await query.answer("❌ Дуэль не найдена", show_alert=True)
             return
+        
         if user.id not in [duel["challenger_id"], duel["target_id"]]:
             await query.answer("❌ Вы не участник этой дуэли", show_alert=True)
             return
+        
         result = surrender_duel(duel_id, user.id)
         if result:
             await update_duel_message(context, duel_id, query.message.chat_id, query.message.message_id)
@@ -1409,15 +1587,19 @@ async def handle_duel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         from database import load_data
         data = load_data()
         duel = None
+        
+        # Ищем дуэль в истории
         for hist_duel in data.get("duels", {}).get("history", []):
             if hist_duel.get("id") == duel_id:
                 duel = hist_duel
                 break
+        
         if duel:
             history_text = "Последние 10 действий:\n"
             for action in duel.get("history", [])[-10:]:
                 time_str = datetime.fromisoformat(action["timestamp"]).strftime("%H:%M:%S")
                 history_text += f"{time_str} - {action['user_name']}: {action['damage']} урона\n"
+            
             await query.answer(history_text, show_alert=True)
         else:
             await query.answer("❌ История дуэли не найдена", show_alert=True)
@@ -1509,9 +1691,9 @@ async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if m.id == context.bot.id:
                 await update.message.reply_text(
                     "👴 Мишок Лысый в чате!\n\n"
-                    "Теперь можно шlёпать меня по лысине прямо здесь!\n"
+                    "Теперь можно шлёпать меня по лысине прямо здесь!\n"
                     "Основные команды:\n"
-                    "/shlep — шlёпнуть Мишка\n"
+                    "/shlep — шлёпнуть Мишка\n"
                     "/stats — статистика\n"
                     "/level — уровень\n"
                     "/my_stats — детальная статистика\n"
@@ -1530,6 +1712,11 @@ def main():
     if not BOT_TOKEN:
         logger.error("❌ Нет токена бота! Установите BOT_TOKEN в config.py или .env файле")
         sys.exit(1)
+    
+    # Очистка просроченных дуэлей при запуске
+    cleaned = cleanup_expired_duels()
+    if cleaned > 0:
+        logger.info(f"Очищено {cleaned} просроченных дуэлей при запуске")
     
     app = Application.builder().token(BOT_TOKEN).build()
     
