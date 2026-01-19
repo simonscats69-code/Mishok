@@ -55,9 +55,8 @@ def get_shlep_start_keyboard():
 
 def get_chat_vote_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("👍 За", callback_data="vote_yes")],
-        [InlineKeyboardButton("👎 Против", callback_data="vote_no")],
-        [InlineKeyboardButton("🤷 Воздержаться", callback_data="vote_abstain")]
+        [InlineKeyboardButton("👍 ЗА", callback_data="vote_yes")],
+        [InlineKeyboardButton("👎 ПРОТИВ", callback_data="vote_no")]
     ])
 
 def get_duel_invite_keyboard(challenger_id: int, target_id: int, duel_id: str):
