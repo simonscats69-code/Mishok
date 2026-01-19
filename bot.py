@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 from functools import wraps
 
-from telegram import Update
+from telegram import Update, BotCommand, BotCommandScopeChat
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters, JobQueue
 from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
@@ -177,16 +177,30 @@ async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit
 
 @command_handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
-    if not msg:
-        return
-    
-    safe_name = escape_markdown(update.effective_user.first_name, version=1)
-    
-    text = f"👋 Привет, {safe_name}!\nЯ — Мишок Лысый 👴✨\n\n"
-    
-    if update.effective_chat.type == "private":
-        text += """*Начни шлёпать прямо сейчас!*
+    """Обработка команды /start - вызывается при нажатии кнопки Start в Telegram"""
+    try:
+        msg = await get_message_from_update(update)
+        if not msg:
+            # Если нет сообщения, пытаемся получить из callback
+            if update.callback_query:
+                msg = update.callback_query.message
+            else:
+                logger.warning("Не удалось получить сообщение для /start")
+                return
+        
+        user = update.effective_user
+        chat = update.effective_chat
+        
+        # Логируем для отладки
+        logger.info(f"/start от {user.id} (@{user.username}) в чате {chat.id} ({chat.type})")
+        
+        # Экранируем имя для безопасности
+        safe_name = escape_markdown(user.first_name, version=1)
+        
+        text = f"👋 Привет, {safe_name}!\nЯ — Мишок Лысый 👴✨\n\n"
+        
+        if chat.type == "private":
+            text += """*Начни шлёпать прямо сейчас!*
 
 Просто нажми кнопку ниже или используй команды:
 
@@ -199,11 +213,31 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 👴 /mishok — О Мишке
 
 *Новая фича:* Теперь шлёпай в одном окне без спама!"""
+            
+            kb = get_shlep_start_keyboard()
+            await msg.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+            
+            # Также устанавливаем меню команд для быстрого доступа
+            try:
+                commands = [
+                    ("shlep", "Шлёпнуть Мишка"),
+                    ("stats", "Глобальная статистика"),
+                    ("level", "Твой уровень"),
+                    ("my_stats", "Моя статистика"),
+                    ("trends", "Глобальные тренды"),
+                    ("help", "Помощь по командам"),
+                    ("mishok", "О Мишке")
+                ]
+                
+                await context.bot.set_my_commands(
+                    commands=[BotCommand(cmd, desc) for cmd, desc in commands],
+                    scope=BotCommandScopeChat(chat.id)
+                )
+            except Exception as e:
+                logger.warning(f"Не удалось установить команды меню: {e}")
         
-        kb = get_shlep_start_keyboard()
-        await msg.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
-    else:
-        text += """*Я бот для шлёпков!*
+        else:
+            text += """*Я бот для шлёпков!*
 
 *Команды для чата:*
 👊 /shlep — Шлёпнуть Мишка
@@ -219,9 +253,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📈 /my_stats — Детальная статистика
 
 *Нажми кнопку ниже или введи команду!*"""
+            
+            kb = get_inline_keyboard()
+            await msg.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
         
-        kb = get_inline_keyboard()
-        await msg.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+        logger.info(f"Успешно обработан /start для {user.id}")
+        
+    except Exception as e:
+        logger.error(f"КРИТИЧЕСКАЯ ОШИБКА в /start: {e}", exc_info=True)
+        try:
+            # Пытаемся отправить хотя бы простое сообщение
+            if update.message:
+                await update.message.reply_text(
+                    "👋 Привет! Я бот Мишок Лысый! Используй /help для списка команд."
+                )
+        except:
+            pass
 
 @command_handler
 async def shlep(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -929,7 +976,7 @@ async def handle_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYP
     elif action == "shlep_menu":
         # Вернуться в меню
         safe_name = escape_markdown(update.effective_user.first_name, version=1)
-        text = f"👋 Привет, {safe_name}!\nЯ — Мишок Лысый 👴✨\n\nНачни шлёпать прямо сейчас!"
+        text = f"👋 Привет, {safe_name}!\nЯ — Мишок Лысый 👴✨\n\nНачни шlёпать прямо сейчас!"
         
         await query.message.edit_text(text, reply_markup=get_shlep_start_keyboard())
 
@@ -947,7 +994,7 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("vote_"):
         await handle_vote(update, context)
     
-    # Обработка новой системы шлёпания
+    # Обработка новой системы шlёпания
     elif data == "start_shlep_session":
         await start_shlep_session(update, context)
     elif data in ["shlep_again", "shlep_level", "shlep_stats", "shlep_my_stats", "shlep_trends", "shlep_menu"]:
