@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
 import random
 import math
@@ -102,84 +102,10 @@ def safe_get(data: Dict, key: str, default: Any = None) -> Any:
     except:
         return default
 
-def chunk_list(lst: List, chunk_size: int) -> List[List]:
-    return [lst[i:i + chunk_size] for i in range(0, len(lst), chunk_size)]
-
-def truncate_text(text: str, max_length: int, suffix: str = "...") -> str:
-    if len(text) <= max_length:
-        return text
-    
-    return text[:max_length - len(suffix)] + suffix
-
-def is_valid_user_id(user_id: Any) -> bool:
-    try:
-        return isinstance(user_id, (int, str)) and str(user_id).isdigit() and int(user_id) > 0
-    except:
-        return False
-
-def get_random_color() -> str:
-    return f"#{random.randint(0, 0xFFFFFF):06x}"
-
-def parse_time_string(time_str: str) -> Optional[timedelta]:
-    try:
-        hours = 0
-        minutes = 0
-        
-        if 'h' in time_str:
-            hours_part = time_str.split('h')[0]
-            hours = int(hours_part) if hours_part.isdigit() else 0
-        
-        if 'm' in time_str:
-            minutes_part = time_str.split('h')[1] if 'h' in time_str else time_str
-            minutes_part = minutes_part.split('m')[0]
-            minutes = int(minutes_part) if minutes_part.isdigit() else 0
-        
-        return timedelta(hours=hours, minutes=minutes)
-    except:
-        return None
-
-def format_duration(seconds: int) -> str:
-    if seconds < 60:
-        return f"{seconds} сек"
-    
-    minutes = seconds // 60
-    if minutes < 60:
-        return f"{minutes} мин"
-    
-    hours = minutes // 60
-    minutes = minutes % 60
-    
-    if hours < 24:
-        return f"{hours} ч {minutes} мин"
-    
-    days = hours // 24
-    hours = hours % 24
-    
-    return f"{days} д {hours} ч"
-
 def calculate_percentage(part: int, whole: int) -> float:
     if whole == 0:
         return 0.0
     return round((part / whole) * 100, 2)
-
-def format_size(size_bytes: int) -> str:
-    if size_bytes < 1024:
-        return f"{size_bytes} B"
-    
-    size_kb = size_bytes / 1024
-    if size_kb < 1024:
-        return f"{size_kb:.1f} KB"
-    
-    size_mb = size_kb / 1024
-    if size_mb < 1024:
-        return f"{size_mb:.1f} MB"
-    
-    size_gb = size_mb / 1024
-    return f"{size_gb:.1f} GB"
-
-def escape_markdown_v2(text: str) -> str:
-    escape_chars = r'_*[]()~`>#+-=|{}.!'
-    return ''.join(f'\\{c}' if c in escape_chars else c for c in text)
 
 def validate_username(username: str) -> str:
     if not username or not isinstance(username, str):
