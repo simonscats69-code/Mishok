@@ -8,8 +8,8 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent))
 
 def fix_mishok_data():
-    DATA_FILE = "/data/mishok_data.json"
-    BACKUP_FILE = "/data/mishok_data_backup_before_fix.json"
+    DATA_FILE = "app/data/mishok_data.json"
+    BACKUP_FILE = "app/data/mishok_data_backup_before_fix.json"
     
     print("🔧 ИСПРАВЛЕНИЕ ФАЙЛА ДАННЫХ МИШОКА")
     print("=" * 60)
