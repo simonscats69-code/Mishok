@@ -9,10 +9,9 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ParseMode
 
-# Импортируем всё напрямую
 from config import BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO
 from database import add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, get_chat_top_users, backup_database
-from keyboard import get_chat_quick_actions, get_inline_keyboard
+from keyboard import get_chat_quick_actions, get_inline_keyboard, get_chat_vote_keyboard
 from cache import cache
 from statistics import get_favorite_time, get_comparison_stats, get_global_trends_info, format_daily_activity_chart, format_hourly_distribution_chart
 from utils import format_number as fmt_num
@@ -105,7 +104,6 @@ def get_reaction():
     return random.choice(MISHOK_REACTIONS)
 
 async def get_message_from_update(update: Update):
-    """Получаем сообщение из update"""
     return update.message or (update.callback_query and update.callback_query.message)
 
 @command_handler
@@ -333,7 +331,7 @@ async def chat_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         text = f"""📊 *СТАТИСТИКА ЧАТА*
 👥 *Участников:* {cs.get('total_users', 0)}
-👊 *Всего шлёпков:* {format_num(cs.get('total_shleps', 0))}
+👊 *Всего шlёпков:* {format_num(cs.get('total_shleps', 0))}
 🏆 *Рекорд урона:* {cs.get('max_damage', 0)} единиц
 👑 *Рекордсмен:* {cs.get('max_damage_user', 'Нет')}"""
     
@@ -370,8 +368,16 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg:
         return
     
-    q = " ".join(context.args) if context.args else "Шлёпнуть Мишка?"
-    await msg.reply_text(f"🗳️ *ГОЛОСОВАНИЕ*\n\n{q}\n\nГолосование длится 5 минут!", parse_mode=ParseMode.MARKDOWN)
+    question = " ".join(context.args) if context.args else "Шлёпнуть Мишка?"
+    kb = get_chat_vote_keyboard()
+    
+    await msg.reply_text(
+        f"🗳️ *ГОЛОСОВАНИЕ*\n\n{question}\n\nГолосование длится 5 минут!",
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=kb
+    )
+    
+    logger.info(f"Голосование создано: {question} в чате {update.effective_chat.id}")
 
 @command_handler
 @chat_only
@@ -443,23 +449,20 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @command_handler
 async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать информацию о Мишке"""
     try:
         msg = await get_message_from_update(update)
         if not msg:
             return
         
-        # Используем MISHOK_INTRO из config.py
         await msg.reply_text(
             MISHOK_INTRO,
             parse_mode=ParseMode.MARKDOWN,
             disable_web_page_preview=True
         )
-        logger.info(f"✅ Команда 'О Мишке' выполнена для пользователя {update.effective_user.id}")
+        logger.info(f"Команда 'О Мишке' выполнена для пользователя {update.effective_user.id}")
         
     except Exception as e:
-        logger.error(f"❌ Ошибка в mishok: {e}", exc_info=True)
-        # Пытаемся отправить сообщение об ошибке
+        logger.error(f"Ошибка в mishok: {e}", exc_info=True)
         try:
             if update.message:
                 await update.message.reply_text(
@@ -472,7 +475,7 @@ async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode=ParseMode.MARKDOWN
                 )
         except Exception as e2:
-            logger.error(f"❌ Не удалось отправить сообщение об ошибке: {e2}")
+            logger.error(f"Не удалось отправить сообщение об ошибке: {e2}")
 
 @command_handler
 async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -517,6 +520,69 @@ async def storage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text += f"\n💾 **Версия Бота:** Bothost Storage Ready"
     await msg.reply_text(text, parse_mode="Markdown")
 
+async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_type: str):
+    try:
+        query = update.callback_query
+        if not query:
+            return
+        
+        user = update.effective_user
+        username = user.username or user.first_name
+        
+        vote_texts = {
+            "vote_yes": "👍 За",
+            "vote_no": "👎 Против", 
+            "vote_abstain": "🤷 Воздержаться"
+        }
+        
+        vote_text = vote_texts.get(vote_type, "Неизвестно")
+        
+        original_text = query.message.text
+        vote_line = f"• {username}: {vote_text}"
+        
+        if "Результаты:" not in original_text:
+            new_text = original_text + f"\n\n📊 *Результаты:*\n{vote_line}"
+        else:
+            lines = original_text.split('\n')
+            results_start = -1
+            
+            for i, line in enumerate(lines):
+                if "Результаты:" in line:
+                    results_start = i
+                    break
+            
+            if results_start >= 0:
+                user_voted = False
+                for j in range(results_start + 1, len(lines)):
+                    if username in lines[j]:
+                        lines[j] = vote_line
+                        user_voted = True
+                        break
+                
+                if not user_voted:
+                    lines.insert(results_start + 1, vote_line)
+                
+                new_text = '\n'.join(lines)
+            else:
+                new_text = original_text + f"\n\n📊 *Результаты:*\n{vote_line}"
+        
+        await query.message.edit_text(
+            new_text,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=get_chat_vote_keyboard()
+        )
+        
+        await query.answer(f"Ваш голос: {vote_text}", show_alert=False)
+        
+        logger.info(f"Голос зарегистрирован: {username} → {vote_text}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка обработки голоса: {e}", exc_info=True)
+        try:
+            await query.answer("❌ Ошибка при регистрации голоса", show_alert=True)
+        except:
+            pass
+
 async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
@@ -527,7 +593,6 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     logger.info(f"Callback received: {data}")
     
-    # Обработчики для inline кнопок
     if data == "shlep_mishok":
         await shlep(update, context)
     elif data == "stats_inline":
@@ -544,6 +609,8 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await help_cmd(update, context)
     elif data == "mishok_info":
         await mishok(update, context)
+    elif data in ["vote_yes", "vote_no", "vote_abstain"]:
+        await handle_vote(update, context, data)
     elif data.startswith("quick_"):
         await quick_handler(update, context, data)
     else:
@@ -575,9 +642,7 @@ async def quick_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, data
     else:
         await query.message.reply_text("⚙️ В разработке")
 
-# ВАЖНО: button_handler не использует @command_handler, потому что это не команда!
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик кнопок reply-клавиатуры"""
     if update.effective_chat.type != "private":
         return
     
@@ -588,7 +653,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"Button pressed: {text}")
     
     try:
-        # Проверяем ВСЕ возможные варианты текста кнопок
         if text in ["👊 Шлёпнуть Мишка", "👊 Шлёпнуть", "Шлёпнуть Мишка"]:
             await shlep(update, context)
         elif text == "🎯 Уровень":
@@ -645,10 +709,8 @@ def main():
         logger.error("❌ Нет токена бота! Установите BOT_TOKEN в config.py или .env файле")
         sys.exit(1)
     
-    # Создаём приложение
     app = Application.builder().token(BOT_TOKEN).build()
     
-    # Команды
     commands = [
         ("start", start),
         ("shlep", shlep),
@@ -671,7 +733,6 @@ def main():
     for name, handler in commands:
         app.add_handler(CommandHandler(name, handler))
     
-    # Обработчики
     app.add_handler(CallbackQueryHandler(inline_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, group_welcome))
@@ -689,7 +750,6 @@ def main():
     print(f"• Бот готов к работе!")
     print("=" * 50)
     
-    # Запускаем бота с правильной инициализацией
     try:
         app.run_polling(
             drop_pending_updates=True,
