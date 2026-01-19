@@ -15,7 +15,7 @@ from database import add_shlep, get_stats, get_top_users, get_user_stats, get_ch
 from keyboard import get_chat_quick_actions, get_inline_keyboard
 from cache import cache
 from statistics import get_favorite_time, get_comparison_stats, get_global_trends_info, format_daily_activity_chart, format_hourly_distribution_chart
-from utils import format_number as fmt_num, calculate_median, calculate_percentile
+from utils import format_number as fmt_num
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -180,7 +180,7 @@ async def stats(update, context, msg):
         for i, (u, c) in enumerate(top[:5], 1):
             lvl = calc_level(c)
             medal = ["🥇", "🥈", "🥉"][i-1] if i <= 3 else ""
-            text += f"\n{medal}{i}. {u or f'Игрок{i}'}"
+            text += f"\n{medag}{i}. {u or f'Игрок{i}'}"
             text += f"\n   📊 {format_num(c)} | Ур. {lvl['level']}"
             text += f"\n   ⚡ Урон: {lvl['min']}-{lvl['max']}"
     
@@ -318,7 +318,7 @@ async def chat_top(update, context, msg):
     for i, (u, c) in enumerate(top, 1):
         lvl = calc_level(c)
         medal = ["🥇", "🥈", "🥉"][i-1] if i <= 3 else ""
-        text += f"{medal}{i}. {u}\n"
+        text += f"{medag}{i}. {u}\n"
         text += f"   📊 {format_num(c)} | Ур. {lvl['level']}\n"
         text += f"   ⚡ Урон: {lvl['min']}-{lvl['max']}\n\n"
     
@@ -534,6 +534,7 @@ def main():
         logger.error("❌ Нет токена бота! Установите BOT_TOKEN в config.py или .env файле")
         sys.exit(1)
     
+    # Создаём приложение
     app = Application.builder().token(BOT_TOKEN).build()
     
     # Команды
@@ -567,7 +568,6 @@ def main():
     
     logger.info("=" * 50)
     logger.info("✅ Мишок Лысый запущен!")
-    logger.info(f"🤖 Бот: @{app.bot.username}")
     logger.info("=" * 50)
     
     print("\n" + "=" * 50)
@@ -578,7 +578,15 @@ def main():
     print(f"• Бот готов к работе!")
     print("=" * 50)
     
-    app.run_polling(drop_pending_updates=True)
+    # Запускаем бота с правильной инициализацией
+    try:
+        app.run_polling(
+            drop_pending_updates=True,
+            allowed_updates=Update.ALL_TYPES
+        )
+    except Exception as e:
+        logger.error(f"❌ Ошибка при запуске бота: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
