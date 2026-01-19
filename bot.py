@@ -15,7 +15,7 @@ from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 
 from config import BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO
-from database import add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, get_chat_top_users, backup_database, check_data_integrity, repair_data_structure, save_vote_data, get_vote_data, delete_vote_data, get_user_vote
+from database import add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, get_chat_top_users, backup_database, check_data_integrity, repair_data_structure, save_vote_data, get_vote_data, delete_vote_data, get_user_vote, get_all_votes
 from keyboard import get_shlep_session_keyboard, get_shlep_start_keyboard, get_chat_vote_keyboard, get_inline_keyboard
 from cache import cache
 from statistics import get_favorite_time, get_comparison_stats
@@ -23,7 +23,8 @@ from statistics import get_favorite_time, get_comparison_stats
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-VOTE_DATA_FILE = "data/votes.json"
+# Используем абсолютный путь для файла голосований
+VOTE_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "votes.json")
 
 shlep_sessions = {}
 
@@ -369,60 +370,83 @@ async def chat_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await msg.reply_text(text)
 
 async def vote_timer(vote_id, chat_id, message_id, context):
+    """Таймер для завершения голосования через 5 минут"""
     try:
-        await asyncio.sleep(300)
+        await asyncio.sleep(300)  # 5 минут
+        
+        # Проверяем, существует ли ещё голосование
+        vote_data = get_vote_data(vote_id)
+        if not vote_data or vote_data.get("finished", False):
+            return
+            
         await finish_vote(vote_id, chat_id, message_id, context)
+        
+    except asyncio.CancelledError:
+        logger.info(f"Таймер голосования {vote_id} отменён")
     except Exception as e:
-        logger.error(f"Ошибка в таймере голосования: {e}")
+        logger.error(f"Ошибка в таймере голосования {vote_id}: {e}")
 
 async def finish_vote(vote_id, chat_id, message_id, context):
-    vote_data = get_vote_data(vote_id)
-    if not vote_data or vote_data.get("finished", False):
-        return
-    vote_data["finished"] = True
-    vote_data["finished_at"] = datetime.now().isoformat()
-    save_vote_data(vote_data)
-    yes_count = len(vote_data.get("votes_yes", []))
-    no_count = len(vote_data.get("votes_no", []))
-    total_votes = yes_count + no_count
-    if total_votes == 0:
-        result_text = "🤷 *НИКТО НЕ ПРОГОЛОСОВАЛ!*\nНикто не решил судьбу моей лысины... 😔"
-        action_text = ""
-    elif yes_count > no_count:
-        result_text = "✅ *БОЛЬШИНСТВО ЗА!*\nНарод решил: шлёпать надо!"
-        action_text = "\n\n👊 *ДАВАЙТЕ НАШЛЁПАЕМ ЭТОМУ ЛЫСОМУ!*"
-        asyncio.create_task(
-            context.bot.send_message(
-                chat_id=chat_id,
-                text="👴 *Мишок:* Ой-ой, народ решил меня отшлёпать! Принимаю свою судьбу! 👊"
-            )
-        )
-    elif no_count > yes_count:
-        result_text = "❌ *БОЛЬШИНСТВО ПРОТИВ!*\nНарод пощадил мою лысину!"
-        action_text = "\n\n🙏 *СПАСИБО ЗА МИЛОСЕРДИЕ!*"
-    else:
-        result_text = "⚖️ *НИЧЬЯ!*\nГолоса разделились поровну!"
-        action_text = "\n\n🤔 *САМ РЕШАЙ, ШЛЁПАТЬ ИЛИ НЕТ!*"
+    """Завершает голосование и показывает результаты"""
     try:
-        text = (
-            f"🗳️ *ГОЛОСОВАНИЕ ЗАВЕРШЕНО*\n\n"
-            f"*Вопрос:* {vote_data['question']}\n\n"
-            f"📊 *Результаты:*\n"
-            f"✅ За: {yes_count} голосов\n"
-            f"❌ Против: {no_count} голосов\n"
-            f"👥 Всего проголосовало: {total_votes}\n\n"
-            f"{result_text}{action_text}"
-        )
-        await context.bot.edit_message_text(
-            chat_id=chat_id,
-            message_id=message_id,
-            text=text,
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=None
-        )
-        logger.info(f"Голосование завершено: {vote_id}, результат: {result_text}")
+        vote_data = get_vote_data(vote_id)
+        if not vote_data or vote_data.get("finished", False):
+            return
+            
+        # Сохраняем результаты перед редактированием
+        vote_data["finished"] = True
+        vote_data["finished_at"] = datetime.now().isoformat()
+        save_vote_data(vote_data)
+        
+        yes_count = len(vote_data.get("votes_yes", []))
+        no_count = len(vote_data.get("votes_no", []))
+        total_votes = yes_count + no_count
+        
+        if total_votes == 0:
+            result_text = "🤷 *НИКТО НЕ ПРОГОЛОСОВАЛ!*\nНикто не решил судьбу моей лысины... 😔"
+            action_text = ""
+        elif yes_count > no_count:
+            result_text = "✅ *БОЛЬШИНСТВО ЗА!*\nНарод решил: шлёпать надо!"
+            action_text = "\n\n👊 *ДАВАЙТЕ НАШЛЁПАЕМ ЭТОМУ ЛЫСОМУ!*"
+            asyncio.create_task(
+                context.bot.send_message(
+                    chat_id=chat_id,
+                    text="👴 *Мишок:* Ой-ой, народ решил меня отшлёпать! Принимаю свою судьбу! 👊"
+                )
+            )
+        elif no_count > yes_count:
+            result_text = "❌ *БОЛЬШИНСТВО ПРОТИВ!*\nНарод пощадил мою лысину!"
+            action_text = "\n\n🙏 *СПАСИБО ЗА МИЛОСЕРДИЕ!*"
+        else:
+            result_text = "⚖️ *НИЧЬЯ!*\nГолоса разделились поровну!"
+            action_text = "\n\n🤔 *САМ РЕШАЙ, ШЛЁПАТЬ ИЛИ НЕТ!*"
+        
+        try:
+            text = (
+                f"🗳️ *ГОЛОСОВАНИЕ ЗАВЕРШЕНО*\n\n"
+                f"*Вопрос:* {vote_data['question']}\n\n"
+                f"📊 *Результаты:*\n"
+                f"✅ За: {yes_count} голосов\n"
+                f"❌ Против: {no_count} голосов\n"
+                f"👥 Всего проголосовало: {total_votes}\n\n"
+                f"{result_text}{action_text}"
+            )
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=text,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=None
+            )
+            logger.info(f"Голосование завершено: {vote_id}, результат: {result_text}")
+        except Exception as e:
+            if "Message to edit not found" in str(e) or "message not found" in str(e):
+                logger.warning(f"Сообщение голосования {vote_id} было удалено")
+            else:
+                logger.error(f"Ошибка обновления сообщения голосования: {e}")
+                
     except Exception as e:
-        logger.error(f"Ошибка обновления сообщения голосования: {e}")
+        logger.error(f"Ошибка завершения голосования {vote_id}: {e}")
 
 @command_handler
 @chat_only
@@ -430,10 +454,15 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = get_message_from_update(update)
     if not msg:
         return
+        
     question = " ".join(context.args) if context.args else "Шлёпнуть Мишка?"
     kb = get_chat_vote_keyboard()
     question_safe = escape_markdown(question, version=1)
+    
+    # Создаем уникальный ID голосования
     vote_id = f"{msg.chat_id}_{msg.message_id}_{int(datetime.now().timestamp())}"
+    
+    # Создаем данные голосования
     vote_data = {
         "id": vote_id,
         "chat_id": msg.chat_id,
@@ -445,8 +474,14 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "ends_at": (datetime.now() + timedelta(minutes=5)).isoformat(),
         "finished": False
     }
+    
+    # Сохраняем голосование
     save_vote_data(vote_data)
+    
+    # Запускаем таймер
     asyncio.create_task(vote_timer(vote_id, msg.chat_id, msg.message_id, context))
+    
+    # Создаем сообщение голосования
     text = (
         f"🗳️ *ГОЛОСОВАНИЕ*\n\n"
         f"*Вопрос:* {question_safe}\n\n"
@@ -454,9 +489,13 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"❌ *Против:* 0\n\n"
         f"⏰ *Голосование длится 5 минут!*"
     )
+    
     sent_message = await msg.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+    
+    # Обновляем message_id на ID отправленного сообщения
     vote_data["message_id"] = sent_message.message_id
     save_vote_data(vote_data)
+    
     logger.info(f"Голосование создано: {question} в чате {msg.chat_id}, ID: {vote_id}")
 
 @command_handler
@@ -465,17 +504,20 @@ async def vote_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = get_message_from_update(update)
     if not msg:
         return
+        
     chat_id = msg.chat_id
+    
     try:
-        with open(VOTE_DATA_FILE, 'r', encoding='utf-8') as f:
-            all_votes = json.load(f)
+        all_votes = get_all_votes()
         active_votes = []
         now = datetime.now()
+        
         for vote_id, vote_data in all_votes.items():
             if (vote_data.get("chat_id") == chat_id and 
                 not vote_data.get("finished", False) and
                 datetime.fromisoformat(vote_data["ends_at"]) > now):
                 active_votes.append(vote_data)
+        
         if not active_votes:
             text = "🗳️ *АКТИВНЫЕ ГОЛОСОВАНИЯ*\n\nВ этом чате нет активных голосований.\n\nСоздать новое: `/vote [вопрос]`"
         else:
@@ -490,59 +532,69 @@ async def vote_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text += f"{i}. *{vote['question'][:30]}...*\n"
                 text += f"   ✅ {yes_count} | ❌ {no_count}\n"
                 text += f"   ⏰ Осталось: {minutes:02d}:{seconds:02d}\n\n"
+        
         await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
     except Exception as e:
         logger.error(f"Ошибка получения информации о голосованиях: {e}")
         await msg.reply_text("❌ Ошибка при получении информации о голосованиях")
 
 async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_type: str):
+    """Обрабатывает голос пользователя (за или против)"""
     try:
         query = update.callback_query
         if not query:
             return
+            
+        await query.answer()
         user = update.effective_user
         user_id = str(user.id)
         
-        # Получаем vote_id из базы данных
+        # Получаем vote_id поиском по message_id и chat_id
         vote_id = None
-        from database import load_data_raw
-        try:
-            all_votes = load_data_raw().get("votes", {})
-            for vid, vdata in all_votes.items():
-                if (vdata.get("message_id") == query.message.message_id and 
-                    vdata.get("chat_id") == query.message.chat_id):
-                    vote_id = vid
-                    break
-        except:
-            pass
-            
+        all_votes = get_all_votes()
+        
+        for vid, vdata in all_votes.items():
+            if (str(vdata.get("message_id")) == str(query.message.message_id) and 
+                str(vdata.get("chat_id")) == str(query.message.chat.id)):
+                vote_id = vid
+                break
+        
         if not vote_id:
-            await query.answer("❌ Не удалось определить голосование", show_alert=True)
+            await query.answer("❌ Голосование не найдено или устарело", show_alert=True)
             return
             
         vote_data = get_vote_data(vote_id)
         if not vote_data:
             await query.answer("❌ Голосование не найдено", show_alert=True)
             return
+            
         if vote_data.get("finished", False):
             await query.answer("❌ Голосование уже завершено", show_alert=True)
             return
+            
+        # Удаляем предыдущий голос пользователя (если был)
         current_vote = get_user_vote(vote_id, user.id)
         if current_vote:
             if current_vote == "yes" and user_id in vote_data["votes_yes"]:
                 vote_data["votes_yes"].remove(user_id)
             elif current_vote == "no" and user_id in vote_data["votes_no"]:
                 vote_data["votes_no"].remove(user_id)
+                
+        # Добавляем новый голос
         if vote_type == "vote_yes":
             vote_data["votes_yes"].append(user_id)
             vote_text = "👍 За"
         else:
             vote_data["votes_no"].append(user_id)
             vote_text = "👎 Против"
+            
         save_vote_data(vote_data)
+        
+        # Обновляем отображение
         yes_count = len(vote_data.get("votes_yes", []))
         no_count = len(vote_data.get("votes_no", []))
         total_votes = yes_count + no_count
+        
         ends_at = datetime.fromisoformat(vote_data["ends_at"])
         now = datetime.now()
         if now < ends_at:
@@ -552,6 +604,7 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
             time_left = f"{minutes:02d}:{seconds:02d}"
         else:
             time_left = "00:00"
+            
         question_safe = escape_markdown(vote_data["question"], version=1)
         text = (
             f"🗳️ *ГОЛОСОВАНИЕ*\n\n"
@@ -561,13 +614,15 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
             f"👥 *Всего:* {total_votes}\n\n"
             f"⏰ *Осталось:* {time_left}"
         )
+        
         await query.message.edit_text(
             text,
             reply_markup=get_chat_vote_keyboard(),
             parse_mode=ParseMode.MARKDOWN
         )
-        await query.answer(f"Ваш голос: {vote_text}", show_alert=False)
+        
         logger.info(f"Голос зарегистрирован: {user.username or user.first_name} → {vote_text} в голосовании {vote_id}")
+        
     except Exception as e:
         logger.error(f"Ошибка обработки голоса: {e}", exc_info=True)
         try:
