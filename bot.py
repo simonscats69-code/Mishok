@@ -1,5 +1,3 @@
-[file name]: bot.py
-[file content begin]
 import logging
 import random
 import sys
@@ -1033,4 +1031,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-[file content end]
