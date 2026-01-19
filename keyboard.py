@@ -1,7 +1,9 @@
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
 def main_kb(for_chat=False):
+    """Основная клавиатура - разная для чатов и личных сообщений"""
     if for_chat:
+        # ИСПРАВЛЕНО: Для чатов используем Inline клавиатуру
         return InlineKeyboardMarkup([
             [InlineKeyboardButton("👊 Шлёпнуть сейчас!", callback_data="shlep_mishok")],
             [
@@ -21,6 +23,7 @@ def main_kb(for_chat=False):
             ]
         ])
     else:
+        # Для личных сообщений - Reply клавиатура
         return ReplyKeyboardMarkup([
             [KeyboardButton("👊 Шлёпнуть Мишка")],
             [KeyboardButton("🎯 Уровень"), KeyboardButton("📊 Статистика")],
@@ -29,6 +32,7 @@ def main_kb(for_chat=False):
         ], resize_keyboard=True, one_time_keyboard=False, selective=True)
 
 def get_shlep_session_keyboard():
+    """Клавиатура для сессии шлёпания"""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("👊 Ещё раз!", callback_data="shlep_again"),
@@ -45,6 +49,7 @@ def get_shlep_session_keyboard():
     ])
 
 def get_shlep_start_keyboard():
+    """Клавиатура для начала шлёпания"""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("👊 НАЧАТЬ ШЛЁПАТЬ!", callback_data="start_shlep_session")],
         [
@@ -54,12 +59,14 @@ def get_shlep_start_keyboard():
     ])
 
 def get_chat_vote_keyboard():
+    """Клавиатура для голосования в чате"""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("👍 ЗА", callback_data="vote_yes")],
         [InlineKeyboardButton("👎 ПРОТИВ", callback_data="vote_no")]
     ])
 
 def get_duel_invite_keyboard(challenger_id: int, target_id: int, duel_id: str):
+    """Клавиатура для приглашения на дуэль"""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("⚔️ Принять вызов!", 
@@ -70,6 +77,7 @@ def get_duel_invite_keyboard(challenger_id: int, target_id: int, duel_id: str):
     ])
 
 def get_duel_active_keyboard(duel_id: str):
+    """Клавиатура для активной дуэли"""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("👊 Шлёпнуть в дуэли!", callback_data=f"duel_shlep_{duel_id}"),
@@ -82,6 +90,7 @@ def get_duel_active_keyboard(duel_id: str):
     ])
 
 def get_duel_finished_keyboard(duel_id: str):
+    """Клавиатура для завершённой дуэли"""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("📊 Детальная статистика", callback_data=f"duel_details_{duel_id}"),
@@ -93,5 +102,6 @@ def get_duel_finished_keyboard(duel_id: str):
         ]
     ])
 
+# Алиасы для обратной совместимости
 get_inline_keyboard = lambda: main_kb(for_chat=True)
 get_game_keyboard = lambda: main_kb(for_chat=False)
