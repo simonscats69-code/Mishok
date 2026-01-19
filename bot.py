@@ -709,7 +709,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"Button pressed: {text}")
     
     try:
-        if "шлёп" in text.lower() or "👊" in text:
+         if text == "👊 Шлёпнуть Мишка":
             await shlep(update, context)
         elif text == "🎯 Уровень":
             await level(update, context)
