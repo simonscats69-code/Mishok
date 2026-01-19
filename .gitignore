@@ -1,3 +1,12 @@
+# Файлы данных (не должны попадать в Git)
+/data/
+mishok_data.json
+*.json
+
+# Резервные копии
+backups/
+*.backup
+
 # Python
 __pycache__/
 *.py[cod]
@@ -13,14 +22,14 @@ eggs/
 lib/
 lib64/
 parts/
-sdk/
+sdist/
 var/
 wheels/
 *.egg-info/
 .installed.cfg
 *.egg
 
-# Virtual environments
+# Environments
 .env
 .venv
 env/
@@ -28,21 +37,6 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-
-# Logs
-*.log
-bot.log
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# Bothost storage (но это нужно для работы)
-# /bothost/storage/mishok_data.json  # НЕ ИГНОРИРУЕМ - это данные пользователей
-
-# Backups (можно игнорировать или коммитить)
-db_backups/
 
 # IDE
 .vscode/
@@ -52,8 +46,12 @@ db_backups/
 
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
 
-# Temp files
-*.tmp
-*.temp
+# Logs
+*.log
