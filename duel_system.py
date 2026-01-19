@@ -1,5 +1,3 @@
-[file name]: duel_system.py
-[file content begin]
 """
 ПОЛНАЯ СИСТЕМА ДУЭЛЕЙ В ОДНОМ ФАЙЛЕ
 Все функции через _ в названиях
@@ -1060,4 +1058,3 @@ def init_duel_system():
 
 # Автоматическая инициализация при импорте
 init_duel_system()
-[file content end]
