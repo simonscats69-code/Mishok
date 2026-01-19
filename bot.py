@@ -489,7 +489,8 @@ async def button_handler(update, context, msg):
     text = update.message.text
     logger.info(f"Button pressed: {text}")
     
-    if text == "👊 Шlёпнуть Мишка":
+    # Проверяем все возможные варианты
+    if text == "👊 Шлёпнуть Мишка" or text == "👊 Шлёпнуть" or "Шлёпнуть" in text:
         await shlep(update, context, msg)
     elif text == "🎯 Уровень":
         await level(update, context, msg)
@@ -503,6 +504,9 @@ async def button_handler(update, context, msg):
         await help_cmd(update, context, msg)
     elif text == "👴 О Мишке":
         await mishok(update, context, msg)
+    else:
+        logger.warning(f"Неизвестная кнопка: {text}")
+        await msg.reply_text("Неизвестная команда. Используйте /help для списка команд.")
 
 @command_handler
 async def group_welcome(update, context, msg):
