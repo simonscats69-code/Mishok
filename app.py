@@ -8,7 +8,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def main():
-    # Импортируем только после проверки токена
     try:
         from bot import main as bot_main
         bot_main()
