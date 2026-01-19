@@ -8,9 +8,12 @@ import random
 
 logger = logging.getLogger(__name__)
 
-DATA_FILE = "data/mishok_data.json"
-BACKUP_DIR = "data/backups"
-VOTES_FILE = "data/votes.json"
+# Используем абсолютные пути
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "data")
+DATA_FILE = os.path.join(DATA_DIR, "mishok_data.json")
+BACKUP_DIR = os.path.join(DATA_DIR, "backups")
+VOTES_FILE = os.path.join(DATA_DIR, "votes.json")
 
 # ========== Функции для работы с голосованиями ==========
 
@@ -49,6 +52,16 @@ def get_vote_data(vote_id):
         logger.error(f"Ошибка чтения голосования: {e}")
         return None
 
+def get_all_votes():
+    """Получает все голосования"""
+    ensure_votes_file()
+    try:
+        with open(VOTES_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Ошибка чтения всех голосований: {e}")
+        return {}
+
 def delete_vote_data(vote_id):
     """Удаляет данные голосования"""
     ensure_votes_file()
@@ -76,6 +89,42 @@ def get_user_vote(vote_id, user_id):
         return "no"
     return None
 
+def cleanup_expired_votes():
+    """Удаляет просроченные голосования (старше 1 дня)"""
+    try:
+        all_votes = get_all_votes()
+        now = datetime.now()
+        expired = []
+        
+        for vote_id, vote_data in all_votes.items():
+            ends_at_str = vote_data.get("ends_at")
+            if ends_at_str:
+                try:
+                    ends_at = datetime.fromisoformat(ends_at_str)
+                    # Удаляем голосования, завершённые более 1 дня назад
+                    finished = vote_data.get("finished", False)
+                    finished_at_str = vote_data.get("finished_at")
+                    
+                    if finished and finished_at_str:
+                        finished_at = datetime.fromisoformat(finished_at_str)
+                        if (now - finished_at).days > 1:
+                            expired.append(vote_id)
+                    elif not finished and now > ends_at + timedelta(days=1):
+                        expired.append(vote_id)
+                except:
+                    continue
+        
+        for vote_id in expired:
+            del all_votes[vote_id]
+        
+        if expired:
+            with open(VOTES_FILE, 'w', encoding='utf-8') as f:
+                json.dump(all_votes, f, indent=2, ensure_ascii=False, default=str)
+            logger.info(f"Удалено {len(expired)} просроченных голосований")
+            
+    except Exception as e:
+        logger.error(f"Ошибка очистки голосований: {e}")
+
 # ========== Функции для работы с основными данными ==========
 
 def ensure_data_file():
@@ -102,6 +151,7 @@ def ensure_data_file():
                 user_data.setdefault("last_shlep", None)
                 user_data.setdefault("damage_history", [])
                 user_data.setdefault("chat_stats", {})
+                user_data.setdefault("bonus_damage", 0)
             
             save_data(data)
         
@@ -706,3 +756,6 @@ def check_data_integrity():
 
 # ========== Инициализация ==========
 logger.info("База данных готова к работе")
+
+# Очищаем старые голосования при импорте
+cleanup_expired_votes()
