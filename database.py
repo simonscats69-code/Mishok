@@ -740,9 +740,10 @@ def create_duel_invite(challenger_id: int, challenger_name: str,
         data.setdefault("duels", {}).setdefault("invites", {})[duel_id] = invite
         save_data(data)
         
+        logger.info(f"Создано приглашение на дуэль: {duel_id}, challenger: {challenger_name}, target: {target_name}")
         return duel_id
     except Exception as e:
-        logger.error(f"Ошибка создания приглашения на дуэль: {e}")
+        logger.error(f"Ошибка создания приглашения на дуэль: {e}", exc_info=True)
         return None
 
 def accept_duel_invite(duel_id: str):
@@ -751,9 +752,15 @@ def accept_duel_invite(duel_id: str):
         data = load_data()
         
         if "duels" not in data or duel_id not in data["duels"]["invites"]:
+            logger.warning(f"Приглашение на дуэль не найдено: {duel_id}")
             return None
         
         invite = data["duels"]["invites"][duel_id]
+        
+        # Убедимся, что target_id установлен
+        if invite["target_id"] == 0:
+            logger.warning(f"Target ID не установлен для дуэли {duel_id}")
+            return None
         
         active_duel = {
             "id": duel_id,
@@ -779,9 +786,10 @@ def accept_duel_invite(duel_id: str):
         
         save_data(data)
         
+        logger.info(f"Дуэль начата: {duel_id}, {invite['challenger_name']} vs {invite['target_name']}")
         return active_duel
     except Exception as e:
-        logger.error(f"Ошибка принятия приглашения на дуэль: {e}")
+        logger.error(f"Ошибка принятия приглашения на дуэль: {e}", exc_info=True)
         return None
 
 def decline_duel_invite(duel_id: str):
@@ -790,19 +798,22 @@ def decline_duel_invite(duel_id: str):
         data = load_data()
         
         if "duels" not in data or duel_id not in data["duels"]["invites"]:
+            logger.warning(f"Приглашение на дуэль не найдено для отклонения: {duel_id}")
             return False
         
         invite = data["duels"]["invites"][duel_id]
         invite["status"] = "declined"
         invite["ended_at"] = datetime.now().isoformat()
+        invite["declined_by"] = invite.get("target_name", "Unknown")
         
         data.setdefault("duels", {}).setdefault("history", []).append(invite)
         del data["duels"]["invites"][duel_id]
         
         save_data(data)
+        logger.info(f"Дуэль отклонена: {duel_id}, отклонено: {invite.get('target_name')}")
         return True
     except Exception as e:
-        logger.error(f"Ошибка отклонения приглашения на дуэль: {e}")
+        logger.error(f"Ошибка отклонения приглашения на дуэль: {e}", exc_info=True)
         return False
 
 def get_active_duel(duel_id: str):
@@ -921,6 +932,7 @@ def finish_duel(duel_id: str):
         
         save_data(data)
         
+        logger.info(f"Дуэль завершена: {duel_id}, победитель: {winner_name if winner_id else 'Ничья'}")
         return result
     except Exception as e:
         logger.error(f"Ошибка завершения дуэли: {e}")
@@ -976,6 +988,7 @@ def surrender_duel(duel_id: str, user_id: int):
         
         save_data(data)
         
+        logger.info(f"Дуэль сдана: {duel_id}, сдался: {surrenderer_name}, победитель: {winner_name}")
         return result
     except Exception as e:
         logger.error(f"Ошибка при сдаче в дуэли: {e}")
@@ -1038,6 +1051,7 @@ def cleanup_expired_duels():
         
         if cleaned > 0:
             save_data(data)
+            logger.info(f"Очищено {cleaned} просроченных дуэлей и приглашений")
         
         return cleaned
     except Exception as e:
