@@ -3,7 +3,7 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMa
 def main_kb(for_chat=False):
     """Основная клавиатура - разная для чатов и личных сообщений"""
     if for_chat:
-        # ИСПРАВЛЕНО: Для чатов используем Inline клавиатуру
+        # Для чатов используем Inline клавиатуру
         return InlineKeyboardMarkup([
             [InlineKeyboardButton("👊 Шлёпнуть сейчас!", callback_data="shlep_mishok")],
             [
@@ -61,8 +61,10 @@ def get_shlep_start_keyboard():
 def get_chat_vote_keyboard():
     """Клавиатура для голосования в чате"""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("👍 ЗА", callback_data="vote_yes")],
-        [InlineKeyboardButton("👎 ПРОТИВ", callback_data="vote_no")]
+        [
+            InlineKeyboardButton("👍 ЗА", callback_data="vote_yes"),
+            InlineKeyboardButton("👎 ПРОТИВ", callback_data="vote_no")
+        ]
     ])
 
 def get_duel_invite_keyboard(challenger_id: int, target_id: int, duel_id: str):
@@ -80,7 +82,7 @@ def get_duel_active_keyboard(duel_id: str):
     """Клавиатура для активной дуэли"""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("👊 Шлёпнуть в дуэли!", callback_data=f"duel_shlep_{duel_id}"),
+            InlineKeyboardButton("👊 Шлёпнуть!", callback_data=f"duel_shlep_{duel_id}"),
             InlineKeyboardButton("📊 Статистика", callback_data=f"duel_stats_{duel_id}")
         ],
         [
@@ -93,11 +95,7 @@ def get_duel_finished_keyboard(duel_id: str):
     """Клавиатура для завершённой дуэли"""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📊 Детальная статистика", callback_data=f"duel_details_{duel_id}"),
-            InlineKeyboardButton("⚔️ Реванш", callback_data=f"duel_rematch_{duel_id}")
-        ],
-        [
-            InlineKeyboardButton("🏆 Топ дуэлей", callback_data="duel_top"),
+            InlineKeyboardButton("📊 Детали", callback_data=f"duel_details_{duel_id}"),
             InlineKeyboardButton("❌ Закрыть", callback_data=f"duel_close_{duel_id}")
         ]
     ])
