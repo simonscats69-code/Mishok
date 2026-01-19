@@ -26,7 +26,7 @@ def main_kb(for_chat=False):
             [KeyboardButton("🎯 Уровень"), KeyboardButton("📊 Статистика")],
             [KeyboardButton("📈 Моя статистика"), KeyboardButton("📊 Тренды")],
             [KeyboardButton("❓ Помощь"), KeyboardButton("👴 О Мишке")]
-        ], resize_keyboard=True)
+        ], resize_keyboard=True, one_time_keyboard=False, selective=True)
 
 def quick_actions():
     return InlineKeyboardMarkup([
