@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from datetime import datetime, timedelta
 import random
 import math
@@ -157,32 +157,6 @@ def format_duration(seconds: int) -> str:
     
     return f"{days} д {hours} ч"
 
-def calculate_xp_for_next_level(current_level: int) -> int:
-    return int(100 * (current_level ** 1.5))
-
-def generate_random_name() -> str:
-    prefixes = ["Лысый", "Шлёпковый", "Медвежий", "Блестящий", "Электрический"]
-    suffixes = ["Мишок", "Шлёп", "Бамбук", "Молния", "Фонарь"]
-    
-    return f"{random.choice(prefixes)} {random.choice(suffixes)}"
-
-def escape_markdown_v2(text: str) -> str:
-    escape_chars = r'_*[]()~`>#+-=|{}.!'
-    return ''.join(f'\\{c}' if c in escape_chars else c for c in text)
-
-def validate_username(username: str) -> str:
-    if not username or not isinstance(username, str):
-        return "Аноним"
-    
-    username = username.strip()
-    
-    if len(username) > 32:
-        username = username[:32]
-    
-    username = username.replace("@", "(at)").replace("#", "").replace("/", "")
-    
-    return username if username else "Аноним"
-
 def calculate_percentage(part: int, whole: int) -> float:
     if whole == 0:
         return 0.0
@@ -203,52 +177,19 @@ def format_size(size_bytes: int) -> str:
     size_gb = size_mb / 1024
     return f"{size_gb:.1f} GB"
 
-def is_weekend() -> bool:
-    today = datetime.now().weekday()
-    return today >= 5
+def escape_markdown_v2(text: str) -> str:
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    return ''.join(f'\\{c}' if c in escape_chars else c for c in text)
 
-def get_current_season() -> str:
-    month = datetime.now().month
+def validate_username(username: str) -> str:
+    if not username or not isinstance(username, str):
+        return "Аноним"
     
-    if month in [12, 1, 2]:
-        return "❄️ Зима"
-    elif month in [3, 4, 5]:
-        return "🌱 Весна"
-    elif month in [6, 7, 8]:
-        return "☀️ Лето"
-    else:
-        return "🍂 Осень"
-
-def generate_session_id() -> str:
-    import uuid
-    return str(uuid.uuid4())[:8]
-
-def log_execution_time(func):
-    import time
-    from functools import wraps
+    username = username.strip()
     
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        start_time = time.time()
-        result = func(*args, **kwargs)
-        end_time = time.time()
-        
-        logger.debug(f"{func.__name__} выполнена за {end_time - start_time:.3f} секунд")
-        return result
+    if len(username) > 32:
+        username = username[:32]
     
-    return wrapper
-
-async def async_log_execution_time(func):
-    import time
-    from functools import wraps
+    username = username.replace("@", "(at)").replace("#", "").replace("/", "")
     
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        start_time = time.time()
-        result = await func(*args, **kwargs)
-        end_time = time.time()
-        
-        logger.debug(f"{func.__name__} выполнена за {end_time - start_time:.3f} секунд")
-        return result
-    
-    return wrapper
+    return username if username else "Аноним"
