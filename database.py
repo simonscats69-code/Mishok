@@ -9,8 +9,8 @@ from datetime import timedelta
 logger = logging.getLogger(__name__)
 
 # Путь к файлу данных
-DATA_FILE = "/data/mishok_data.json"
-BACKUP_DIR = "/data/backups"
+DATA_FILE = "app/data/mishok_data.json"
+BACKUP_DIR = "app/data/backups"
 
 def ensure_data_file():
     """Создаёт файл данных, если его нет"""
