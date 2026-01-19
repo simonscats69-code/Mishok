@@ -2,14 +2,20 @@ import json
 import atexit
 import signal
 import os
+import threading
+import time
 from datetime import datetime, timedelta
-from typing import Tuple, Optional, Dict, Any, List
 
-DATA_FILE = "mishok_data.json"
+if os.path.exists("/bothost/storage"):
+    DATA_DIR = "/bothost/storage"
+else:
+    DATA_DIR = "."
+
+DATA_FILE = os.path.join(DATA_DIR, "mishok_data.json")
+BACKUP_DIR = os.path.join(DATA_DIR, "backups")
 
 class SimpleDB:
     def __init__(self):
-        # Основные таблицы
         self.global_stats = {
             'total_shleps': 0,
             'last_shlep': None,
@@ -17,18 +23,29 @@ class SimpleDB:
             'max_damage_user': None,
             'max_damage_date': None
         }
-        self.user_stats = {}  # user_id -> {username, count, last_shlep}
-        self.chat_stats = {}  # chat_id -> {total, max_damage, max_user, users}
+        self.user_stats = {}
+        self.chat_stats = {}
+        self.detailed_stats = {}
         
-        # Для статистики (аналог detailed_stats)
-        self.detailed_stats = {}  # user_id -> {date: {hour: count}}
+        os.makedirs(DATA_DIR, exist_ok=True)
+        os.makedirs(BACKUP_DIR, exist_ok=True)
         
         self.load_data()
         atexit.register(self.save_data)
         signal.signal(signal.SIGTERM, self.handle_shutdown)
         signal.signal(signal.SIGINT, self.handle_shutdown)
+        
+        self.auto_save_thread = threading.Thread(target=self.auto_save_loop, daemon=True)
+        self.auto_save_thread.start()
     
-    # ========== СОХРАНЕНИЕ ==========
+    def auto_save_loop(self):
+        while True:
+            time.sleep(300)
+            try:
+                self.save_data()
+            except:
+                pass
+    
     def load_data(self):
         if os.path.exists(DATA_FILE):
             try:
@@ -38,8 +55,8 @@ class SimpleDB:
                     self.user_stats = {int(k): v for k, v in data.get('user_stats', {}).items()}
                     self.chat_stats = {int(k): v for k, v in data.get('chat_stats', {}).items()}
                     self.detailed_stats = {int(k): v for k, v in data.get('detailed_stats', {}).items()}
-            except Exception as e:
-                print(f"⚠️ Ошибка загрузки: {e}")
+            except:
+                pass
     
     def save_data(self):
         try:
@@ -52,21 +69,18 @@ class SimpleDB:
             }
             with open(DATA_FILE, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print(f"❌ Ошибка сохранения: {e}")
+        except:
+            pass
     
     def handle_shutdown(self, signum, frame):
-        print(f"\n🛑 Сохраняем данные...")
         self.save_data()
         exit(0)
     
-    # ========== ОСНОВНЫЕ МЕТОДЫ ==========
-    def add_shlep(self, user_id: int, username: str, damage: int = 0, chat_id: int = None):
+    def add_shlep(self, user_id, username, damage=0, chat_id=None):
         now = datetime.now()
         date_str = now.date().isoformat()
         hour = now.hour
         
-        # Глобальная статистика
         self.global_stats['total_shleps'] += 1
         self.global_stats['last_shlep'] = now.isoformat()
         
@@ -75,7 +89,6 @@ class SimpleDB:
             self.global_stats['max_damage_user'] = username
             self.global_stats['max_damage_date'] = now.isoformat()
         
-        # Статистика пользователя
         if user_id not in self.user_stats:
             self.user_stats[user_id] = {'username': username, 'count': 0, 'last_shlep': None}
         
@@ -83,7 +96,6 @@ class SimpleDB:
         self.user_stats[user_id]['last_shlep'] = now.isoformat()
         self.user_stats[user_id]['username'] = username
         
-        # Детальная статистика (для statistics.py)
         if user_id not in self.detailed_stats:
             self.detailed_stats[user_id] = {}
         if date_str not in self.detailed_stats[user_id]:
@@ -92,7 +104,6 @@ class SimpleDB:
             self.detailed_stats[user_id][date_str][hour] = 0
         self.detailed_stats[user_id][date_str][hour] += 1
         
-        # Статистика чата
         if chat_id:
             if chat_id not in self.chat_stats:
                 self.chat_stats[chat_id] = {
@@ -121,7 +132,7 @@ class SimpleDB:
         users.sort(key=lambda x: x[1], reverse=True)
         return users[:limit]
     
-    def get_user_stats(self, user_id: int):
+    def get_user_stats(self, user_id):
         if user_id in self.user_stats:
             data = self.user_stats[user_id]
             last = datetime.fromisoformat(data['last_shlep']) if data['last_shlep'] else None
@@ -129,7 +140,7 @@ class SimpleDB:
         self.user_stats[user_id] = {'username': f"Игрок_{user_id}", 'count': 0, 'last_shlep': None}
         return (f"Игрок_{user_id}", 0, None)
     
-    def get_chat_stats(self, chat_id: int):
+    def get_chat_stats(self, chat_id):
         if chat_id not in self.chat_stats:
             return None
         stats = self.chat_stats[chat_id]
@@ -141,22 +152,19 @@ class SimpleDB:
             'active_today': 0
         }
     
-    def get_chat_top_users(self, chat_id: int, limit=10):
+    def get_chat_top_users(self, chat_id, limit=10):
         if chat_id not in self.chat_stats:
             return []
         users = [(data['username'], data['count']) for data in self.chat_stats[chat_id]['users'].values()]
         users.sort(key=lambda x: x[1], reverse=True)
         return users[:limit]
     
-    # ========== МЕТОДЫ ДЛЯ STATISTICS.PY ==========
-    def get_detailed_stats(self, user_id: int, days: int = 30):
-        """Возвращает данные для statistics.py"""
+    def get_detailed_stats(self, user_id, days=30):
         result = {'daily_activity': {}, 'hourly_distribution': [0]*24, 'summary': {}}
         
         if user_id not in self.detailed_stats:
             return result
         
-        # Активность по дням
         end_date = datetime.now().date()
         start_date = end_date - timedelta(days=days-1)
         
@@ -169,13 +177,11 @@ class SimpleDB:
             result['daily_activity'][date_str] = daily_total
             current_date += timedelta(days=1)
         
-        # Распределение по часам
         for date_str, hours in self.detailed_stats.get(user_id, {}).items():
             for hour, count in hours.items():
                 if 0 <= hour < 24:
                     result['hourly_distribution'][hour] += count
         
-        # Сводка
         total_shleps = sum(sum(hours.values()) for hours in self.detailed_stats.get(user_id, {}).values())
         active_days = len(self.detailed_stats.get(user_id, {}))
         result['summary'] = {
@@ -188,12 +194,10 @@ class SimpleDB:
         return result
     
     def get_global_trends(self):
-        """Глобальные тренды для statistics.py"""
         now = datetime.now()
         today = now.date().isoformat()
         yesterday = (now - timedelta(days=1)).date().isoformat()
         
-        # Считаем активность
         active_users_24h = set()
         shleps_24h = 0
         active_today = set()
@@ -221,20 +225,38 @@ class SimpleDB:
         }
     
     def get_comparison_data(self):
-        """Данные для сравнения игроков"""
         return {
             'total_users': len(self.user_stats),
             'user_counts': [data['count'] for data in self.user_stats.values()],
             'total_shleps': self.global_stats['total_shleps']
         }
+    
+    def backup_database(self):
+        try:
+            if not os.path.exists(DATA_FILE):
+                return False, "Файл данных не найден"
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_file = os.path.join(BACKUP_DIR, f"mishok_data_{timestamp}.json")
+            
+            import shutil
+            shutil.copy2(DATA_FILE, backup_file)
+            
+            backup_files = sorted([f for f in os.listdir(BACKUP_DIR) if f.startswith("mishok_data_")])
+            if len(backup_files) > 10:
+                for old_file in backup_files[:-10]:
+                    os.remove(os.path.join(BACKUP_DIR, old_file))
+            
+            return True, backup_file
+        except Exception as e:
+            return False, str(e)
 
-# ========== ИНТЕРФЕЙС ==========
 db = SimpleDB()
 
 def init_db():
     pass
 
-def add_shlep(user_id: int, username: str, damage: int = 0, chat_id: int = None):
+def add_shlep(user_id, username, damage=0, chat_id=None):
     return db.add_shlep(user_id, username, damage, chat_id)
 
 def get_stats():
@@ -243,16 +265,16 @@ def get_stats():
 def get_top_users(limit=10):
     return db.get_top_users(limit)
 
-def get_user_stats(user_id: int):
+def get_user_stats(user_id):
     return db.get_user_stats(user_id)
 
-def get_chat_stats(chat_id: int):
+def get_chat_stats(chat_id):
     return db.get_chat_stats(chat_id)
 
-def get_chat_top_users(chat_id: int, limit=10):
+def get_chat_top_users(chat_id, limit=10):
     return db.get_chat_top_users(chat_id, limit)
 
-def get_detailed_stats(user_id: int, days: int = 30):
+def get_detailed_stats(user_id, days=30):
     return db.get_detailed_stats(user_id, days)
 
 def get_global_trends():
@@ -262,11 +284,4 @@ def get_comparison_data():
     return db.get_comparison_data()
 
 def backup_database():
-    db.save_data()
-    return True
-
-if __name__ == "__main__":
-    # Тест
-    print("✅ In-memory база с полной функциональностью")
-    print(f"👥 Пользователей: {len(db.user_stats)}")
-    print(f"📊 Детальной статистики: {sum(len(dates) for dates in db.detailed_stats.values())} записей")
+    return db.backup_database()
