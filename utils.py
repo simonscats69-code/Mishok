@@ -7,14 +7,12 @@ import math
 logger = logging.getLogger(__name__)
 
 def format_number(num: int) -> str:
-    """Форматирует число с разделителями пробелами"""
     try:
         return f"{num:,}".replace(",", " ")
     except:
         return str(num)
 
 def calculate_level(shlep_count: int) -> Dict[str, Any]:
-    """Рассчитывает уровень на основе количества шлёпков"""
     if shlep_count <= 0:
         return {
             "level": 1,
@@ -23,7 +21,6 @@ def calculate_level(shlep_count: int) -> Dict[str, Any]:
             "shleps_to_next": 10
         }
     
-    # Уровень увеличивается каждые 10 шлёпков
     level = (shlep_count // 10) + 1
     progress = (shlep_count % 10) * 10
     next_level_at = (level * 10)
@@ -37,42 +34,34 @@ def calculate_level(shlep_count: int) -> Dict[str, Any]:
     }
 
 def calculate_damage_range(level: int) -> tuple:
-    """Рассчитывает диапазон урона на основе уровня"""
     base_min = 10
     base_max = 25
     
     if level <= 100:
-        # Для первых 100 уровней быстрый рост
         min_dmg = int(base_min * (1.02 ** min(level - 1, 100)))
         max_dmg = int(base_max * (1.08 ** min(level - 1, 100)))
     elif level <= 1000:
-        # Для 100-1000 уровней средний рост
         min_dmg = base_min + 100 * 2 + (level - 100) * 1
         max_dmg = base_max + 100 * 3 + (level - 100) * 2
     else:
-        # После 1000 уровней медленный рост
         min_dmg = base_min + 1000 * 2 + (level - 1000) * 0.5
         max_dmg = base_max + 1000 * 3 + (level - 1000) * 1
     
-    # Гарантируем, что максимум больше минимума
     if max_dmg <= min_dmg:
         max_dmg = min_dmg + 10
     
     return (min_dmg, max_dmg)
 
 def generate_progress_bar(percentage: int, length: int = 10) -> str:
-    """Генерирует прогресс-бар"""
     filled = int(percentage / 100 * length)
     empty = length - filled
     
-    # Используем разные символы для лучшего отображения
     filled_char = "█"
     empty_char = "░"
     
     return filled_char * filled + empty_char * empty
 
 def format_time_ago(timestamp: datetime) -> str:
-    """Форматирует время в формате 'сколько времени назад'"""
     if not timestamp:
         return "никогда"
     
@@ -97,7 +86,6 @@ def format_time_ago(timestamp: datetime) -> str:
         return "только что"
 
 def safe_get(data: Dict, key: str, default: Any = None) -> Any:
-    """Безопасное получение значения из словаря"""
     try:
         keys = key.split(".")
         current = data
@@ -115,29 +103,24 @@ def safe_get(data: Dict, key: str, default: Any = None) -> Any:
         return default
 
 def chunk_list(lst: List, chunk_size: int) -> List[List]:
-    """Разделяет список на части"""
     return [lst[i:i + chunk_size] for i in range(0, len(lst), chunk_size)]
 
 def truncate_text(text: str, max_length: int, suffix: str = "...") -> str:
-    """Обрезает текст до указанной длины"""
     if len(text) <= max_length:
         return text
     
     return text[:max_length - len(suffix)] + suffix
 
 def is_valid_user_id(user_id: Any) -> bool:
-    """Проверяет, является ли user_id валидным"""
     try:
         return isinstance(user_id, (int, str)) and str(user_id).isdigit() and int(user_id) > 0
     except:
         return False
 
 def get_random_color() -> str:
-    """Возвращает случайный цвет в HEX формате"""
     return f"#{random.randint(0, 0xFFFFFF):06x}"
 
 def parse_time_string(time_str: str) -> Optional[timedelta]:
-    """Парсит строку времени вида '1h30m' в timedelta"""
     try:
         hours = 0
         minutes = 0
@@ -156,7 +139,6 @@ def parse_time_string(time_str: str) -> Optional[timedelta]:
         return None
 
 def format_duration(seconds: int) -> str:
-    """Форматирует длительность в секундах в читаемый вид"""
     if seconds < 60:
         return f"{seconds} сек"
     
@@ -176,47 +158,37 @@ def format_duration(seconds: int) -> str:
     return f"{days} д {hours} ч"
 
 def calculate_xp_for_next_level(current_level: int) -> int:
-    """Рассчитывает XP для следующего уровня"""
-    # Квадратичная прогрессия
     return int(100 * (current_level ** 1.5))
 
 def generate_random_name() -> str:
-    """Генерирует случайное смешное имя"""
     prefixes = ["Лысый", "Шлёпковый", "Медвежий", "Блестящий", "Электрический"]
     suffixes = ["Мишок", "Шлёп", "Бамбук", "Молния", "Фонарь"]
     
     return f"{random.choice(prefixes)} {random.choice(suffixes)}"
 
 def escape_markdown_v2(text: str) -> str:
-    """Экранирует спецсимволы для MarkdownV2"""
     escape_chars = r'_*[]()~`>#+-=|{}.!'
     return ''.join(f'\\{c}' if c in escape_chars else c for c in text)
 
 def validate_username(username: str) -> str:
-    """Очищает и валидирует имя пользователя"""
     if not username or not isinstance(username, str):
         return "Аноним"
     
-    # Убираем лишние пробелы
     username = username.strip()
     
-    # Ограничиваем длину
     if len(username) > 32:
         username = username[:32]
     
-    # Заменяем опасные символы
     username = username.replace("@", "(at)").replace("#", "").replace("/", "")
     
     return username if username else "Аноним"
 
 def calculate_percentage(part: int, whole: int) -> float:
-    """Рассчитывает процент"""
     if whole == 0:
         return 0.0
     return round((part / whole) * 100, 2)
 
 def format_size(size_bytes: int) -> str:
-    """Форматирует размер в байтах в читаемый вид"""
     if size_bytes < 1024:
         return f"{size_bytes} B"
     
@@ -232,12 +204,10 @@ def format_size(size_bytes: int) -> str:
     return f"{size_gb:.1f} GB"
 
 def is_weekend() -> bool:
-    """Проверяет, выходной ли сегодня"""
     today = datetime.now().weekday()
-    return today >= 5  # 5 = суббота, 6 = воскресенье
+    return today >= 5
 
 def get_current_season() -> str:
-    """Возвращает текущий сезон"""
     month = datetime.now().month
     
     if month in [12, 1, 2]:
@@ -250,12 +220,10 @@ def get_current_season() -> str:
         return "🍂 Осень"
 
 def generate_session_id() -> str:
-    """Генерирует уникальный ID сессии"""
     import uuid
     return str(uuid.uuid4())[:8]
 
 def log_execution_time(func):
-    """Декоратор для логирования времени выполнения"""
     import time
     from functools import wraps
     
@@ -271,7 +239,6 @@ def log_execution_time(func):
     return wrapper
 
 async def async_log_execution_time(func):
-    """Асинхронный декоратор для логирования времени выполнения"""
     import time
     from functools import wraps
     
