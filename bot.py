@@ -19,7 +19,6 @@ from database import add_shlep, get_stats, get_top_users, get_user_stats, get_ch
 from keyboard import get_shlep_session_keyboard, get_shlep_start_keyboard, get_chat_vote_keyboard, get_inline_keyboard
 from cache import cache
 from statistics import get_favorite_time, get_comparison_stats
-from duel_system import handle_duel_command, handle_duel_callback, init_duel_system
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -141,24 +140,6 @@ async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit
         
         total_damage = base_dmg + bonus_damage
         
-        # Проверяем активную дуэль через duel_system
-        from duel_system import duel_system
-        active_duel = duel_system.get_user_active_duel(user.id)
-        
-        if active_duel:
-            # Добавляем урон в дуэль
-            success, result, duel_data = duel_system.duel_callback_attack(
-                active_duel["id"], 
-                user.id, 
-                total_damage, 
-                user.first_name
-            )
-            
-            if success and duel_data.get("message_id") and duel_data.get("chat_id"):
-                # Обновляем сообщение дуэли
-                from duel_system import update_duel_message
-                await update_duel_message(duel_data, msg)
-        
         try:
             total, cnt, max_dmg = add_shlep(
                 user.id, 
@@ -186,14 +167,7 @@ async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit
         lvl = calc_level(cnt)
         title, _ = level_title(lvl['level'])
         
-        duel_info = ""
-        if active_duel:
-            opponent = active_duel["target_name"] if user.id == active_duel["challenger_id"] else active_duel["challenger_name"]
-            duel_info = f"\n⚔️ Дуэль с {opponent}: +{total_damage} урона"
-            if bonus_damage > 0:
-                duel_info += f" ({base_dmg} + {bonus_damage} бонус)"
-        
-        text = f"{get_reaction()}{rec}{duel_info}\n💥 Урон: {total_damage}\n👤 {user.first_name}: {cnt} шлёпков\n🎯 Уровень {lvl['level']} ({title})\n📊 До уровня: {lvl['next']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n📈 Всего шлёпков в игре: {format_num(total)}"
+        text = f"{get_reaction()}{rec}\n💥 Урон: {total_damage}\n👤 {user.first_name}: {cnt} шлёпков\n🎯 Уровень {lvl['level']} ({title})\n📊 До уровня: {lvl['next']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n📈 Всего шлёпков в игре: {format_num(total)}"
         
         kb = get_shlep_session_keyboard()
         
@@ -250,7 +224,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📊 /chat_stats — Статистика чата
 🏆 /chat_top — Топ игроков
 🗳️ /vote [вопрос] — Голосование
-⚔️ /duel @username — Дуэль
 👑 /roles — Роли в чате
 
 Личные команды (в лс с ботом):
@@ -621,7 +594,23 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg:
         return
     
-    text = "🆘 ПОМОЩЬ\n\nОсновные команды:\n/start — Начало работы\n/shlep — Шлёпнуть Мишка\n/stats — Глобальная статистика\n/level — Твой уровень\n/my_stats — Детальная статистика\n/mishok — О Мишке\n\nДля чатов:\n/chat_stats — Статистика чата\n/chat_top — Топ игроков чата\n/vote — Голосование\n/duel — Дуэль\n/roles — Роли в чате\n\nНовое: Шлёпай в одном окне без спама сообщений!"
+    text = """🆘 ПОМОЩЬ
+
+Основные команды:
+/start — Начало работы
+/shlep — Шлёпнуть Мишка
+/stats — Глобальная статистика
+/level — Твой уровень
+/my_stats — Детальная статистика
+/mishok — О Мишке
+
+Для чатов:
+/chat_stats — Статистика чата
+/chat_top — Топ игроков чата
+/vote — Голосование
+/roles — Роли в чате
+
+Новое: Шлёпай в одном окне без спама сообщений!"""
     
     await msg.reply_text(text)
 
@@ -900,8 +889,13 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data in ["vote_yes", "vote_no"]:
         await handle_vote(update, context, data)
     elif data.startswith("duel_"):
-        # Обработчик дуэлей теперь в duel_system.py
-        await handle_duel_callback(update, context, data)
+        # Система дуэлей отключена
+        await query.answer("❌ Система дуэлей временно отключена", show_alert=True)
+        try:
+            # Удаляем кнопки чтобы не соблазняли
+            await query.message.edit_reply_markup(reply_markup=None)
+        except:
+            pass
     else:
         await query.message.reply_text("⚙️ Эта функция в разработке")
 
@@ -957,7 +951,6 @@ async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "/chat_stats — статистика чата\n"
                     "/chat_top — топ игроков\n"
                     "/vote — голосование\n"
-                    "/duel — дуэль\n"
                     "Прогресс сохраняется! 💾"
                 )
 
@@ -968,13 +961,6 @@ def main():
     if not BOT_TOKEN:
         logger.error("❌ Нет токена бота! Установите BOT_TOKEN в config.py или .env файле")
         sys.exit(1)
-    
-    # Очистка просроченных дуэлей при запуске
-    try:
-        system = init_duel_system()
-        logger.info("✅ Система дуэлей инициализирована")
-    except Exception as e:
-        logger.error(f"❌ Ошибка инициализации дуэлей: {e}")
     
     app = Application.builder().token(BOT_TOKEN).build()
     
@@ -991,7 +977,6 @@ def main():
         ("chat_top", chat_top),
         ("vote", vote),
         ("vote_info", vote_info),
-        ("duel", handle_duel_command),  # Команда дуэлей из duel_system.py
         ("roles", roles),
         ("backup", backup),
         ("storage", storage),
