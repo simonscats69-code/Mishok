@@ -31,34 +31,50 @@ def ensure_data_file():
         save_data(default_data)
         logger.info(f"Создан новый файл данных: {DATA_FILE}")
         return default_data
-    else:
-        try:
-            data = load_data_raw()
-            needs_fix = False
+    
+    try:
+        with open(DATA_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        if "user_stats" in data and "users" not in data:
+            logger.info("Автоматическая конвертация user_stats -> users")
+            data["users"] = data.pop("user_stats")
+            for user_id, user_data in data["users"].items():
+                if "count" in user_data:
+                    user_data["total_shleps"] = user_data.pop("count")
+                user_data.setdefault("max_damage", 0)
+                user_data.setdefault("last_shlep", None)
+                user_data.setdefault("damage_history", [])
+                user_data.setdefault("chat_stats", {})
             
-            required_keys = ["users", "chats", "global_stats", "timestamps", "records"]
-            for key in required_keys:
-                if key not in data:
-                    logger.warning(f"В файле данных отсутствует ключ: {key}")
-                    needs_fix = True
-            
-            if "user_stats" in data and "users" not in data:
-                logger.warning("Обнаружена старая структура данных (user_stats)")
-                needs_fix = True
-            
-            if needs_fix:
-                logger.info("Файл данных требует исправления структуры")
-                return fix_data_structure(data)
-            else:
-                logger.info(f"Файл данных найден и структура корректна: {DATA_FILE}")
-                return data
-                
-        except Exception as e:
-            logger.error(f"Ошибка проверки файла данных: {e}")
-            return create_new_data_file()
+            save_data(data)
+        
+        return data
+    except Exception as e:
+        logger.error(f"Ошибка загрузки файла данных: {e}")
+        return create_new_data_file()
+
+def create_new_data_file():
+    default_data = {
+        "users": {},
+        "chats": {},
+        "global_stats": {
+            "total_shleps": 0,
+            "last_shlep": None,
+            "max_damage": 0,
+            "max_damage_user": None,
+            "max_damage_date": None,
+            "total_users": 0
+        },
+        "timestamps": {},
+        "records": []
+    }
+    save_data(default_data)
+    logger.info(f"Создан новый файл данных: {DATA_FILE}")
+    return default_data
 
 def repair_data_structure():
-    data = load_data()
+    data = load_data_raw()
     
     data.setdefault("users", {})
     data.setdefault("chats", {})
@@ -105,21 +121,6 @@ def repair_data_structure():
     logger.info("Структура данных восстановлена")
     return True
 
-def repair_data_structure_and_load():
-    try:
-        backup_database()
-        
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            raw_data = json.load(f)
-        
-        repair_data_structure()
-        
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error(f"Ошибка восстановления данных: {e}")
-        return create_new_data_file()
-
 def load_data_raw():
     try:
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
@@ -128,106 +129,6 @@ def load_data_raw():
         logger.error(f"Ошибка загрузки данных: {e}")
         return {}
 
-def fix_data_structure(old_data):
-    logger.info("Исправление структуры данных...")
-    
-    new_data = {
-        "users": {},
-        "chats": {},
-        "global_stats": {
-            "total_shleps": 0,
-            "last_shlep": None,
-            "max_damage": 0,
-            "max_damage_user": None,
-            "max_damage_date": None,
-            "total_users": 0
-        },
-        "timestamps": {},
-        "records": []
-    }
-    
-    if "user_stats" in old_data:
-        for user_id_str, user_info in old_data["user_stats"].items():
-            new_data["users"][user_id_str] = {
-                "username": user_info.get("username", f"User_{user_id_str}"),
-                "total_shleps": user_info.get("count", user_info.get("total_shleps", 0)),
-                "max_damage": 0,
-                "last_shlep": user_info.get("last_shlep"),
-                "damage_history": [],
-                "chat_stats": {}
-            }
-    elif "users" in old_data:
-        for user_id_str, user_info in old_data["users"].items():
-            new_data["users"][user_id_str] = {
-                "username": user_info.get("username", f"User_{user_id_str}"),
-                "total_shleps": user_info.get("total_shleps", user_info.get("count", 0)),
-                "max_damage": user_info.get("max_damage", 0),
-                "last_shlep": user_info.get("last_shlep"),
-                "damage_history": user_info.get("damage_history", []),
-                "chat_stats": user_info.get("chat_stats", {})
-            }
-    
-    if "chat_stats" in old_data:
-        for chat_id_str, chat_info in old_data["chat_stats"].items():
-            new_data["chats"][chat_id_str] = {
-                "total_shleps": chat_info.get("total_shleps", 0),
-                "users": {},
-                "max_damage": chat_info.get("max_damage", 0),
-                "max_damage_user": chat_info.get("max_damage_user"),
-                "max_damage_date": chat_info.get("max_damage_date")
-            }
-            
-            if "users" in chat_info:
-                seen_users = {}
-                for uid, user_data in chat_info["users"].items():
-                    if uid not in seen_users:
-                        seen_users[uid] = {
-                            "username": user_data.get("username", f"User_{uid}"),
-                            "total_shleps": user_data.get("count", user_data.get("total_shleps", 0)),
-                            "max_damage": user_data.get("max_damage", 0)
-                        }
-                    else:
-                        seen_users[uid]["total_shleps"] += user_data.get("count", user_data.get("total_shleps", 0))
-                
-                new_data["chats"][chat_id_str]["users"] = seen_users
-    
-    if "global_stats" in old_data:
-        new_data["global_stats"] = {
-            "total_shleps": old_data["global_stats"].get("total_shleps", 0),
-            "last_shlep": old_data["global_stats"].get("last_shlep"),
-            "max_damage": old_data["global_stats"].get("max_damage", 0),
-            "max_damage_user": old_data["global_stats"].get("max_damage_user"),
-            "max_damage_date": old_data["global_stats"].get("max_damage_date"),
-            "total_users": len(new_data["users"])
-        }
-    else:
-        total_shleps = sum(user.get("total_shleps", 0) for user in new_data["users"].values())
-        new_data["global_stats"]["total_shleps"] = total_shleps
-        new_data["global_stats"]["total_users"] = len(new_data["users"])
-    
-    save_data(new_data)
-    logger.info("Структура данных исправлена")
-    return new_data
-
-def create_new_data_file():
-    default_data = {
-        "users": {},
-        "chats": {},
-        "global_stats": {
-            "total_shleps": 0,
-            "last_shlep": None,
-            "max_damage": 0,
-            "max_damage_user": None,
-            "max_damage_date": None,
-            "total_users": 0
-        },
-        "timestamps": {},
-        "records": []
-    }
-    save_data(default_data)
-    logger.info(f"Создан новый файл данных: {DATA_FILE}")
-    return default_data
-
 def load_data():
     try:
         ensure_data_file()
@@ -235,17 +136,18 @@ def load_data():
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
-        needs_repair = False
-        
-        required_keys = ["users", "chats", "global_stats", "timestamps", "records"]
-        for key in required_keys:
-            if key not in data:
-                needs_repair = True
-                break
-        
-        if needs_repair:
-            logger.warning("Обнаружена поврежденная структура данных, восстанавливаю...")
-            return repair_data_structure_and_load()
+        if "user_stats" in data and "users" not in data:
+            logger.info("Обнаружена старая структура user_stats, конвертирую...")
+            data["users"] = data.pop("user_stats")
+            for user_id, user_data in data["users"].items():
+                if "count" in user_data:
+                    user_data["total_shleps"] = user_data.pop("count")
+                user_data.setdefault("max_damage", 0)
+                user_data.setdefault("last_shlep", None)
+                user_data.setdefault("damage_history", [])
+                user_data.setdefault("chat_stats", {})
+            
+            save_data(data)
         
         if "timestamps" in data:
             for key, value in data["timestamps"].items():
@@ -255,7 +157,7 @@ def load_data():
         return data
     except Exception as e:
         logger.error(f"Ошибка загрузки данных: {e}")
-        return repair_data_structure_and_load()
+        return load_data_raw()
 
 def save_data(data):
     try:
@@ -656,10 +558,4 @@ def check_data_integrity():
         }
     }
 
-def migrate_old_data():
-    logger.info("Проверка структуры данных...")
-    ensure_data_file()
-    logger.info("Проверка завершена")
-
-migrate_old_data()
 logger.info("База данных готова к работе")
