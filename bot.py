@@ -7,15 +7,16 @@ import asyncio
 import re
 from datetime import datetime, timedelta
 from functools import wraps
+from typing import Dict, Any, Tuple
 
-from telegram import Update
+from telegram import Update, User
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 
 from config import BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO
 from database import add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, get_chat_top_users, backup_database, check_data_integrity, repair_data_structure, create_duel_invite, accept_duel_invite, decline_duel_invite, get_active_duel, add_shlep_to_duel, finish_duel, surrender_duel, get_user_active_duel, cleanup_expired_duels, update_duel_message_id, save_vote_data, get_vote_data, delete_vote_data, get_user_vote
-from keyboard import get_shlep_session_keyboard, get_shlep_start_keyboard, get_chat_vote_keyboard, get_inline_keyboard, get_game_keyboard, get_duel_invite_keyboard, get_duel_active_keyboard, get_duel_finished_keyboard
+from keyboard import get_shlep_session_keyboard, get_shlep_start_keyboard, get_chat_vote_keyboard, get_inline_keyboard, get_duel_invite_keyboard, get_duel_active_keyboard, get_duel_finished_keyboard
 from cache import cache
 from statistics import get_favorite_time, get_comparison_stats, get_global_trends_info, format_daily_activity_chart, format_hourly_distribution_chart
 
@@ -25,6 +26,46 @@ logger = logging.getLogger(__name__)
 VOTE_DATA_FILE = "data/votes.json"
 
 shlep_sessions = {}
+
+# Перенесено из duel_utils.py (используется в handle_duel_accept)
+def is_user_target(invite: Dict[str, Any], user: User) -> Tuple[bool, str]:
+    """
+    Проверяет, является ли пользователь целевым для приглашения
+    """
+    try:
+        target_name = invite["target_name"].lower().replace("@", "").strip()
+        
+        if not target_name:
+            return False, "Некорректное имя цели"
+        
+        username = (user.username or "").lower().replace("@", "").strip()
+        first_name = user.first_name.lower().strip()
+        last_name = (user.last_name or "").lower().strip()
+        
+        user_names = [username, first_name]
+        if last_name:
+            user_names.append(last_name)
+            user_names.append(f"{first_name} {last_name}")
+        
+        for name in user_names:
+            if name and target_name == name:
+                return True, ""
+        
+        if invite["target_name"].startswith("@"):
+            target_without_at = target_name[1:] if target_name.startswith("@") else target_name
+            for name in user_names:
+                if name and target_without_at == name:
+                    return True, ""
+        
+        for name in user_names:
+            if name and (target_name in name or name in target_name):
+                return True, ""
+        
+        return False, "Это приглашение не для вас"
+        
+    except Exception as e:
+        logger.error(f"Ошибка проверки целевого пользователя: {e}")
+        return False, "Ошибка проверки"
 
 def command_handler(func):
     @wraps(func)
@@ -1768,13 +1809,9 @@ def main():
         ("vote_info", vote_info),
         ("duel", duel),                    # /duel
         ("duelaccept", duel),              # /duelaccept (без пробела)
-        ("duelaccept@mishok_lysiy_bot", duel),  # С упоминанием бота
         ("duellist", duel),                # /duellist (без пробела)
-        ("duellist@mishok_lysiy_bot", duel),    # С упоминанием бота
         ("duelstats", duel),               # /duelstats (без пробела)
-        ("duelstats@mishok_lysiy_bot", duel),   # С упоминанием бота
         ("duelcancel", duel),              # /duelcancel (без пробела)
-        ("duelcancel@mishok_lysiy_bot", duel),  # С упоминанием бота
         ("roles", roles),
         ("backup", backup),
         ("storage", storage),
