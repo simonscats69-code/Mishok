@@ -1,266 +1,143 @@
-import random
 import pytz
 from datetime import datetime, timedelta
 
-def get_moscow_time():
-    try:
-        moscow_tz = pytz.timezone('Europe/Moscow')
-        return datetime.now(moscow_tz)
-    except:
-        return datetime.now()
+def moscow_time():
+    try: return datetime.now(pytz.timezone('Europe/Moscow'))
+    except: return datetime.now()
 
-def format_number(number):
-    return f"{number:,}".replace(",", " ")
+def fmt_num(n): return f"{n:,}".replace(",", " ")
 
-def format_percentage(value, total):
-    if total == 0:
-        return "0.0%"
-    percentage = (value / total) * 100
-    return f"{percentage:.1f}%"
+def fmt_percent(val, total): return f"{(val/total*100):.1f}%" if total else "0.0%"
 
-def create_progress_bar(value, total, length=20):
-    if total == 0:
-        filled = 0
-    else:
-        filled = int((value / total) * length)
-    
+def progress_bar(val, total, length=20):
+    filled = int((val/total*length)) if total else 0
     filled = max(0, min(filled, length))
-    empty = length - filled
-    
-    return "█" * filled + "░" * empty
+    return "█"*filled + "░"*(length-filled)
 
-def truncate_text(text, max_length=100, suffix="..."):
-    if len(text) <= max_length:
-        return text
-    return text[:max_length - len(suffix)] + suffix
+def truncate(txt, max_len=100, suffix="..."):
+    return txt[:max_len-len(suffix)] + suffix if len(txt)>max_len else txt
 
-def format_time_ago(timestamp):
-    if not timestamp:
-        return "никогда"
-    
-    now = get_moscow_time()
-    diff = now - timestamp
-    
-    if diff.days > 365:
-        years = diff.days // 365
-        return f"{years} год{'' if years == 1 else 'а' if 2 <= years <= 4 else 'ов'} назад"
-    elif diff.days > 30:
-        months = diff.days // 30
-        return f"{months} месяц{'' if months == 1 else 'а' if 2 <= months <= 4 else 'ев'} назад"
-    elif diff.days > 0:
-        return f"{diff.days} день{'' if diff.days == 1 else 'я' if 2 <= diff.days <= 4 else 'ей'} назад"
-    elif diff.seconds > 3600:
-        hours = diff.seconds // 3600
-        return f"{hours} час{'' if hours == 1 else 'а' if 2 <= hours <= 4 else 'ов'} назад"
-    elif diff.seconds > 60:
-        minutes = diff.seconds // 60
-        return f"{minutes} минут{'' if minutes == 1 else 'ы' if 2 <= minutes <= 4 else ''} назад"
-    else:
-        return "только что"
+def time_ago(ts):
+    if not ts: return "никогда"
+    diff = moscow_time() - ts
+    if diff.days > 365: y=diff.days//365; return f"{y} год{'' if y==1 else 'а' if 2<=y<=4 else 'ов'} назад"
+    if diff.days > 30: m=diff.days//30; return f"{m} месяц{'' if m==1 else 'а' if 2<=m<=4 else 'ев'} назад"
+    if diff.days > 0: return f"{diff.days} день{'' if diff.days==1 else 'я' if 2<=diff.days<=4 else 'ей'} назад"
+    if diff.seconds > 3600: h=diff.seconds//3600; return f"{h} час{'' if h==1 else 'а' if 2<=h<=4 else 'ов'} назад"
+    if diff.seconds > 60: m=diff.seconds//60; return f"{m} минут{'' if m==1 else 'ы' if 2<=m<=4 else ''} назад"
+    return "только что"
 
-def format_duration(seconds):
-    if seconds < 60:
-        return f"{seconds} сек"
-    elif seconds < 3600:
-        minutes = seconds // 60
-        return f"{minutes} мин"
-    elif seconds < 86400:
-        hours = seconds // 3600
-        minutes = (seconds % 3600) // 60
-        return f"{hours} ч {minutes} мин"
-    else:
-        days = seconds // 86400
-        hours = (seconds % 86400) // 3600
-        return f"{days} д {hours} ч"
+def fmt_duration(sec):
+    if sec<60: return f"{sec} сек"
+    if sec<3600: return f"{sec//60} мин"
+    if sec<86400: return f"{sec//3600} ч {(sec%3600)//60} мин"
+    return f"{sec//86400} д {(sec%86400)//3600} ч"
 
-def format_date_range(days):
-    if days == 1:
-        return "сегодня"
-    elif days == 7:
-        return "за неделю"
-    elif days == 30:
-        return "за месяц"
-    elif days == 365:
-        return "за год"
-    else:
-        return f"за {days} дней"
+def fmt_date_range(days):
+    if days==1: return "сегодня"
+    if days==7: return "за неделю"
+    if days==30: return "за месяц"
+    if days==365: return "за год"
+    return f"за {days} дней"
 
-def calculate_average(data):
-    if not data:
-        return 0.0
-    return sum(data) / len(data)
+def avg(data): return sum(data)/len(data) if data else 0.0
 
-def calculate_median(data):
-    if not data:
-        return 0.0
-    
-    sorted_data = sorted(data)
-    n = len(sorted_data)
-    
-    if n % 2 == 1:
-        return float(sorted_data[n // 2])
-    else:
-        mid1 = sorted_data[n // 2 - 1]
-        mid2 = sorted_data[n // 2]
-        return (mid1 + mid2) / 2
+def median(data):
+    if not data: return 0.0
+    s=sorted(data); n=len(s)
+    if n%2==1: return float(s[n//2])
+    return (s[n//2-1]+s[n//2])/2
 
-def calculate_percentile(data, percentile):
-    if not data:
-        return 0.0
-    
-    sorted_data = sorted(data)
-    n = len(sorted_data)
-    k = (n - 1) * percentile / 100
-    
-    f = int(k)
-    c = k - f
-    
-    if f + 1 < n:
-        return sorted_data[f] + c * (sorted_data[f + 1] - sorted_data[f])
-    else:
-        return sorted_data[f]
+def percentile(data, p):
+    if not data: return 0.0
+    s=sorted(data); n=len(s); k=(n-1)*p/100
+    f=int(k); c=k-f
+    if f+1<n: return s[f]+c*(s[f+1]-s[f])
+    return s[f]
 
-def generate_chart(data, max_width=50):
-    if not data:
-        return "📊 Нет данных для отображения"
-    
-    max_value = max(data.values())
-    if max_value == 0:
-        return "📊 Все значения равны нулю"
-    
-    chart_lines = []
-    for label, value in data.items():
-        bar_length = int((value / max_value) * max_width)
-        bar = "█" * bar_length
-        
-        if bar_length < max_width:
-            bar += "░" * (max_width - bar_length)
-        
-        chart_lines.append(f"{label}: {bar} {value}")
-    
-    return "\n".join(chart_lines)
-
-def generate_hourly_chart(hourly_data, compact=False):
-    if not hourly_data or len(hourly_data) != 24:
-        return "⏰ Нет данных по часам"
-    
-    if compact:
-        chart_lines = ["⏰ *Активность по часам (компактно):*"]
-        
-        for block_start in range(0, 24, 4):
-            block_end = block_start + 3
-            block_data = hourly_data[block_start:block_end+1]
-            block_total = sum(block_data)
-            
-            max_total = max([sum(hourly_data[i:i+4]) for i in range(0, 24, 4)])
-            
-            if max_total > 0:
-                bar_length = int((block_total / max_total) * 20)
-            else:
-                bar_length = 0
-            
-            bar = "█" * bar_length
-            if bar_length < 20:
-                bar += "░" * (20 - bar_length)
-            
-            time_range = f"{block_start:02d}:00-{block_end:02d}:00"
-            chart_lines.append(f"{time_range}: {bar} {block_total}")
-        
-        return "\n".join(chart_lines)
-    else:
-        chart_lines = ["⏰ *Активность по часам:*"]
-        
-        max_value = max(hourly_data)
-        if max_value == 0:
-            return "⏰ Нет активности за этот период"
-        
-        for hour in range(24):
-            value = hourly_data[hour]
-            bar_length = int((value / max_value) * 15)
-            
-            bar = "█" * bar_length
-            if bar_length < 15:
-                bar += "░" * (15 - bar_length)
-            
-            hour_label = f"{hour:02d}:00"
-            emoji = get_hour_emoji(hour)
-            
-            chart_lines.append(f"{emoji} {hour_label}: {bar} {value}")
-        
-        return "\n".join(chart_lines)
-
-def get_hour_emoji(hour):
-    if 0 <= hour < 6:
-        return "🌙"
-    elif 6 <= hour < 12:
-        return "🌅"
-    elif 12 <= hour < 18:
-        return "☀️"
-    else:
-        return "🌆"
-
-def get_day_of_week_emoji(date):
-    weekdays = ["😴", "😞", "😐", "🙂", "😊", "🎉", "🎊"]
-    return weekdays[date.weekday()]
-
-def format_statistics_summary(stats):
-    lines = []
-    
-    if 'total' in stats:
-        lines.append(f"📊 Всего: {format_number(stats['total'])}")
-    
-    if 'average' in stats:
-        lines.append(f"📈 Среднее: {stats['average']:.1f}")
-    
-    if 'median' in stats:
-        lines.append(f"⚖️ Медиана: {stats['median']:.1f}")
-    
-    if 'max' in stats:
-        lines.append(f"🏆 Максимум: {stats['max']}")
-    
-    if 'min' in stats and stats['min'] > 0:
-        lines.append(f"📉 Минимум: {stats['min']}")
-    
+def chart(data, width=50):
+    if not data: return "📊 Нет данных"
+    mx=max(data.values())
+    if mx==0: return "📊 Все нули"
+    lines=[]
+    for label,val in data.items():
+        bar_len=int((val/mx)*width); bar="█"*bar_len + "░"*(width-bar_len)
+        lines.append(f"{label}: {bar} {val}")
     return "\n".join(lines)
 
-def safe_division(numerator, denominator, default=0.0):
-    if denominator == 0:
-        return default
-    return numerator / denominator
-
-def generate_random_id(length=8):
-    import string
-    import secrets
-    alphabet = string.ascii_letters + string.digits
-    return ''.join(secrets.choice(alphabet) for _ in range(length))
-
-def parse_time_range(time_range):
-    now = get_moscow_time()
-    
-    if time_range == "today":
-        start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        end = now
-    elif time_range == "week":
-        start = now - timedelta(days=7)
-        end = now
-    elif time_range == "month":
-        start = now - timedelta(days=30)
-        end = now
-    elif time_range == "year":
-        start = now - timedelta(days=365)
-        end = now
+def hourly_chart(hours, compact=False):
+    if not hours or len(hours)!=24: return "⏰ Нет данных"
+    if compact:
+        lines=["⏰ *Активность (компактно):*"]
+        for i in range(0,24,4):
+            total=sum(hours[i:i+4]); mx=max([sum(hours[j:j+4]) for j in range(0,24,4)]) or 1
+            bar_len=int((total/mx)*20); bar="█"*bar_len + "░"*(20-bar_len)
+            lines.append(f"{i:02d}:00-{i+3:02d}:00: {bar} {total}")
+        return "\n".join(lines)
     else:
-        start = datetime(2020, 1, 1)
-        end = now
-    
+        lines=["⏰ *Активность:*"]; mx=max(hours)
+        if mx==0: return "⏰ Нет активности"
+        for h in range(24):
+            val=hours[h]; bar_len=int((val/mx)*15); bar="█"*bar_len + "░"*(15-bar_len)
+            emoji="🌙" if 0<=h<6 else "🌅" if 6<=h<12 else "☀️" if 12<=h<18 else "🌆"
+            lines.append(f"{emoji} {h:02d}:00: {bar} {val}")
+        return "\n".join(lines)
+
+def hour_emoji(h):
+    if 0<=h<6: return "🌙"
+    if 6<=h<12: return "🌅"
+    if 12<=h<18: return "☀️"
+    return "🌆"
+
+def day_emoji(d): return ["😴","😞","😐","🙂","😊","🎉","🎊"][d.weekday()]
+
+def stats_summary(stats):
+    lines=[]
+    if 'total' in stats: lines.append(f"📊 Всего: {fmt_num(stats['total'])}")
+    if 'average' in stats: lines.append(f"📈 Среднее: {stats['average']:.1f}")
+    if 'median' in stats: lines.append(f"⚖️ Медиана: {stats['median']:.1f}")
+    if 'max' in stats: lines.append(f"🏆 Максимум: {stats['max']}")
+    if 'min' in stats and stats['min']>0: lines.append(f"📉 Минимум: {stats['min']}")
+    return "\n".join(lines)
+
+def safe_div(num, den, default=0.0): return num/den if den else default
+
+def random_id(length=8):
+    import string, secrets
+    return ''.join(secrets.choice(string.ascii_letters+string.digits) for _ in range(length))
+
+def parse_time_range(tr):
+    now=moscow_time()
+    if tr=="today": start=now.replace(hour=0,minute=0,second=0,microsecond=0); end=now
+    elif tr=="week": start=now-timedelta(days=7); end=now
+    elif tr=="month": start=now-timedelta(days=30); end=now
+    elif tr=="year": start=now-timedelta(days=365); end=now
+    else: start=datetime(2020,1,1); end=now
     return start, end
 
-def humanize_number(num):
-    if num < 1000:
-        return str(num)
-    elif num < 1000000:
-        return f"{num/1000:.1f}K".replace(".0", "")
-    elif num < 1000000000:
-        return f"{num/1000000:.1f}M".replace(".0", "")
-    else:
-        return f"{num/1000000000:.1f}B".replace(".0", "")
+def humanize_num(n):
+    if n<1000: return str(n)
+    if n<1000000: return f"{n/1000:.1f}K".replace(".0","")
+    if n<1000000000: return f"{n/1000000:.1f}M".replace(".0","")
+    return f"{n/1000000000:.1f}B".replace(".0","")
+
+get_moscow_time = moscow_time
+format_number = fmt_num
+format_percentage = fmt_percent
+create_progress_bar = progress_bar
+truncate_text = truncate
+format_time_ago = time_ago
+format_duration = fmt_duration
+format_date_range = fmt_date_range
+calculate_average = avg
+calculate_median = median
+calculate_percentile = percentile
+generate_chart = chart
+generate_hourly_chart = hourly_chart
+get_hour_emoji = hour_emoji
+get_day_of_week_emoji = day_emoji
+format_statistics_summary = stats_summary
+safe_division = safe_div
+generate_random_id = random_id
+parse_time_range = parse_time_range
+humanize_number = humanize_num
