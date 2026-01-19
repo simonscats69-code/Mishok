@@ -6,7 +6,7 @@ from datetime import datetime
 from functools import wraps
 
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters, JobQueue
 from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 
@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 
 # Глобальный словарь для хранения сессий шлёпания
 shlep_sessions = {}
+
+# Глобальный словарь для хранения голосований
+active_votes = {}
 
 def command_handler(func):
     @wraps(func)
@@ -250,7 +253,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             u_safe = escape_markdown(u or f'Игрок{i}', version=1)
             lvl = calc_level(c)
             medal = ["🥇", "🥈", "🥉"][i-1] if i <= 3 else ""
-            text += f"\n{medad}{i}. {u_safe}"
+            text += f"\n{medal}{i}. {u_safe}"  # ИСПРАВЛЕНО: medad → medal
             text += f"\n   📊 {format_num(c)} | Ур. {lvl['level']}"
             text += f"\n   ⚡ Урон: {lvl['min']}-{lvl['max']}"
     
@@ -390,17 +393,224 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg:
         return
     
-    question = " ".join(context.args) if context.args else "Шlёпнуть Мишка?"
-    kb = get_chat_vote_keyboard()
+    chat_id = update.effective_chat.id
+    user = update.effective_user
     
+    question = " ".join(context.args) if context.args else "Шлёпнуть Мишка?"
+    
+    # Создаем новое голосование
+    vote_id = f"{chat_id}_{datetime.now().timestamp()}"
+    active_votes[vote_id] = {
+        "chat_id": chat_id,
+        "message_id": None,
+        "question": question,
+        "votes_yes": [],
+        "votes_no": [],
+        "votes_abstain": [],
+        "creator_id": user.id,
+        "created_at": datetime.now(),
+        "ended": False
+    }
+    
+    kb = get_chat_vote_keyboard(vote_id)
     question_safe = escape_markdown(question, version=1)
     
-    await msg.reply_text(
-        f"🗳️ ГОЛОСОВАНИЕ\n\n{question_safe}\n\nГолосование длится 5 минут!",
-        reply_markup=kb
+    # Отправляем сообщение с голосованием
+    vote_msg = await msg.reply_text(
+        f"🗳️ *ГОЛОСОВАНИЕ*\n\n{question_safe}\n\n"
+        f"✅ За: 0\n❌ Против: 0\n🤷 Воздержались: 0\n\n"
+        f"⏰ Голосование закончится через 5 минут!",
+        reply_markup=kb,
+        parse_mode=ParseMode.MARKDOWN
     )
     
-    logger.info(f"Голосование создано: {question} в чате {update.effective_chat.id}")
+    # Сохраняем ID сообщения
+    active_votes[vote_id]["message_id"] = vote_msg.message_id
+    
+    # Запускаем таймер на 5 минут
+    context.job_queue.run_once(
+        end_vote,
+        300,  # 5 минут в секундах
+        data=vote_id,
+        chat_id=chat_id,
+        name=f"vote_{vote_id}"
+    )
+    
+    logger.info(f"Голосование создано: {question} в чате {chat_id}, ID: {vote_id}")
+
+async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработка нажатий на кнопки голосования"""
+    try:
+        query = update.callback_query
+        if not query:
+            return
+        
+        await query.answer()
+        
+        # Разбираем callback_data: vote_yes_ID или vote_no_ID или vote_abstain_ID
+        data = query.data
+        
+        if not data.startswith("vote_"):
+            return
+        
+        parts = data.split("_")
+        if len(parts) < 3:
+            await query.answer("❌ Ошибка голосования", show_alert=True)
+            return
+        
+        vote_type = f"{parts[0]}_{parts[1]}"  # "vote_yes", "vote_no", "vote_abstain"
+        vote_id = "_".join(parts[2:])  # ID голосования
+        
+        if vote_id not in active_votes:
+            await query.answer("❌ Голосование уже завершено", show_alert=True)
+            return
+        
+        vote_data = active_votes[vote_id]
+        if vote_data["ended"]:
+            await query.answer("❌ Голосование завершено", show_alert=True)
+            return
+        
+        user = update.effective_user
+        user_id = user.id
+        
+        # Убираем старый голос пользователя
+        if user_id in vote_data["votes_yes"]:
+            vote_data["votes_yes"].remove(user_id)
+        if user_id in vote_data["votes_no"]:
+            vote_data["votes_no"].remove(user_id)
+        if user_id in vote_data["votes_abstain"]:
+            vote_data["votes_abstain"].remove(user_id)
+        
+        # Добавляем новый голос
+        if vote_type == "vote_yes":
+            vote_data["votes_yes"].append(user_id)
+            vote_text = "👍 За"
+        elif vote_type == "vote_no":
+            vote_data["votes_no"].append(user_id)
+            vote_text = "👎 Против"
+        elif vote_type == "vote_abstain":
+            vote_data["votes_abstain"].append(user_id)
+            vote_text = "🤷 Воздержаться"
+        else:
+            await query.answer("❌ Неизвестный тип голоса", show_alert=True)
+            return
+        
+        # Обновляем сообщение
+        yes_count = len(vote_data["votes_yes"])
+        no_count = len(vote_data["votes_no"])
+        abstain_count = len(vote_data["votes_abstain"])
+        
+        question_safe = escape_markdown(vote_data["question"], version=1)
+        
+        try:
+            await query.message.edit_text(
+                f"🗳️ *ГОЛОСОВАНИЕ*\n\n{question_safe}\n\n"
+                f"✅ За: {yes_count}\n❌ Против: {no_count}\n🤷 Воздержались: {abstain_count}\n\n"
+                f"⏰ Голосование закончится через 5 минут!",
+                reply_markup=get_chat_vote_keyboard(vote_id),
+                parse_mode=ParseMode.MARKDOWN
+            )
+        except Exception as e:
+            logger.error(f"Ошибка редактирования сообщения голосования: {e}")
+        
+        await query.answer(f"Ваш голос: {vote_text}", show_alert=False)
+        logger.info(f"Голос зарегистрирован: {user.username or user.id} → {vote_text} в голосовании {vote_id}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка обработки голоса: {e}", exc_info=True)
+        try:
+            await query.answer("❌ Ошибка при регистрации голоса", show_alert=True)
+        except:
+            pass
+
+async def end_vote(context: ContextTypes.DEFAULT_TYPE):
+    """Завершение голосования через 5 минут"""
+    try:
+        job = context.job
+        vote_id = job.data
+        
+        if vote_id not in active_votes:
+            logger.warning(f"Голосование {vote_id} не найдено при завершении")
+            return
+        
+        vote_data = active_votes[vote_id]
+        if vote_data["ended"]:
+            return
+        
+        # Помечаем как завершенное
+        vote_data["ended"] = True
+        
+        yes_count = len(vote_data["votes_yes"])
+        no_count = len(vote_data["votes_no"])
+        abstain_count = len(vote_data["votes_abstain"])
+        total_votes = yes_count + no_count + abstain_count
+        
+        # Формируем результаты
+        question_safe = escape_markdown(vote_data["question"], version=1)
+        
+        result_text = f"🗳️ *ГОЛОСОВАНИЕ ЗАВЕРШЕНО*\n\n{question_safe}\n\n"
+        result_text += f"📊 *Результаты:*\n"
+        result_text += f"✅ За: {yes_count}\n"
+        result_text += f"❌ Против: {no_count}\n"
+        result_text += f"🤷 Воздержались: {abstain_count}\n"
+        result_text += f"👥 Всего голосов: {total_votes}\n\n"
+        
+        if total_votes == 0:
+            result_text += "🤷 *Итог:* Никто не проголосовал. Мишок остался не шлёпнутым!"
+        elif yes_count > no_count:
+            result_text += "🎉 *Итог:* Большинство ЗА! Давайте нашлёпаем этому лысому! 👴💥\n\n"
+            result_text += "Кто сделает первый шлёпок? Используй /shlep !"
+        elif no_count > yes_count:
+            result_text += "😔 *Итог:* Большинство ПРОТИВ. Мишок сегодня отдыхает."
+        else:
+            result_text += "⚖️ *Итог:* Ничья! Решение за вами."
+        
+        try:
+            # Получаем сообщение
+            chat_id = vote_data["chat_id"]
+            message_id = vote_data["message_id"]
+            
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=result_text,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=None  # Убираем кнопки
+            )
+        except Exception as e:
+            logger.error(f"Ошибка при редактировании сообщения голосования: {e}")
+            # Если не удалось отредактировать, отправляем новое сообщение
+            try:
+                await context.bot.send_message(
+                    chat_id=vote_data["chat_id"],
+                    text=result_text,
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            except Exception as e2:
+                logger.error(f"Не удалось отправить результаты голосования: {e2}")
+        
+        # Удаляем голосование из активных через 1 минуту после завершения
+        context.job_queue.run_once(
+            delete_vote_data,
+            60,
+            data=vote_id,
+            name=f"delete_vote_{vote_id}"
+        )
+        
+        logger.info(f"Голосование {vote_id} завершено. За: {yes_count}, Против: {no_count}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка при завершении голосования: {e}", exc_info=True)
+
+async def delete_vote_data(context: ContextTypes.DEFAULT_TYPE):
+    """Удаление данных голосования из памяти"""
+    try:
+        vote_id = context.job.data
+        if vote_id in active_votes:
+            del active_votes[vote_id]
+            logger.debug(f"Данные голосования {vote_id} удалены из памяти")
+    except Exception as e:
+        logger.error(f"Ошибка удаления данных голосования: {e}")
 
 @command_handler
 @chat_only
@@ -415,9 +625,9 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         target = ' '.join(context.args)
         target_safe = escape_markdown(target, version=1)
         user_safe = escape_markdown(user.first_name, version=1)
-        text = f"⚔️ ВЫЗОВ НА ДУЭЛЬ!\n{user_safe} вызывает {target_safe} на дуэль шlёпков!\n\n📜 Правила:\n• 5 минут на дуэль\n• Побеждает тот, кто сделает больше шlёпков\n• Победитель получает бонус"
+        text = f"⚔️ ВЫЗОВ НА ДУЭЛЬ!\n{user_safe} вызывает {target_safe} на дуэль шlёпков!\n\n📜 Правила:\n• 5 минут на дуэль\n• Побеждает тот, кто сделает больше шлёпков\n• Победитель получает бонус"
     else:
-        text = "⚔️ СИСТЕМА ДУЭЛЕЙ\nИспользуй '/duel @username' чтобы вызвать кого-то на дуэль!\n\n📜 Правила:\n• Дуэль длится 5 минут\n• Побеждает тот, кто сделает больше шlёпков\n• Победитель получает специальную роль"
+        text = "⚔️ СИСТЕМА ДУЭЛЕЙ\nИспользуй '/duel @username' чтобы вызвать кого-то на дуэль!\n\n📜 Правила:\n• Дуэль длится 5 минут\n• Побеждает тот, кто сделает больше шлёпков\n• Победитель получает специальную роль"
     
     await msg.reply_text(text)
 
@@ -630,68 +840,6 @@ async def data_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await msg.reply_text(text)
 
-async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_type: str):
-    try:
-        query = update.callback_query
-        if not query:
-            return
-        
-        user = update.effective_user
-        username = user.username or user.first_name
-        
-        vote_texts = {
-            "vote_yes": "👍 За",
-            "vote_no": "👎 Против", 
-            "vote_abstain": "🤷 Воздержаться"
-        }
-        
-        vote_text = vote_texts.get(vote_type, "Неизвестно")
-        
-        original_text = query.message.text
-        vote_line = f"• {username}: {vote_text}"
-        
-        if "Результаты:" not in original_text:
-            new_text = original_text + f"\n\n📊 Результаты:\n{vote_line}"
-        else:
-            lines = original_text.split('\n')
-            results_start = -1
-            
-            for i, line in enumerate(lines):
-                if "Результаты:" in line:
-                    results_start = i
-                    break
-            
-            if results_start >= 0:
-                user_voted = False
-                for j in range(results_start + 1, len(lines)):
-                    if username in lines[j]:
-                        lines[j] = vote_line
-                        user_voted = True
-                        break
-                
-                if not user_voted:
-                    lines.insert(results_start + 1, vote_line)
-                
-                new_text = '\n'.join(lines)
-            else:
-                new_text = original_text + f"\n\n📊 Результаты:\n{vote_line}"
-        
-        await query.message.edit_text(
-            new_text,
-            reply_markup=get_chat_vote_keyboard()
-        )
-        
-        await query.answer(f"Ваш голос: {vote_text}", show_alert=False)
-        
-        logger.info(f"Голос зарегистрирован: {username} → {vote_text}")
-        
-    except Exception as e:
-        logger.error(f"Ошибка обработки голоса: {e}", exc_info=True)
-        try:
-            await query.answer("❌ Ошибка при регистрации голоса", show_alert=True)
-        except:
-            pass
-
 async def start_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Начало сессии шлёпания в одном окне"""
     query = update.callback_query
@@ -795,8 +943,12 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     logger.info(f"Callback received: {data}")
     
+    # Обработка голосований
+    if data.startswith("vote_"):
+        await handle_vote(update, context)
+    
     # Обработка новой системы шлёпания
-    if data == "start_shlep_session":
+    elif data == "start_shlep_session":
         await start_shlep_session(update, context)
     elif data in ["shlep_again", "shlep_level", "shlep_stats", "shlep_my_stats", "shlep_trends", "shlep_menu"]:
         await handle_shlep_session(update, context, data)
@@ -818,8 +970,6 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await help_cmd(update, context)
     elif data == "mishok_info":
         await mishok(update, context)
-    elif data in ["vote_yes", "vote_no", "vote_abstain"]:
-        await handle_vote(update, context, data)
     elif data.startswith("quick_"):
         await quick_handler(update, context, data)
     else:
