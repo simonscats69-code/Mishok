@@ -84,7 +84,7 @@ def level_title(lvl):
     if lvl >= 750: return ("💎 БОЖЕСТВЕННЫЙ АРХИТЕКТОР", "Ты строишь реальность шлёпками!")
     if lvl >= 700: return ("⭐ ВЕЧНЫЙ ИМПЕРАТОР", "Твоя империя будет существовать вечно!")
     if lvl >= 650: return ("🌠 КОСМИЧЕСКИЙ ДЕМИУРГ", "Создаёшь звёзды одним шлёпком!")
-    if lvl >= 600: return ("⚡ ПРЕВОСХОДНЫЙ БОГО ЦАРЬ", "Ты — высшая форма существования!")
+    if lvl >= 600: return ("⚡ ПРЕВОСХОДНЫЙ БОГО-ЦАРЬ", "Ты — высшая форма существования!")
     if lvl >= 550: return ("🔥 МИРОТВОРЕЦ ВСЕЛЕННОЙ", "Твоим шлёпком устанавливается мир!")
     if lvl >= 500: return ("🌟 ВЕРХОВНЫЙ БОГ ШЛЁПКОВ", "Тебе поклоняются миллионы!")
     if lvl >= 450: return ("👑 НЕБЕСНЫЙ ПАТРИАРХ", "Твоя династия будет править вечно!")
@@ -443,11 +443,36 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @command_handler
 async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await get_message_from_update(update)
-    if not msg:
-        return
-    
-    await msg.reply_text(MISHOK_INTRO, parse_mode=ParseMode.MARKDOWN)
+    """Показать информацию о Мишке"""
+    try:
+        msg = await get_message_from_update(update)
+        if not msg:
+            return
+        
+        # Используем MISHOK_INTRO из config.py
+        await msg.reply_text(
+            MISHOK_INTRO,
+            parse_mode=ParseMode.MARKDOWN,
+            disable_web_page_preview=True
+        )
+        logger.info(f"✅ Команда 'О Мишке' выполнена для пользователя {update.effective_user.id}")
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка в mishok: {e}", exc_info=True)
+        # Пытаемся отправить сообщение об ошибке
+        try:
+            if update.message:
+                await update.message.reply_text(
+                    "ℹ️ *Информация о Мишке:*\n\nЯ — Мишок Лысый, бот для шлёпок! Используй /help для команд.",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            elif update.callback_query:
+                await update.callback_query.message.reply_text(
+                    "ℹ️ *Информация о Мишке:*\n\nЯ — Мишок Лысый, бот для шлёпок!",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+        except Exception as e2:
+            logger.error(f"❌ Не удалось отправить сообщение об ошибке: {e2}")
 
 @command_handler
 async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -517,6 +542,8 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await trends(update, context)
     elif data == "help_inline":
         await help_cmd(update, context)
+    elif data == "mishok_info":
+        await mishok(update, context)
     elif data.startswith("quick_"):
         await quick_handler(update, context, data)
     else:
@@ -550,6 +577,7 @@ async def quick_handler(update: Update, context: ContextTypes.DEFAULT_TYPE, data
 
 # ВАЖНО: button_handler не использует @command_handler, потому что это не команда!
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик кнопок reply-клавиатуры"""
     if update.effective_chat.type != "private":
         return
     
@@ -559,24 +587,34 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     logger.info(f"Button pressed: {text}")
     
-    # Проверяем все возможные варианты
-    if text == "👊 Шлёпнуть Мишка" or text == "👊 Шлёпнуть" or "Шлёпнуть" in text:
-        await shlep(update, context)
-    elif text == "🎯 Уровень":
-        await level(update, context)
-    elif text == "📊 Статистика":
-        await stats(update, context)
-    elif text == "📈 Моя статистика":
-        await my_stats(update, context)
-    elif text == "📊 Тренды":
-        await trends(update, context)
-    elif text == "❓ Помощь":
-        await help_cmd(update, context)
-    elif text == "👴 О Мишке":
-        await mishok(update, context)
-    else:
-        logger.warning(f"Неизвестная кнопка: {text}")
-        await update.message.reply_text("Неизвестная команда. Используйте /help для списка команд.")
+    try:
+        # Проверяем ВСЕ возможные варианты текста кнопок
+        if text in ["👊 Шлёпнуть Мишка", "👊 Шлёпнуть", "Шлёпнуть Мишка"]:
+            await shlep(update, context)
+        elif text == "🎯 Уровень":
+            await level(update, context)
+        elif text == "📊 Статистика":
+            await stats(update, context)
+        elif text == "📈 Моя статистика":
+            await my_stats(update, context)
+        elif text == "📊 Тренды":
+            await trends(update, context)
+        elif text == "❓ Помощь":
+            await help_cmd(update, context)
+        elif text in ["👴 О Мишке", "О Мишке"]:
+            await mishok(update, context)
+        else:
+            logger.warning(f"Неизвестная кнопка: {text}")
+            await update.message.reply_text(
+                "Неизвестная команда. Используйте /help для списка команд.",
+                parse_mode=ParseMode.MARKDOWN
+            )
+    except Exception as e:
+        logger.error(f"Ошибка в button_handler: {e}", exc_info=True)
+        await update.message.reply_text(
+            "⚠️ Произошла ошибка при обработке команды. Попробуйте ещё раз.",
+            parse_mode=ParseMode.MARKDOWN
+        )
 
 async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message and update.message.new_chat_members:
