@@ -1,9 +1,7 @@
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
 def main_kb(for_chat=False):
-    """Основная клавиатура"""
     if for_chat:
-        # Inline клавиатура для чатов
         return InlineKeyboardMarkup([
             [InlineKeyboardButton("👊 Шлёпнуть сейчас!", callback_data="shlep_mishok")],
             [
@@ -23,7 +21,6 @@ def main_kb(for_chat=False):
             ]
         ])
     else:
-        # Reply клавиатура для личных сообщений
         return ReplyKeyboardMarkup([
             [KeyboardButton("👊 Шлёпнуть Мишка")],
             [KeyboardButton("🎯 Уровень"), KeyboardButton("📊 Статистика")],
@@ -32,7 +29,6 @@ def main_kb(for_chat=False):
         ], resize_keyboard=True)
 
 def quick_actions():
-    """Быстрые действия для чатов"""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("👊 Ещё раз!", callback_data="quick_shlep"),
@@ -53,7 +49,6 @@ def quick_actions():
     ])
 
 def get_chat_vote_keyboard():
-    """Клавиатура для голосований"""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("👍 За", callback_data="vote_yes")],
         [InlineKeyboardButton("👎 Против", callback_data="vote_no")],
@@ -61,14 +56,12 @@ def get_chat_vote_keyboard():
     ])
 
 def get_chat_duel_keyboard():
-    """Клавиатура для дуэлей"""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("⚔️ Принять дуэль", callback_data="accept_duel")],
         [InlineKeyboardButton("❌ Отказаться", callback_data="decline_duel")]
     ])
 
 def get_chat_admin_keyboard():
-    """Клавиатура для администраторов"""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📊 Статистика", callback_data="admin_stats")],
         [InlineKeyboardButton("🔄 Сбросить кэш", callback_data="admin_clear_cache")],
@@ -77,7 +70,6 @@ def get_chat_admin_keyboard():
     ])
 
 def get_chat_roles_keyboard():
-    """Клавиатура для ролей"""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("👑 Король шлёпков", callback_data="role_king")],
         [InlineKeyboardButton("🎯 Самый меткий", callback_data="role_accurate")],
@@ -87,7 +79,6 @@ def get_chat_roles_keyboard():
     ])
 
 def get_chat_notification_keyboard():
-    """Клавиатура для уведомлений"""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🔔 Включить уведомления", callback_data="notify_on")],
         [InlineKeyboardButton("🔕 Выключить уведомления", callback_data="notify_off")],
@@ -95,7 +86,6 @@ def get_chat_notification_keyboard():
     ])
 
 def get_chat_record_keyboard():
-    """Клавиатура для рекордов"""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🏆 Глобальный рекорд", callback_data="record_global")],
         [InlineKeyboardButton("📊 Рекорд чата", callback_data="record_chat")],
@@ -103,7 +93,6 @@ def get_chat_record_keyboard():
         [InlineKeyboardButton("📈 История рекордов", callback_data="record_history")]
     ])
 
-# Экспортируем функции для использования в других модулях
 get_chat_quick_actions = quick_actions
 get_inline_keyboard = lambda: main_kb(for_chat=True)
 get_game_keyboard = lambda: main_kb(for_chat=False)
