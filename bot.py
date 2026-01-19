@@ -29,9 +29,9 @@ def command_handler(func):
             logger.error(f"Ошибка в {func.__name__}: {e}", exc_info=True)
             try:
                 if update.message:
-                    await update.message.reply_text(f"⚠️ Ошибка выполнения команды")
+                    await update.message.reply_text("⚠️ Ошибка выполнения команды")
                 elif update.callback_query:
-                    await update.callback_query.message.reply_text(f"⚠️ Ошибка выполнения команды")
+                    await update.callback_query.message.reply_text("⚠️ Ошибка выполнения команды")
             except:
                 pass
     return wrapper
@@ -241,7 +241,7 @@ async def level(update: Update, context: ContextTypes.DEFAULT_TYPE):
 💡 {safe_advice}"""
     
     if last:
-        text += f"\n⏰ Последний шлёпок: {last.strftime('%d.%m.%Y %H:%M')}"
+        text += f"\n⏰ Последний шlёпок: {last.strftime('%d.%m.%Y %H:%M')}"
     
     await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
 
