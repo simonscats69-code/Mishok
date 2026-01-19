@@ -74,11 +74,17 @@ def quick_actions():
         ]
     ])
 
-def get_chat_vote_keyboard():
+def get_chat_vote_keyboard(vote_id=None):
+    """Клавиатура для голосования с уникальным ID"""
+    if vote_id is None:
+        vote_id = "temp"
+    
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("👍 За", callback_data="vote_yes")],
-        [InlineKeyboardButton("👎 Против", callback_data="vote_no")],
-        [InlineKeyboardButton("🤷 Воздержаться", callback_data="vote_abstain")]
+        [
+            InlineKeyboardButton("👍 За", callback_data=f"vote_yes_{vote_id}"),
+            InlineKeyboardButton("👎 Против", callback_data=f"vote_no_{vote_id}")
+        ],
+        [InlineKeyboardButton("🤷 Воздержаться", callback_data=f"vote_abstain_{vote_id}")]
     ])
 
 def get_chat_duel_keyboard():
