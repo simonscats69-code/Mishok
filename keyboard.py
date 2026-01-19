@@ -1,3 +1,5 @@
+[file name]: keyboard.py
+[file content begin]
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
 def main_kb(for_chat=False):
@@ -63,37 +65,5 @@ def get_chat_vote_keyboard():
         ]
     ])
 
-def get_duel_invite_keyboard(challenger_id: int, target_id: int, duel_id: str):
-    """Клавиатура для приглашения на дуэль"""
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("⚔️ Принять вызов!", 
-                               callback_data=f"duel_accept_{duel_id}"),
-            InlineKeyboardButton("❌ Отклонить", 
-                               callback_data=f"duel_decline_{duel_id}")
-        ]
-    ])
-
-def get_duel_active_keyboard(duel_id: str):
-    """Клавиатура для активной дуэли"""
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("👊 Шлёпнуть!", callback_data=f"duel_shlep_{duel_id}"),
-            InlineKeyboardButton("📊 Статистика", callback_data=f"duel_stats_{duel_id}")
-        ],
-        [
-            InlineKeyboardButton("🏳️ Сдаться", callback_data=f"duel_surrender_{duel_id}"),
-            InlineKeyboardButton("🔄 Обновить", callback_data=f"duel_refresh_{duel_id}")
-        ]
-    ])
-
-def get_duel_finished_keyboard(duel_id: str):
-    """Клавиатура для завершённой дуэли"""
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("📊 Детали", callback_data=f"duel_details_{duel_id}"),
-            InlineKeyboardButton("❌ Закрыть", callback_data=f"duel_close_{duel_id}")
-        ]
-    ])
-
 get_inline_keyboard = lambda: main_kb(for_chat=True)
+[file content end]
