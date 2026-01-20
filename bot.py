@@ -14,7 +14,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 
-from config import BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO
+from config import BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO, DATA_FILE, VOTES_FILE, BACKUP_PATH, LOG_FILE, CHAT_VOTE_DURATION
 from database import add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, get_chat_top_users, backup_database, check_data_integrity, repair_data_structure, save_vote_data, get_vote_data, delete_vote_data, get_user_vote, get_all_votes, cleanup_expired_votes
 from keyboard import get_shlep_session_keyboard, get_shlep_start_keyboard, get_chat_vote_keyboard, get_inline_keyboard
 from cache import cache
@@ -22,9 +22,6 @@ from statistics import get_favorite_time, get_comparison_stats
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Используем абсолютный путь для файла голосований
-VOTE_DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "votes.json")
 
 shlep_sessions = {}
 
@@ -113,7 +110,6 @@ def get_reaction():
     return random.choice(MISHOK_REACTIONS)
 
 def get_message_from_update(update: Update):
-    """Получает сообщение из update"""
     if update.callback_query and update.callback_query.message:
         return update.callback_query.message
     return update.message
@@ -168,7 +164,6 @@ async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit
         lvl = calc_level(cnt)
         title, _ = level_title(lvl['level'])
         
-        # ИСПРАВЛЕННЫЙ ТЕКСТ - убрали лишнюю информацию
         text = f"{get_reaction()}{rec}\n💥 Урон: {total_damage}\n👤 {user.first_name}: {cnt} шлёпков\n🎯 Уровень {lvl['level']} ({title})"
         
         kb = get_shlep_session_keyboard()
@@ -371,11 +366,9 @@ async def chat_top(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await msg.reply_text(text)
 
 async def vote_timer(vote_id, chat_id, message_id, context):
-    """Таймер для завершения голосования через 5 минут"""
     try:
-        await asyncio.sleep(300)  # 5 минут
+        await asyncio.sleep(CHAT_VOTE_DURATION)
         
-        # Проверяем, существует ли ещё голосование
         vote_data = get_vote_data(vote_id)
         if not vote_data or vote_data.get("finished", False):
             return
@@ -388,16 +381,13 @@ async def vote_timer(vote_id, chat_id, message_id, context):
         logger.error(f"Ошибка в таймере голосования {vote_id}: {e}")
 
 async def finish_vote(vote_id, chat_id, message_id, context):
-    """Завершает голосование и показывает результаты"""
     try:
         vote_data = get_vote_data(vote_id)
         if not vote_data or vote_data.get("finished", False):
             return
             
-        # Сохраняем результаты перед редактированием
         vote_data["finished"] = True
         vote_data["finished_at"] = datetime.now().isoformat()
-        save_vote_data(vote_data)
         
         yes_count = len(vote_data.get("votes_yes", []))
         no_count = len(vote_data.get("votes_no", []))
@@ -446,12 +436,7 @@ async def finish_vote(vote_id, chat_id, message_id, context):
             else:
                 logger.error(f"Ошибка обновления сообщения голосования: {e}")
         
-        # ОЧИСТКА СТАРЫХ ГОЛОСОВАНИЙ ПОСЛЕ ЗАВЕРШЕНИЯ
-        try:
-            cleanup_expired_votes()
-            logger.info(f"Очистка старых голосований выполнена после завершения {vote_id}")
-        except Exception as cleanup_error:
-            logger.error(f"Ошибка очистки после голосования: {cleanup_error}")
+        save_vote_data(vote_data)
                 
     except Exception as e:
         logger.error(f"Ошибка завершения голосования {vote_id}: {e}")
@@ -467,10 +452,8 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = get_chat_vote_keyboard()
     question_safe = escape_markdown(question, version=1)
     
-    # Создаем уникальный ID голосования
     vote_id = f"{msg.chat_id}_{msg.message_id}_{int(datetime.now().timestamp())}"
     
-    # Создаем данные голосования
     vote_data = {
         "id": vote_id,
         "chat_id": msg.chat_id,
@@ -479,28 +462,24 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "votes_yes": [],
         "votes_no": [],
         "started_at": datetime.now().isoformat(),
-        "ends_at": (datetime.now() + timedelta(minutes=5)).isoformat(),
+        "ends_at": (datetime.now() + timedelta(seconds=CHAT_VOTE_DURATION)).isoformat(),
         "finished": False
     }
     
-    # Сохраняем голосование
     save_vote_data(vote_data)
     
-    # Запускаем таймер
     asyncio.create_task(vote_timer(vote_id, msg.chat_id, msg.message_id, context))
     
-    # Создаем сообщение голосования
     text = (
         f"🗳️ *ГОЛОСОВАНИЕ*\n\n"
         f"*Вопрос:* {question_safe}\n\n"
         f"✅ *За:* 0\n"
         f"❌ *Против:* 0\n\n"
-        f"⏰ *Голосование длится 5 минут!*"
+        f"⏰ *Голосование длится {CHAT_VOTE_DURATION//60} минут!*"
     )
     
     sent_message = await msg.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
     
-    # Обновляем message_id на ID отправленного сообщения
     vote_data["message_id"] = sent_message.message_id
     save_vote_data(vote_data)
     
@@ -516,7 +495,6 @@ async def vote_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = msg.chat_id
     
     try:
-        # Очищаем старые голосования перед показом информации
         cleanup_expired_votes()
         
         all_votes = get_all_votes()
@@ -550,7 +528,6 @@ async def vote_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text("❌ Ошибка при получении информации о голосованиях")
 
 async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_type: str):
-    """Обрабатывает голос пользователя (за или против)"""
     try:
         query = update.callback_query
         if not query:
@@ -560,7 +537,6 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
         user = update.effective_user
         user_id = str(user.id)
         
-        # Получаем vote_id поиском по message_id и chat_id
         vote_id = None
         all_votes = get_all_votes()
         
@@ -583,7 +559,6 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
             await query.answer("❌ Голосование уже завершено", show_alert=True)
             return
             
-        # Удаляем предыдущий голос пользователя (если был)
         current_vote = get_user_vote(vote_id, user.id)
         if current_vote:
             if current_vote == "yes" and user_id in vote_data["votes_yes"]:
@@ -591,7 +566,6 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
             elif current_vote == "no" and user_id in vote_data["votes_no"]:
                 vote_data["votes_no"].remove(user_id)
                 
-        # Добавляем новый голос
         if vote_type == "vote_yes":
             vote_data["votes_yes"].append(user_id)
             vote_text = "👍 За"
@@ -601,7 +575,6 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
             
         save_vote_data(vote_data)
         
-        # Обновляем отображение
         yes_count = len(vote_data.get("votes_yes", []))
         no_count = len(vote_data.get("votes_no", []))
         total_votes = yes_count + no_count
@@ -710,7 +683,7 @@ async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg:
         return
     
-    ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
+    from config import ADMIN_ID
     if update.effective_user.id != ADMIN_ID:
         await msg.reply_text("⚠️ Эта команда только для администраторов!")
         return
@@ -729,10 +702,10 @@ async def storage(update: Update, context: ContextTypes.DEFAULT_TYPE):
     paths = [
         ("/root", "Основная папка"),
         ("/bothost", "Корень Bothost"),
-        ("/bothost/storage", "Постоянное хранилище"),
-        (os.path.join(os.path.dirname(__file__), "mishok_data.json"), "Файл данных"),
-        ("/mnt/storage", "Основное хранилище (альтернативное)"),
-        ("/data", "Общее хранилище")
+        (DATA_FILE, "Файл данных"),
+        (VOTES_FILE, "Файл голосований"),
+        (BACKUP_PATH, "Директория бэкапов"),
+        (LOG_FILE, "Файл логов")
     ]
     
     for p, d in paths:
@@ -823,7 +796,7 @@ async def data_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg:
         return
     
-    DATA_FILE = "/data/mishok_data.json"
+    from config import DATA_FILE
     text = "📁 ИНФОРМАЦИЯ О ФАЙЛЕ ДАННЫХ\n\n"
     
     if os.path.exists(DATA_FILE):
@@ -953,10 +926,8 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data in ["vote_yes", "vote_no"]:
         await handle_vote(update, context, data)
     elif data.startswith("duel_"):
-        # Система дуэлей отключена
         await query.answer("❌ Система дуэлей временно отключена", show_alert=True)
         try:
-            # Удаляем кнопки чтобы не соблазняли
             await query.message.edit_reply_markup(reply_markup=None)
         except:
             pass
@@ -964,8 +935,6 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("⚙️ Эта функция в разработке")
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """ИСПРАВЛЕННЫЙ ОБРАБОТЧИК REPLY-КНОПОК"""
-    # Обрабатываем кнопки в личных сообщениях
     if not update.message:
         return
     
@@ -987,7 +956,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await mishok(update, context)
         else:
             logger.warning(f"Неизвестная кнопка: {text}")
-            # В чатах не отправляем ответ на неизвестные кнопки
             if update.effective_chat.type == "private":
                 await update.message.reply_text(
                     "Неизвестная команда. Используйте /help для списка команд."
@@ -1021,6 +989,26 @@ async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Ошибка: {context.error}", exc_info=True)
 
+@command_handler
+async def check_paths(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from config import DATA_FILE, VOTES_FILE, BACKUP_PATH
+    
+    text = (
+        "🔍 ПРОВЕРКА ПУТЕЙ ДЛЯ ДАННЫХ:\n\n"
+        f"📁 DATA_FILE: {DATA_FILE}\n"
+        f"   Существует: {'✅ Да' if os.path.exists(DATA_FILE) else '❌ Нет'}\n\n"
+        f"🗳️ VOTES_FILE: {VOTES_FILE}\n"
+        f"   Существует: {'✅ Да' if os.path.exists(VOTES_FILE) else '❌ Нет'}\n\n"
+        f"💾 BACKUP_PATH: {BACKUP_PATH}\n"
+        f"   Существует: {'✅ Да' if os.path.exists(BACKUP_PATH) else '❌ Нет'}\n"
+    )
+    
+    if os.path.exists(DATA_FILE):
+        size = os.path.getsize(DATA_FILE)
+        text += f"\n📏 Размер файла данных: {size:,} байт".replace(",", " ")
+    
+    await update.message.reply_text(text)
+
 def main():
     if not BOT_TOKEN:
         logger.error("❌ Нет токена бота! Установите BOT_TOKEN в config.py или .env файле")
@@ -1028,7 +1016,6 @@ def main():
     
     app = Application.builder().token(BOT_TOKEN).build()
     
-    # Регистрируем команды
     commands = [
         ("start", start),
         ("shlep", shlep),
@@ -1047,6 +1034,7 @@ def main():
         ("check_data", check_data),
         ("repair", repair),
         ("data_info", data_info),
+        ("check_paths", check_paths),
     ]
     
     for name, handler in commands:
