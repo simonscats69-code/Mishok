@@ -62,20 +62,17 @@ def get_main_reply_keyboard():
 def get_admin_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🧹 Очистка", callback_data="admin_cleanup"),
-         InlineKeyboardButton("🩺 Здоровье", callback_data="admin_health")],
-        [InlineKeyboardButton("📊 Статистика", callback_data="admin_stats"),
-         InlineKeyboardButton("💾 Бэкап", callback_data="admin_backup")],
-        [InlineKeyboardButton("🔄 Миграция", callback_data="admin_migrate"),
+         InlineKeyboardButton("📊 Статистика", callback_data="admin_stats")],
+        [InlineKeyboardButton("💾 Бэкап", callback_data="admin_backup"),
          InlineKeyboardButton("🔧 Исправление", callback_data="admin_repair")],
-        [InlineKeyboardButton("📁 Хранилище", callback_data="admin_storage"),
-         InlineKeyboardButton("❌ Закрыть", callback_data="admin_close")]
+        [InlineKeyboardButton("❌ Закрыть", callback_data="admin_close")]
     ])
 
-def get_migration_keyboard():
+def get_cleanup_keyboard():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔍 Найти данные", callback_data="migrate_find")],
-        [InlineKeyboardButton("📦 Перенести всё", callback_data="migrate_all")],
-        [InlineKeyboardButton("🧪 Проверить структуру", callback_data="migrate_check")],
+        [InlineKeyboardButton("🗑️ Логи", callback_data="cleanup_logs"),
+         InlineKeyboardButton("📦 Временные файлы", callback_data="cleanup_temp")],
+        [InlineKeyboardButton("💾 Старые бэкапы", callback_data="cleanup_backups")],
         [InlineKeyboardButton("🔙 Назад", callback_data="admin_back")]
     ])
 
@@ -85,13 +82,5 @@ def get_confirmation_keyboard(action: str):
         [InlineKeyboardButton("❌ Нет, отмена", callback_data="cancel_action")]
     ])
 
-def get_cleanup_keyboard():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🗑️ Логи", callback_data="cleanup_logs"),
-         InlineKeyboardButton("📦 Временные файлы", callback_data="cleanup_temp")],
-        [InlineKeyboardButton("💾 Старые бэкапы", callback_data="cleanup_backups"),
-         InlineKeyboardButton("🧹 Всё сразу", callback_data="cleanup_all")],
-        [InlineKeyboardButton("🔙 Назад", callback_data="admin_back")]
-    ])
-
+# Удаляем ненужные функции
 get_inline_keyboard = get_main_inline_keyboard
