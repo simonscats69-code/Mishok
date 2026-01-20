@@ -14,8 +14,14 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 
-from config import BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO, DATA_FILE, VOTES_FILE, BACKUP_PATH, LOG_FILE, CHAT_VOTE_DURATION
-from database import add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, get_chat_top_users, backup_database, check_data_integrity, repair_data_structure, save_vote_data, get_vote_data, delete_vote_data, get_user_vote, get_all_votes, cleanup_expired_votes, create_safe_backup, get_backup_list, get_database_size
+from config import BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO, DATA_FILE, BACKUP_PATH, LOG_FILE
+from database import (
+    add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, 
+    get_chat_top_users, backup_database, check_data_integrity, 
+    repair_data_structure, create_safe_backup, get_backup_list, 
+    get_database_size, create_vote, get_vote, get_active_chat_vote, 
+    add_user_vote, finish_vote, update_vote_message_id
+)
 from keyboard import get_shlep_session_keyboard, get_shlep_start_keyboard, get_chat_vote_keyboard, get_main_reply_keyboard, get_main_inline_keyboard, get_admin_keyboard, get_confirmation_keyboard, get_cleanup_keyboard
 from cache import cache
 from statistics import get_comparison_stats
@@ -394,63 +400,64 @@ async def chat_top(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     
     await msg.reply_text(text)
 
-async def vote_timer(vote_id, chat_id, message_id, context):
+# ===== УПРОЩЕННАЯ СИСТЕМА ГОЛОСОВАНИЙ =====
+
+async def vote_timer(vote_id: str, chat_id: int, message_id: int, context: ContextTypes.DEFAULT_TYPE):
+    """Таймер завершения голосования"""
     try:
-        await asyncio.sleep(CHAT_VOTE_DURATION)
-        
-        vote_data = get_vote_data(vote_id)
-        if not vote_data or vote_data.get("finished", False):
+        vote = get_vote(vote_id)
+        if not vote:
             return
-            
-        await finish_vote(vote_id, chat_id, message_id, context)
         
+        ends_at = datetime.fromisoformat(vote["ends_at"])
+        wait_time = (ends_at - datetime.now()).total_seconds()
+        
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+        
+        # Проверяем ещё раз
+        vote = get_vote(vote_id)
+        if vote and vote.get("active", False):
+            await finish_vote_task(vote_id, chat_id, message_id, context)
+            
     except asyncio.CancelledError:
         logger.info(f"Таймер голосования {vote_id} отменён")
     except Exception as e:
-        logger.error(f"Ошибка в таймере голосования {vote_id}: {e}")
+        logger.error(f"Ошибка в таймере голосования: {e}")
 
-async def finish_vote(vote_id, chat_id, message_id, context):
+async def finish_vote_task(vote_id: str, chat_id: int, message_id: int, context: ContextTypes.DEFAULT_TYPE):
+    """Завершает голосование и обновляет сообщение"""
     try:
-        vote_data = get_vote_data(vote_id)
-        if not vote_data or vote_data.get("finished", False):
+        vote = finish_vote(vote_id)
+        if not vote:
             return
-            
-        vote_data["finished"] = True
-        vote_data["finished_at"] = datetime.now().isoformat()
         
-        yes_count = len(vote_data.get("votes_yes", []))
-        no_count = len(vote_data.get("votes_no", []))
+        yes_count = len(vote.get("votes_yes", []))
+        no_count = len(vote.get("votes_no", []))
         total_votes = yes_count + no_count
         
+        # Определяем результат
         if total_votes == 0:
-            result_text = "🤷 *НИКТО НЕ ПРОГОЛОСОВАЛ!*\nНикто не решил судьбу моей лысины... 😔"
-            action_text = ""
+            result_text = "🤷 *НИКТО НЕ ПРОГОЛОСОВАЛ!*"
         elif yes_count > no_count:
-            result_text = "✅ *БОЛЬШИНСТВО ЗА!*\nНарод решил: шлёпать надо!"
-            action_text = "\n\n👊 *ДАВАЙТЕ НАШЛЁПАЕМ ЭТОМУ ЛЫСОМУ!*"
-            asyncio.create_task(
-                context.bot.send_message(
-                    chat_id=chat_id,
-                    text="👴 *Мишок:* Ой-ой, народ решил меня отшлёпать! Принимаю свою судьбу! 👊"
-                )
-            )
+            result_text = "✅ *БОЛЬШИНСТВО ЗА!*"
         elif no_count > yes_count:
-            result_text = "❌ *БОЛЬШИНСТВО ПРОТИВ!*\nНарод пощадил мою лысину!"
-            action_text = "\n\n🙏 *СПАСИБО ЗА МИЛОСЕРДИЕ!*"
+            result_text = "❌ *БОЛЬШИНСТВО ПРОТИВ!*"
         else:
-            result_text = "⚖️ *НИЧЬЯ!*\nГолоса разделились поровну!"
-            action_text = "\n\n🤔 *САМ РЕШАЙ, ШЛЁПАТЬ ИЛИ НЕТ!*"
+            result_text = "⚖️ *НИЧЬЯ!*"
         
+        text = (
+            f"🗳️ *ГОЛОСОВАНИЕ ЗАВЕРШЕНО*\n\n"
+            f"❓ *Вопрос:* {vote['question']}\n\n"
+            f"📊 *Результаты:*\n"
+            f"✅ За: {yes_count} голосов\n"
+            f"❌ Против: {no_count} голосов\n"
+            f"👥 Всего: {total_votes}\n\n"
+            f"{result_text}"
+        )
+        
+        # Пытаемся обновить сообщение
         try:
-            text = (
-                f"🗳️ *ГОЛОСОВАНИЕ ЗАВЕРШЕНО*\n\n"
-                f"*Вопрос:* {vote_data['question']}\n\n"
-                f"📊 *Результаты:*\n"
-                f"✅ За: {yes_count} голосов\n"
-                f"❌ Против: {no_count} голосов\n"
-                f"👥 Всего проголосовало: {total_votes}\n\n"
-                f"{result_text}{action_text}"
-            )
             await context.bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=message_id,
@@ -458,97 +465,120 @@ async def finish_vote(vote_id, chat_id, message_id, context):
                 parse_mode=ParseMode.MARKDOWN,
                 reply_markup=None
             )
-            logger.info(f"Голосование завершено: {vote_id}, результат: {result_text}")
         except Exception as e:
-            if "Message to edit not found" in str(e) or "message not found" in str(e):
-                logger.warning(f"Сообщение голосования {vote_id} было удалено")
-            else:
+            if "Message to edit not found" not in str(e):
                 logger.error(f"Ошибка обновления сообщения голосования: {e}")
+                # Отправляем новое сообщение
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    parse_mode=ParseMode.MARKDOWN
+                )
         
-        save_vote_data(vote_data)
-                
+        logger.info(f"Голосование завершено: {vote_id}, результат: {result_text}")
+        
     except Exception as e:
-        logger.error(f"Ошибка завершения голосования {vote_id}: {e}")
+        logger.error(f"Ошибка завершения голосования: {e}")
 
 @command_handler
 @chat_only
 async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
+    """Создаёт голосование в чате"""
+    # Проверяем активное голосование
+    active_vote = get_active_chat_vote(msg.chat_id)
+    if active_vote:
+        ends_at = datetime.fromisoformat(active_vote["ends_at"])
+        time_left = (ends_at - datetime.now()).seconds
+        minutes = time_left // 60
+        seconds = time_left % 60
+        
+        await msg.reply_text(
+            f"⚠️ В этом чате уже есть активное голосование:\n"
+            f"❓ {active_vote['question']}\n\n"
+            f"✅ За: {len(active_vote.get('votes_yes', []))}\n"
+            f"❌ Против: {len(active_vote.get('votes_no', []))}\n\n"
+            f"⏰ Осталось: {minutes:02d}:{seconds:02d}\n\n"
+            f"Дождитесь окончания или завершите командой /vote_end"
+        )
+        return
+    
+    # Создаём новое
     question = " ".join(context.args) if context.args else "Шлёпнуть Мишка?"
-    kb = get_chat_vote_keyboard()
     question_safe = escape_text(question)
     
-    vote_id = f"{msg.chat_id}_{msg.message_id}_{int(datetime.now().timestamp())}"
+    vote_id = create_vote(msg.chat_id, question, duration_minutes=5)
     
-    vote_data = {
-        "id": vote_id,
-        "chat_id": msg.chat_id,
-        "message_id": msg.message_id,
-        "question": question,
-        "votes_yes": [],
-        "votes_no": [],
-        "started_at": datetime.now().isoformat(),
-        "ends_at": (datetime.now() + timedelta(seconds=CHAT_VOTE_DURATION)).isoformat(),
-        "finished": False
-    }
+    if not vote_id:
+        await msg.reply_text("❌ Не удалось создать голосование")
+        return
     
-    save_vote_data(vote_data)
-    
-    asyncio.create_task(vote_timer(vote_id, msg.chat_id, msg.message_id, context))
-    
+    # Отправляем сообщение
     text = (
         f"🗳️ *ГОЛОСОВАНИЕ*\n\n"
-        f"*Вопрос:* {question_safe}\n\n"
-        f"✅ *За:* 0\n"
-        f"❌ *Против:* 0\n\n"
-        f"⏰ *Голосование длится {CHAT_VOTE_DURATION//60} минут!*"
+        f"❓ *Вопрос:* {question_safe}\n\n"
+        f"✅ *За:* 0 голосов\n"
+        f"❌ *Против:* 0 голосов\n\n"
+        f"⏰ *Завершится через 5 минут*"
     )
     
-    sent_message = await msg.reply_text(text, reply_markup=kb, parse_mode=ParseMode.MARKDOWN)
+    sent_message = await msg.reply_text(
+        text, 
+        reply_markup=get_chat_vote_keyboard(),
+        parse_mode=ParseMode.MARKDOWN
+    )
     
-    vote_data["message_id"] = sent_message.message_id
-    save_vote_data(vote_data)
+    # Сохраняем ID сообщения
+    update_vote_message_id(vote_id, sent_message.message_id)
     
-    logger.info(f"Голосование создано: {question} в чате {msg.chat_id}, ID: {vote_id}")
+    # Запускаем таймер
+    asyncio.create_task(vote_timer(vote_id, msg.chat_id, sent_message.message_id, context))
+    
+    logger.info(f"Создано голосование: {question} в чате {msg.chat_id}")
 
 @command_handler
-@chat_only
-async def vote_info(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    chat_id = msg.chat_id
+@chat_only  
+async def vote_end(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
+    """Ручное завершение голосования"""
+    active_vote = get_active_chat_vote(msg.chat_id)
     
+    if not active_vote:
+        await msg.reply_text("⚠️ В этом чате нет активных голосований")
+        return
+    
+    # Только создатель или админ
+    from config import ADMIN_ID
+    user = update.effective_user
+    
+    # Получаем creator_id из vote_id (формат: chatid_timestamp)
     try:
-        cleanup_expired_votes()
-        
-        all_votes = get_all_votes()
-        active_votes = []
-        now = datetime.now()
-        
-        for vote_id, vote_data in all_votes.items():
-            if (vote_data.get("chat_id") == chat_id and 
-                not vote_data.get("finished", False) and
-                datetime.fromisoformat(vote_data["ends_at"]) > now):
-                active_votes.append(vote_data)
-        
-        if not active_votes:
-            text = "🗳️ *АКТИВНЫЕ ГОЛОСОВАНИЯ*\n\nВ этом чате нет активных голосований.\n\nСоздать новое: `/vote [вопрос]`"
-        else:
-            text = "🗳️ *АКТИВНЫЕ ГОЛОСОВАНИЯ В ЧАТЕ:*\n\n"
-            for i, vote in enumerate(active_votes[:5], 1):
-                ends_at = datetime.fromisoformat(vote["ends_at"])
-                remaining = (ends_at - now).seconds
-                minutes = remaining // 60
-                seconds = remaining % 60
-                yes_count = len(vote.get("votes_yes", []))
-                no_count = len(vote.get("votes_no", []))
-                text += f"{i}. *{vote['question'][:30]}...*\n"
-                text += f"   ✅ {yes_count} | ❌ {no_count}\n"
-                text += f"   ⏰ Осталось: {minutes:02d}:{seconds:02d}\n\n"
-        
-        await msg.reply_text(text, parse_mode=ParseMode.MARKDOWN)
-    except Exception as e:
-        logger.error(f"Ошибка получения информации о голосованиях: {e}")
-        await msg.reply_text("❌ Ошибка при получении информации о голосованиях")
+        creator_id = int(active_vote["id"].split("_")[0])
+    except:
+        creator_id = None
+    
+    if user.id != ADMIN_ID and (creator_id and user.id != creator_id):
+        await msg.reply_text("❌ Только создатель голосования или администратор может завершить голосование")
+        return
+    
+    # Завершаем
+    await finish_vote_task(active_vote["id"], msg.chat_id, active_vote.get("message_id"), context)
+
+def get_vote_message_text(vote_data):
+    """Форматирует текст сообщения голосования"""
+    ends_at = datetime.fromisoformat(vote_data["ends_at"])
+    time_left = (ends_at - datetime.now()).seconds
+    minutes = time_left // 60
+    seconds = time_left % 60
+    
+    return (
+        f"🗳️ *ГОЛОСОВАНИЕ*\n\n"
+        f"❓ *Вопрос:* {vote_data['question']}\n\n"
+        f"✅ *За:* {len(vote_data.get('votes_yes', []))} голосов\n"
+        f"❌ *Против:* {len(vote_data.get('votes_no', []))} голосов\n\n"
+        f"⏰ *Осталось:* {minutes:02d}:{seconds:02d}"
+    )
 
 async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_type: str):
+    """Обрабатывает голос пользователя"""
     try:
         query = update.callback_query
         if not query:
@@ -556,82 +586,38 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
             
         await query.answer()
         user = update.effective_user
-        user_id = str(user.id)
         
-        vote_id = None
-        all_votes = get_all_votes()
-        
-        for vid, vdata in all_votes.items():
-            if (str(vdata.get("message_id")) == str(query.message.message_id) and 
-                str(vdata.get("chat_id")) == str(query.message.chat.id)):
-                vote_id = vid
-                break
-        
-        if not vote_id:
-            await query.answer("❌ Голосование не найдено или устарело", show_alert=True)
+        # Ищем активное голосование в чате
+        active_vote = get_active_chat_vote(query.message.chat.id)
+        if not active_vote:
+            await query.answer("❌ Нет активного голосования", show_alert=True)
             return
-            
-        vote_data = get_vote_data(vote_id)
-        if not vote_data:
-            await query.answer("❌ Голосование не найдено", show_alert=True)
+        
+        # Добавляем голос
+        success = add_user_vote(active_vote["id"], user.id, vote_type)
+        
+        if not success:
+            await query.answer("❌ Ошибка голосования", show_alert=True)
             return
-            
-        if vote_data.get("finished", False):
-            await query.answer("❌ Голосование уже завершено", show_alert=True)
-            return
-            
-        current_vote = get_user_vote(vote_id, user.id)
-        if current_vote:
-            if current_vote == "yes" and user_id in vote_data["votes_yes"]:
-                vote_data["votes_yes"].remove(user_id)
-            elif current_vote == "no" and user_id in vote_data["votes_no"]:
-                vote_data["votes_no"].remove(user_id)
-                
-        if vote_type == "vote_yes":
-            vote_data["votes_yes"].append(user_id)
-            vote_text = "👍 За"
-        else:
-            vote_data["votes_no"].append(user_id)
-            vote_text = "👎 Против"
-            
-        save_vote_data(vote_data)
         
-        yes_count = len(vote_data.get("votes_yes", []))
-        no_count = len(vote_data.get("votes_no", []))
-        total_votes = yes_count + no_count
+        # Обновляем сообщение
+        vote_text = get_vote_message_text(active_vote)
         
-        ends_at = datetime.fromisoformat(vote_data["ends_at"])
-        now = datetime.now()
-        if now < ends_at:
-            remaining = (ends_at - now).seconds
-            minutes = remaining // 60
-            seconds = remaining % 60
-            time_left = f"{minutes:02d}:{seconds:02d}"
-        else:
-            time_left = "00:00"
-            
-        question_safe = escape_text(vote_data["question"])
-        text = (
-            f"🗳️ *ГОЛОСОВАНИЕ*\n\n"
-            f"*Вопрос:* {question_safe}\n\n"
-            f"✅ *За:* {yes_count}\n"
-            f"❌ *Против:* {no_count}\n"
-            f"👥 *Всего:* {total_votes}\n\n"
-            f"⏰ *Осталось:* {time_left}"
-        )
+        try:
+            await query.message.edit_text(
+                vote_text,
+                reply_markup=get_chat_vote_keyboard(),
+                parse_mode=ParseMode.MARKDOWN
+            )
+        except Exception as e:
+            logger.error(f"Ошибка обновления сообщения: {e}")
         
-        await query.message.edit_text(
-            text,
-            reply_markup=get_chat_vote_keyboard(),
-            parse_mode=ParseMode.MARKDOWN
-        )
-        
-        logger.info(f"Голос зарегистрирован: {user.username or user.first_name} → {vote_text} в голосовании {vote_id}")
+        await query.answer("✅ Голос учтён!")
         
     except Exception as e:
-        logger.error(f"Ошибка обработки голоса: {e}", exc_info=True)
+        logger.error(f"Ошибка обработки голоса: {e}")
         try:
-            await query.answer("❌ Ошибка при регистрации голоса", show_alert=True)
+            await query.answer("❌ Ошибка", show_alert=True)
         except:
             pass
 
@@ -652,6 +638,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 /chat_stats — Статистика чата
 /chat_top — Топ игроков чата
 /vote — Голосование
+/vote_end — Завершить голосование (создатель/админ)
 
 Новое: Шлёпай в одном окне без спама сообщений!"""
     
@@ -706,30 +693,6 @@ async def backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         await status_msg.edit_text(text)
     else:
         await status_msg.edit_text(f"❌ Ошибка создания бэкапа: {backup_path}")
-
-@command_handler
-@with_message
-async def storage(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    text = "📂 Информация о хранилище:\n"
-    paths = [
-        ("/root", "Основная папка"),
-        ("/bothost", "Корень Bothost"),
-        (DATA_FILE, "Файл данных"),
-        (VOTES_FILE, "Файл голосований"),
-        (BACKUP_PATH, "Директория бэкапов"),
-        (LOG_FILE, "Файл логов")
-    ]
-    
-    for p, d in paths:
-        ex = os.path.exists(p)
-        if ex and os.path.isfile(p):
-            sz = os.path.getsize(p)
-            text += f"{'✅' if ex else '❌'} {d}: {p} ({sz/1024:.1f} KB)\n"
-        else:
-            text += f"{'✅' if ex else '❌'} {d}: {p}\n"
-    
-    text += f"\n💾 Версия Бота: Bothost Storage Ready"
-    await msg.reply_text(text)
 
 @command_handler
 @with_message
@@ -790,63 +753,6 @@ async def repair_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         text = "❌ Не удалось восстановить структуру данных"
     
     await status_msg.edit_text(text)
-
-@command_handler
-@with_message
-async def data_info(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    text = "📁 ИНФОРМАЦИЯ О ФАЙЛЕ ДАННЫХ\n\n"
-    
-    if os.path.exists(DATA_FILE):
-        try:
-            size = os.path.getsize(DATA_FILE)
-            modified = datetime.fromtimestamp(os.path.getmtime(DATA_FILE))
-            text += f"📍 Путь: {DATA_FILE}\n"
-            text += f"📏 Размер: {size:,} байт\n".replace(",", " ")
-            text += f"📅 Изменен: {modified.strftime('%d.%m.%Y %H:%M:%S')}\n"
-            
-            with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            
-            text += f"\n📊 СОДЕРЖИМОЕ:\n"
-            text += f"• Пользователей: {len(data.get('users', {}))}\n"
-            text += f"• Чатов: {len(data.get('chats', {}))}\n"
-            text += f"• Всего шлёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n"
-            text += f"• Макс. урон: {data.get('global_stats', {}).get('max_damage', 0)}\n"
-            text += f"• Записей в истории: {len(data.get('records', []))}\n"
-            
-            required_keys = ["users", "chats", "global_stats", "timestamps", "records"]
-            missing_keys = [k for k in required_keys if k not in data]
-            
-            if missing_keys:
-                text += f"\n⚠️ Отсутствуют ключи: {missing_keys}\n"
-            else:
-                text += "\n✅ Структура корректна\n"
-        except Exception as e:
-            text += f"\n❌ Ошибка чтения файла: {str(e)}\n"
-    else:
-        text += f"❌ Файл не найден: {DATA_FILE}\n"
-        text += "Используйте /repair для восстановления структуры данных"
-    
-    await msg.reply_text(text)
-
-@command_handler
-@with_message
-async def check_paths(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    text = (
-        "🔍 ПРОВЕРКА ПУТЕЙ ДЛЯ ДАННЫХ:\n\n"
-        f"📁 DATA_FILE: {DATA_FILE}\n"
-        f"   Существует: {'✅ Да' if os.path.exists(DATA_FILE) else '❌ Нет'}\n\n"
-        f"🗳️ VOTES_FILE: {VOTES_FILE}\n"
-        f"   Существует: {'✅ Да' if os.path.exists(VOTES_FILE) else '❌ Нет'}\n\n"
-        f"💾 BACKUP_PATH: {BACKUP_PATH}\n"
-        f"   Существует: {'✅ Да' if os.path.exists(BACKUP_PATH) else '❌ Нет'}\n"
-    )
-    
-    if os.path.exists(DATA_FILE):
-        size = os.path.getsize(DATA_FILE)
-        text += f"\n📏 Размер файла данных: {size:,} байт".replace(",", " ")
-    
-    await msg.reply_text(text)
 
 async def start_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -939,7 +845,7 @@ async def admin_health(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         try:
             import shutil
             total, used, free = shutil.disk_usage(".")
-            disk_info = f"Диск: {used/(1024**3):.1f} GB из {total/(1024**3):.1f} GB использовано ({used/total*100:.1f}%)"
+            disk_info = f"Диск: {used/(1024**3):.1f} GB из {total/(1024**3):.1f} использовано ({used/total*100:.1f}%)"
         except:
             disk_info = "Информация о диске: доступно"
         
@@ -1363,6 +1269,7 @@ async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "/chat_stats — статистика чата\n"
                     "/chat_top — топ игроков\n"
                     "/vote — голосование\n"
+                    "/vote_end — завершить голосование (создатель/админ)\n"
                     "Прогресс сохраняется! 💾"
                 )
 
@@ -1387,13 +1294,10 @@ def main():
         ("chat_stats", chat_stats),
         ("chat_top", chat_top),
         ("vote", vote),
-        ("vote_info", vote_info),
+        ("vote_end", vote_end),
         ("backup", backup_cmd),
-        ("storage", storage),
         ("check_data", check_data),
         ("repair", repair_cmd),
-        ("data_info", data_info),
-        ("check_paths", check_paths),
         ("admin", admin_panel),
     ]
     
