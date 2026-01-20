@@ -81,6 +81,3 @@ def get_confirmation_keyboard(action: str):
         [InlineKeyboardButton(f"✅ Да, {action}", callback_data=f"confirm_{action}")],
         [InlineKeyboardButton("❌ Нет, отмена", callback_data="cancel_action")]
     ])
-
-# Удаляем ненужные функции
-get_inline_keyboard = get_main_inline_keyboard
