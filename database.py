@@ -11,8 +11,6 @@ logger = logging.getLogger(__name__)
 from config import DATA_FILE, VOTES_FILE, BACKUP_PATH, BACKUP_ENABLED, BACKUP_RETENTION_DAYS, MAX_USER_HISTORY
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.dirname(DATA_FILE)
-BACKUP_DIR = BACKUP_PATH
 
 def ensure_votes_file():
     try:
@@ -116,14 +114,14 @@ def cleanup_expired_votes():
 
 def restore_from_backup():
     try:
-        if not os.path.exists(BACKUP_DIR):
+        if not os.path.exists(BACKUP_PATH):
             logger.warning("Директория бэкапов не существует")
             return create_default_data()
         
         backups = []
-        for filename in os.listdir(BACKUP_DIR):
+        for filename in os.listdir(BACKUP_PATH):
             if filename.endswith('.json') and 'backup' in filename:
-                filepath = os.path.join(BACKUP_DIR, filename)
+                filepath = os.path.join(BACKUP_PATH, filename)
                 mtime = os.path.getmtime(filepath)
                 backups.append((filepath, mtime))
         
@@ -314,10 +312,10 @@ def create_auto_backup():
         if not BACKUP_ENABLED:
             return
         
-        os.makedirs(BACKUP_DIR, exist_ok=True)
+        os.makedirs(BACKUP_PATH, exist_ok=True)
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_file = os.path.join(BACKUP_DIR, f"auto_backup_{timestamp}.json")
+        backup_file = os.path.join(BACKUP_PATH, f"auto_backup_{timestamp}.json")
         
         if os.path.exists(DATA_FILE):
             shutil.copy2(DATA_FILE, backup_file)
@@ -330,13 +328,13 @@ def create_auto_backup():
 
 def cleanup_old_backups():
     try:
-        if not os.path.exists(BACKUP_DIR):
+        if not os.path.exists(BACKUP_PATH):
             return
         
         now = datetime.now()
-        for filename in os.listdir(BACKUP_DIR):
+        for filename in os.listdir(BACKUP_PATH):
             if filename.endswith('.json'):
-                filepath = os.path.join(BACKUP_DIR, filename)
+                filepath = os.path.join(BACKUP_PATH, filename)
                 mtime = datetime.fromtimestamp(os.path.getmtime(filepath))
                 
                 if (now - mtime).days > BACKUP_RETENTION_DAYS:
@@ -374,6 +372,104 @@ def save_data(data):
     except Exception as e:
         logger.error(f"Ошибка сохранения данных: {e}")
         return False
+
+def create_safe_backup(description: str = "") -> Tuple[bool, str]:
+    try:
+        if not os.path.exists(DATA_FILE):
+            return False, "Файл данных не существует"
+        
+        os.makedirs(BACKUP_PATH, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        desc_part = f"_{description}" if description else ""
+        backup_file = os.path.join(BACKUP_PATH, f"safe_backup{desc_part}_{timestamp}.json")
+        
+        shutil.copy2(DATA_FILE, backup_file)
+        
+        size = os.path.getsize(backup_file)
+        logger.info(f"Создан безопасный бэкап: {backup_file} ({size} байт)")
+        
+        return True, backup_file
+    except Exception as e:
+        logger.error(f"Ошибка создания безопасного бэкапа: {e}")
+        return False, str(e)
+
+def get_backup_list(limit: int = 10) -> List[Dict]:
+    try:
+        if not os.path.exists(BACKUP_PATH):
+            return []
+        
+        backups = []
+        for filename in os.listdir(BACKUP_PATH):
+            if filename.endswith('.json'):
+                filepath = os.path.join(BACKUP_PATH, filename)
+                mtime = os.path.getmtime(filepath)
+                size = os.path.getsize(filepath)
+                
+                backups.append({
+                    "name": filename,
+                    "path": filepath,
+                    "size": size,
+                    "modified": datetime.fromtimestamp(mtime),
+                    "age_days": (datetime.now() - datetime.fromtimestamp(mtime)).days
+                })
+        
+        backups.sort(key=lambda x: x["modified"], reverse=True)
+        return backups[:limit]
+    except Exception as e:
+        logger.error(f"Ошибка получения списка бэкапов: {e}")
+        return []
+
+def get_database_size() -> Dict[str, Any]:
+    try:
+        if not os.path.exists(DATA_FILE):
+            return {"exists": False, "size": 0, "users": 0, "chats": 0}
+        
+        size = os.path.getsize(DATA_FILE)
+        
+        with open(DATA_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        return {
+            "exists": True,
+            "size": size,
+            "users": len(data.get("users", {})),
+            "chats": len(data.get("chats", {})),
+            "total_shleps": data.get("global_stats", {}).get("total_shleps", 0),
+            "last_modified": datetime.fromtimestamp(os.path.getmtime(DATA_FILE))
+        }
+    except Exception as e:
+        logger.error(f"Ошибка получения размера БД: {e}")
+        return {"exists": False, "size": 0, "error": str(e)}
+
+def get_system_stats() -> Dict[str, Any]:
+    try:
+        import psutil
+        
+        disk = psutil.disk_usage('.')
+        memory = psutil.virtual_memory()
+        
+        db_stats = get_database_size()
+        
+        return {
+            "disk": {
+                "total": disk.total,
+                "used": disk.used,
+                "free": disk.free,
+                "percent": disk.percent
+            },
+            "memory": {
+                "total": memory.total,
+                "available": memory.available,
+                "percent": memory.percent
+            },
+            "database": db_stats
+        }
+    except ImportError:
+        return {"error": "psutil не установлен"}
+    except Exception as e:
+        logger.error(f"Ошибка получения системной статистики: {e}")
+        return {"error": str(e)}
 
 def add_shlep(user_id: int, username: str, damage: int, chat_id: Optional[int] = None) -> Tuple[int, int, int]:
     try:
@@ -609,18 +705,18 @@ def get_chat_top_users(chat_id: int, limit: int = 10) -> List[Tuple[str, int]]:
 
 def backup_database():
     try:
-        if not os.path.exists(BACKUP_DIR):
-            os.makedirs(BACKUP_DIR, exist_ok=True)
+        if not os.path.exists(BACKUP_PATH):
+            os.makedirs(BACKUP_PATH, exist_ok=True)
         
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_file = os.path.join(BACKUP_DIR, f"mishok_backup_{timestamp}.json")
+        backup_file = os.path.join(BACKUP_PATH, f"mishok_backup_{timestamp}.json")
         
         shutil.copy2(DATA_FILE, backup_file)
         
-        backups = sorted([f for f in os.listdir(BACKUP_DIR) if f.endswith('.json')])
+        backups = sorted([f for f in os.listdir(BACKUP_PATH) if f.endswith('.json')])
         if len(backups) > 10:
             for old_backup in backups[:-10]:
-                os.remove(os.path.join(BACKUP_DIR, old_backup))
+                os.remove(os.path.join(BACKUP_PATH, old_backup))
         
         logger.info(f"Создан бэкап: {backup_file}")
         return True, f"Бэкап создан: {backup_file}"
