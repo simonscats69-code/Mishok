@@ -10,6 +10,49 @@ if not BOT_TOKEN:
 
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
+DATA_PATH = os.getenv("DATA_PATH", "/data/mishok_bot")
+DATA_FILE = os.getenv("DATA_FILE", os.path.join(DATA_PATH, "mishok_data.json"))
+VOTES_FILE = os.getenv("VOTES_FILE", os.path.join(DATA_PATH, "votes.json"))
+BACKUP_PATH = os.getenv("BACKUP_PATH", os.path.join(DATA_PATH, "backups"))
+LOG_FILE = os.getenv("LOG_FILE", os.path.join(DATA_PATH, "bot.log"))
+
+CACHE_ENABLED = os.getenv("CACHE_ENABLED", "true").lower() == "true"
+CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "300"))
+MAX_CACHE_SIZE = int(os.getenv("MAX_CACHE_SIZE", "1000"))
+LOG_CACHE_STATS = os.getenv("LOG_CACHE_STATS", "true").lower() == "true"
+
+CHAT_VOTE_DURATION = int(os.getenv("CHAT_VOTE_DURATION", "300"))
+CHAT_DUEL_DURATION = int(os.getenv("CHAT_DUEL_DURATION", "300"))
+CHAT_NOTIFICATIONS_ENABLED = os.getenv("CHAT_NOTIFICATIONS_ENABLED", "true").lower() == "true"
+
+BACKUP_ENABLED = os.getenv("BACKUP_ENABLED", "true").lower() == "true"
+BACKUP_RETENTION_DAYS = int(os.getenv("BACKUP_RETENTION_DAYS", "7"))
+
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+AUTOSAVE_INTERVAL = int(os.getenv("AUTOSAVE_INTERVAL", "300"))
+MAX_USER_HISTORY = int(os.getenv("MAX_USER_HISTORY", "100"))
+
+for directory in [DATA_PATH, BACKUP_PATH]:
+    if directory and not os.path.exists(directory):
+        try:
+            os.makedirs(directory, exist_ok=True)
+            print(f"📁 Создана директория: {directory}")
+        except:
+            pass
+
+print("=" * 50)
+print("⚙️  КОНФИГУРАЦИЯ МИШОК ЛЫСЫЙ БОТ")
+print("=" * 50)
+print(f"🤖 Токен бота: {'✅ Установлен' if BOT_TOKEN else '❌ НЕТ!'}")
+print(f"👑 Админ ID: {ADMIN_ID}")
+print(f"💾 Защищенные пути:")
+print(f"  📁 Данные: {DATA_PATH}")
+print(f"  📄 Файл данных: {DATA_FILE}")
+print(f"  🗳️ Файл голосований: {VOTES_FILE}")
+print(f"  💾 Бэкапы: {BACKUP_PATH}")
+print(f"  📝 Логи: {LOG_FILE}")
+print("=" * 50)
+
 MISHOK_REACTIONS = [
  "👴 Ай-ай-ай! Кто это так лихо отшлёпал старика?!",
 "💢 Ох, и больно же! За лысину-то больнее всего!",
