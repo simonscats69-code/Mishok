@@ -698,7 +698,7 @@ def format_stats_text(total, last, maxd, maxu, maxdt):
         f"{COMMAND_TEXTS['stats']['last_shlep'].format(date=last_date)}"
     )
 
-def format_level_text(username, count, level, title, progress_bar, progress, min_dmg, max_dmg, next_level, advice, last_shlep):
+def format_level_text(username, count, level, title, progress_bar, progress, min_dmg, max_dmg, next_level, advice, last_shlep_date=None):
     """Форматирует текст уровня"""
     text = (
         f"{COMMAND_TEXTS['level']['header']}\n"
@@ -711,8 +711,8 @@ def format_level_text(username, count, level, title, progress_bar, progress, min
         f"{COMMAND_TEXTS['level']['advice'].format(advice=advice)}"
     )
     
-    if last_shlep:
-        text += f"\n{COMMAND_TEXTS['level']['last_shlep'].format(date=last_shlep.strftime('%d.%m.%Y %H:%M'))}"
+    if last_shlep_date:
+        text += f"\n{COMMAND_TEXTS['level']['last_shlep'].format(date=last_shlep_date)}"
     
     return text
 
@@ -760,7 +760,7 @@ LEVEL_TITLES = {
     20: ("⭐ ПРОФЕССИОНАЛ", "Уже что-то получается!"),
     10: ("🔥 УВЕРЕННЫЙ НОВИЧОК", "Начинаешь понимать основы!"),
     5: ("👊 ЗЕЛЁНЫЙ САЛАГ", "Ещё путаешься, но стараешься!"),
-    0: ("🌱 ПОЛНЫЙ ДОХЛЯК", "Ты только начал... очень слабо!")
+    0: ("🌱 ПОЛНЫЙ ДОХЛЯк", "Ты только начал... очень слабо!")
 }
 
 # ==================== МЕТКИ СТАТУСА ====================
