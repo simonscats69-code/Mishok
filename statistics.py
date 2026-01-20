@@ -5,50 +5,8 @@ from database import load_data
 
 logger = logging.getLogger(__name__)
 
-def get_favorite_time(user_id: int) -> str:
-    try:
-        data = load_data()
-        user_data = data["users"].get(str(user_id))
-        
-        if not user_data or "damage_history" not in user_data:
-            return "⏰ *Любимое время:* данных недостаточно"
-        
-        hour_counts = {}
-        for record in user_data["damage_history"]:
-            try:
-                record_time = datetime.fromisoformat(record["timestamp"])
-                hour = record_time.hour
-                hour_counts[hour] = hour_counts.get(hour, 0) + 1
-            except:
-                continue
-        
-        if not hour_counts:
-            return "⏰ *Любимое время:* данных недостаточно"
-        
-        favorite_hour = max(hour_counts.items(), key=lambda x: x[1])[0]
-        
-        if 5 <= favorite_hour < 12:
-            time_of_day = "утро"
-            emoji = "🌅"
-        elif 12 <= favorite_hour < 17:
-            time_of_day = "день"
-            emoji = "☀️"
-        elif 17 <= favorite_hour < 22:
-            time_of_day = "вечер"
-            emoji = "🌆"
-        else:
-            time_of_day = "ночь"
-            emoji = "🌙"
-        
-        hour_str = f"{favorite_hour:02d}:00"
-        
-        return f"⏰ *Любимое время:* {hour_str} ({time_of_day} {emoji})"
-    
-    except Exception as e:
-        logger.error(f"Ошибка получения любимого времени: {e}")
-        return "⏰ *Любимое время:* ошибка расчета"
-
 def get_comparison_stats(user_id: int) -> Dict[str, Any]:
+    """Сравнивает статистику пользователя с другими игроками"""
     try:
         data = load_data()
         all_users = data.get("users", {})
