@@ -1,35 +1,6 @@
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 
-def main_kb(for_chat=False):
-    """Основная клавиатура - разная для чатов и личных сообщений"""
-    if for_chat:
-        return InlineKeyboardMarkup([
-            [InlineKeyboardButton("👊 Шлёпнуть сейчас!", callback_data="shlep_mishok")],
-            [
-                InlineKeyboardButton("📊 Статистика", callback_data="stats_inline"),
-                InlineKeyboardButton("🏆 Топ чата", callback_data="chat_top")
-            ],
-            [
-                InlineKeyboardButton("🎯 Уровень", callback_data="level_inline"),
-                InlineKeyboardButton("📈 Моя статистика", callback_data="my_stats")
-            ],
-            [
-                InlineKeyboardButton("👴 О Мишке", callback_data="mishok_info")
-            ],
-            [
-                InlineKeyboardButton("❓ Помощь", callback_data="help_inline")
-            ]
-        ])
-    else:
-        return ReplyKeyboardMarkup([
-            [KeyboardButton("👊 Шлёпнуть Мишка")],
-            [KeyboardButton("🎯 Уровень"), KeyboardButton("📊 Статистика")],
-            [KeyboardButton("📈 Моя статистика")],
-            [KeyboardButton("❓ Помощь"), KeyboardButton("👴 О Мишке")]
-        ], resize_keyboard=True, one_time_keyboard=False, selective=True)
-
 def get_shlep_session_keyboard():
-    """Клавиатура для сессии шлёпания"""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("👊 Ещё раз!", callback_data="shlep_again"),
@@ -45,7 +16,6 @@ def get_shlep_session_keyboard():
     ])
 
 def get_shlep_start_keyboard():
-    """Клавиатура для начала шлёпания"""
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("👊 НАЧАТЬ ШЛЁПАТЬ!", callback_data="start_shlep_session")],
         [
@@ -55,7 +25,6 @@ def get_shlep_start_keyboard():
     ])
 
 def get_chat_vote_keyboard():
-    """Клавиатура для голосования в чате"""
     return InlineKeyboardMarkup([
         [
             InlineKeyboardButton("👍 ЗА", callback_data="vote_yes"),
@@ -63,4 +32,66 @@ def get_chat_vote_keyboard():
         ]
     ])
 
-get_inline_keyboard = lambda: main_kb(for_chat=True)
+def get_main_inline_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("👊 Шлёпнуть сейчас!", callback_data="shlep_mishok")],
+        [
+            InlineKeyboardButton("📊 Статистика", callback_data="stats_inline"),
+            InlineKeyboardButton("🏆 Топ чата", callback_data="chat_top")
+        ],
+        [
+            InlineKeyboardButton("🎯 Уровень", callback_data="level_inline"),
+            InlineKeyboardButton("📈 Моя статистика", callback_data="my_stats")
+        ],
+        [
+            InlineKeyboardButton("👴 О Мишке", callback_data="mishok_info")
+        ],
+        [
+            InlineKeyboardButton("❓ Помощь", callback_data="help_inline")
+        ]
+    ])
+
+def get_main_reply_keyboard():
+    return ReplyKeyboardMarkup([
+        [KeyboardButton("👊 Шлёпнуть Мишка")],
+        [KeyboardButton("🎯 Уровень"), KeyboardButton("📊 Статистика")],
+        [KeyboardButton("📈 Моя статистика")],
+        [KeyboardButton("❓ Помощь"), KeyboardButton("👴 О Мишке")]
+    ], resize_keyboard=True, one_time_keyboard=False, selective=True)
+
+def get_admin_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🧹 Очистка", callback_data="admin_cleanup"),
+         InlineKeyboardButton("🩺 Здоровье", callback_data="admin_health")],
+        [InlineKeyboardButton("📊 Статистика", callback_data="admin_stats"),
+         InlineKeyboardButton("💾 Бэкап", callback_data="admin_backup")],
+        [InlineKeyboardButton("🔄 Миграция", callback_data="admin_migrate"),
+         InlineKeyboardButton("🔧 Исправление", callback_data="admin_repair")],
+        [InlineKeyboardButton("📁 Хранилище", callback_data="admin_storage"),
+         InlineKeyboardButton("❌ Закрыть", callback_data="admin_close")]
+    ])
+
+def get_migration_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔍 Найти данные", callback_data="migrate_find")],
+        [InlineKeyboardButton("📦 Перенести всё", callback_data="migrate_all")],
+        [InlineKeyboardButton("🧪 Проверить структуру", callback_data="migrate_check")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="admin_back")]
+    ])
+
+def get_confirmation_keyboard(action: str):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(f"✅ Да, {action}", callback_data=f"confirm_{action}")],
+        [InlineKeyboardButton("❌ Нет, отмена", callback_data="cancel_action")]
+    ])
+
+def get_cleanup_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🗑️ Логи", callback_data="cleanup_logs"),
+         InlineKeyboardButton("📦 Временные файлы", callback_data="cleanup_temp")],
+        [InlineKeyboardButton("💾 Старые бэкапы", callback_data="cleanup_backups"),
+         InlineKeyboardButton("🧹 Всё сразу", callback_data="cleanup_all")],
+        [InlineKeyboardButton("🔙 Назад", callback_data="admin_back")]
+    ])
+
+get_inline_keyboard = get_main_inline_keyboard
