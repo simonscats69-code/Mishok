@@ -15,15 +15,17 @@ from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 
 from config import BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO, DATA_FILE, VOTES_FILE, BACKUP_PATH, LOG_FILE, CHAT_VOTE_DURATION
-from database import add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, get_chat_top_users, backup_database, check_data_integrity, repair_data_structure, save_vote_data, get_vote_data, delete_vote_data, get_user_vote, get_all_votes, cleanup_expired_votes
-from keyboard import get_shlep_session_keyboard, get_shlep_start_keyboard, get_chat_vote_keyboard, get_inline_keyboard
+from database import add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, get_chat_top_users, backup_database, check_data_integrity, repair_data_structure, save_vote_data, get_vote_data, delete_vote_data, get_user_vote, get_all_votes, cleanup_expired_votes, create_safe_backup, get_backup_list, get_database_size, get_system_stats
+from keyboard import get_shlep_session_keyboard, get_shlep_start_keyboard, get_chat_vote_keyboard, get_inline_keyboard, get_admin_keyboard, get_migration_keyboard, get_confirmation_keyboard, get_cleanup_keyboard, get_main_reply_keyboard, get_main_inline_keyboard
 from cache import cache
 from statistics import get_favorite_time, get_comparison_stats
+from utils import create_progress_bar, format_file_size, get_system_info
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 shlep_sessions = {}
+admin_sessions = {}
 
 def command_handler(func):
     @wraps(func)
@@ -48,6 +50,18 @@ def chat_only(func):
             message = update.message or (update.callback_query and update.callback_query.message)
             if message:
                 await message.reply_text("Эта команда работает только в группах!")
+            return
+        return await func(update, context)
+    return wrapper
+
+def admin_only(func):
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        from config import ADMIN_ID
+        if update.effective_user.id != ADMIN_ID:
+            msg = get_message_from_update(update)
+            if msg:
+                await msg.reply_text("⚠️ Эта команда только для администраторов!")
             return
         return await func(update, context)
     return wrapper
@@ -113,6 +127,21 @@ def get_message_from_update(update: Update):
     if update.callback_query and update.callback_query.message:
         return update.callback_query.message
     return update.message
+
+async def send_progress(message, text, progress=0):
+    bar_length = 10
+    filled = int(progress * bar_length)
+    bar = "█" * filled + "░" * (bar_length - filled)
+    percentage = int(progress * 100)
+    
+    status_text = f"🔄 {text}\n[{bar}] {percentage}%"
+    
+    try:
+        await message.edit_text(status_text)
+    except:
+        await message.reply_text(status_text)
+    
+    return percentage
 
 async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_message=None):
     try:
@@ -211,7 +240,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 Новая фича: Теперь шлёпай в одном окне без спама сообщений!"""
         
-        kb = get_shlep_start_keyboard()
+        kb = get_main_reply_keyboard()
         await msg.reply_text(text, reply_markup=kb)
     else:
         text += """Я бот для шлёпков!
@@ -230,7 +259,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 Нажми кнопку ниже или введи команду!"""
         
-        kb = get_inline_keyboard()
+        kb = get_main_inline_keyboard()
         await msg.reply_text(text, reply_markup=kb)
 
 @command_handler
@@ -678,18 +707,35 @@ async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"Не удалось отправить сообщение об ошибке: {e2}")
 
 @command_handler
+@admin_only
 async def backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = get_message_from_update(update)
     if not msg:
         return
     
-    from config import ADMIN_ID
-    if update.effective_user.id != ADMIN_ID:
-        await msg.reply_text("⚠️ Эта команда только для администраторов!")
-        return
+    status_msg = await msg.reply_text("💾 Создание бэкапа...")
     
-    ok, result = backup_database()
-    await msg.reply_text("✅ Бэкап создан!" if ok else f"❌ Ошибка: {result}")
+    await send_progress(status_msg, "Создание безопасного бэкапа", 0.3)
+    success, backup_path = create_safe_backup("manual")
+    
+    if success:
+        await send_progress(status_msg, "Бэкап создан", 0.7)
+        
+        size = os.path.getsize(backup_path)
+        backups = get_backup_list(5)
+        
+        text = "✅ БЭКАП СОЗДАН!\n\n"
+        text += f"📁 Файл: {os.path.basename(backup_path)}\n"
+        text += f"📏 Размер: {format_file_size(size)}\n\n"
+        text += "📦 ПОСЛЕДНИЕ БЭКАПЫ:\n"
+        
+        for i, backup in enumerate(backups, 1):
+            age = backup['age_days']
+            text += f"{i}. {backup['name']} ({format_file_size(backup['size'])}), {age} дн. назад\n"
+        
+        await status_msg.edit_text(text)
+    else:
+        await status_msg.edit_text(f"❌ Ошибка создания бэкапа: {backup_path}")
 
 @command_handler
 async def storage(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -755,36 +801,36 @@ async def check_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.reply_text(f"❌ Ошибка проверки: {str(e)}")
 
 @command_handler
+@admin_only
 async def repair(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = get_message_from_update(update)
     if not msg:
         return
     
-    from config import ADMIN_ID
-    if update.effective_user.id != ADMIN_ID:
-        await msg.reply_text("⚠️ Эта команда только для администраторов!")
-        return
+    status_msg = await msg.reply_text("🔄 Восстановление структуры данных...")
     
-    try:
-        await msg.reply_text("🔄 Восстановление структуры данных...")
-        success = repair_data_structure()
+    await send_progress(status_msg, "Создание бэкапа перед восстановлением", 0.2)
+    create_safe_backup("before_repair")
+    
+    await send_progress(status_msg, "Восстановление структуры", 0.5)
+    success = repair_data_structure()
+    
+    if success:
+        await send_progress(status_msg, "Загрузка данных для проверки", 0.8)
+        from database import load_data
+        data = load_data()
         
-        if success:
-            from database import load_data
-            data = load_data()
-            text = (
-                "✅ СТРУКТУРА ДАННЫХ ВОССТАНОВЛЕНА\n\n"
-                f"👥 Пользователей: {len(data.get('users', {}))}\n"
-                f"💬 Чатов: {len(data.get('chats', {}))}\n"
-                f"👊 Всего шлёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n\n"
-                "Ошибки больше не должны возникать!"
-            )
-        else:
-            text = "❌ Не удалось восстановить структуру данных"
-        
-        await msg.reply_text(text)
-    except Exception as e:
-        await msg.reply_text(f"❌ Ошибка: {str(e)}")
+        text = (
+            "✅ СТРУКТУРА ДАННЫХ ВОССТАНОВЛЕНА\n\n"
+            f"👥 Пользователей: {len(data.get('users', {}))}\n"
+            f"💬 Чатов: {len(data.get('chats', {}))}\n"
+            f"👊 Всего шлёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n\n"
+            "Ошибки больше не должны возникать!"
+        )
+    else:
+        text = "❌ Не удалось восстановить структуру данных"
+    
+    await status_msg.edit_text(text)
 
 @command_handler
 async def data_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -896,6 +942,533 @@ async def handle_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYP
         text = f"👋 Привет, {safe_name}!\nЯ — Мишок Лысый 👴✨\n\nНачни шлёпать прямо сейчас!"
         await query.message.edit_text(text, reply_markup=get_shlep_start_keyboard())
 
+@command_handler
+@admin_only
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = get_message_from_update(update)
+    if not msg:
+        return
+    
+    await msg.reply_text(
+        "⚙️ АДМИН-ПАНЕЛЬ\n\n"
+        "Выберите действие:",
+        reply_markup=get_admin_keyboard()
+    )
+
+@command_handler
+@admin_only
+async def admin_health(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query:
+        return
+    
+    await query.answer()
+    await query.message.edit_text("🩺 Проверяю здоровье системы...")
+    
+    try:
+        import psutil
+        import platform
+        
+        status_msg = query.message
+        
+        await send_progress(status_msg, "Проверка памяти", 0.1)
+        memory = psutil.virtual_memory()
+        
+        await send_progress(status_msg, "Проверка диска", 0.3)
+        disk = psutil.disk_usage('.')
+        
+        await send_progress(status_msg, "Проверка базы данных", 0.5)
+        db_stats = get_database_size()
+        
+        await send_progress(status_msg, "Проверка целостности", 0.7)
+        integrity = check_data_integrity()
+        
+        system_info = get_system_info()
+        
+        report = "🏥 ОТЧЕТ О ЗДОРОВЬЕ СИСТЕМЫ\n\n"
+        
+        report += f"💾 Память: {memory.percent}% ({memory.available/1024/1024:.0f} MB свободно)\n"
+        report += f"📁 Диск: {disk.percent}% ({disk.free/1024/1024:.0f} MB свободно)\n"
+        
+        if db_stats.get("exists"):
+            report += f"🗃️ База данных: {format_file_size(db_stats['size'])}\n"
+            report += f"👥 Пользователей: {db_stats['users']}\n"
+            report += f"👊 Шлёпков: {db_stats['total_shleps']}\n"
+        else:
+            report += "🗃️ База данных: ❌ Не найдена\n"
+        
+        report += f"🔍 Целостность: {len(integrity['errors'])} ошибок, {len(integrity['warnings'])} предупреждений\n"
+        report += f"🐍 Python: {system_info['python_version']}\n"
+        report += f"🖥️ Система: {system_info['system']} {system_info['machine']}\n"
+        
+        all_good = (memory.percent < 90 and disk.percent < 90 and 
+                   not integrity['errors'] and db_stats.get("exists", False))
+        
+        if all_good:
+            report += "\n🎉 ВСЕ СИСТЕМЫ РАБОТАЮТ НОРМАЛЬНО"
+        else:
+            report += "\n⚠️ ТРЕБУЕТСЯ ВНИМАНИЕ АДМИНИСТРАТОРА"
+        
+        await status_msg.edit_text(report, reply_markup=get_admin_keyboard())
+        
+    except ImportError as e:
+        await query.message.edit_text(
+            f"❌ Не удалось проверить здоровье системы: {str(e)}\n"
+            f"Установите psutil: pip install psutil",
+            reply_markup=get_admin_keyboard()
+        )
+    except Exception as e:
+        await query.message.edit_text(
+            f"❌ Ошибка проверки здоровья: {str(e)[:200]}",
+            reply_markup=get_admin_keyboard()
+        )
+
+@command_handler
+@admin_only
+async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query:
+        return
+    
+    await query.answer()
+    status_msg = query.message
+    
+    await status_msg.edit_text("📊 Собираю статистику пользователей...")
+    
+    from database import load_data
+    
+    data = load_data()
+    users = data.get('users', {})
+    
+    if not users:
+        await status_msg.edit_text("📭 Нет данных о пользователях", reply_markup=get_admin_keyboard())
+        return
+    
+    import datetime
+    now = datetime.datetime.now()
+    
+    active_today = 0
+    active_week = 0
+    total_shleps = 0
+    max_shleps = 0
+    max_user = None
+    
+    for user_id, user_data in users.items():
+        shleps = user_data.get('total_shleps', 0)
+        total_shleps += shleps
+        
+        if shleps > max_shleps:
+            max_shleps = shleps
+            max_user = user_data.get('username', f'ID: {user_id}')[:20]
+        
+        last_shlep = user_data.get('last_shlep')
+        if last_shlep:
+            try:
+                last_date = datetime.datetime.fromisoformat(last_shlep)
+                days_diff = (now - last_date).days
+                
+                if days_diff == 0:
+                    active_today += 1
+                if days_diff <= 7:
+                    active_week += 1
+            except:
+                pass
+    
+    avg_shleps = total_shleps / len(users) if users else 0
+    
+    report = f"👥 СТАТИСТИКА ПОЛЬЗОВАТЕЛЕЙ\n\n"
+    report += f"📈 Всего пользователей: {len(users)}\n"
+    report += f"🎯 Активных сегодня: {active_today}\n"
+    report += f"📅 Активных за неделю: {active_week}\n"
+    report += f"👊 Всего шлёпков: {total_shleps}\n"
+    report += f"📊 Среднее на пользователя: {avg_shleps:.1f}\n"
+    report += f"🏆 Рекордсмен: {max_user} ({max_shleps} шлёпков)\n\n"
+    
+    level_distribution = {}
+    for user_data in users.values():
+        shleps = user_data.get('total_shleps', 0)
+        level = (shleps // 10) + 1
+        level_key = f"{min(level, 100)}+" if level > 100 else str(level)
+        level_distribution[level_key] = level_distribution.get(level_key, 0) + 1
+    
+    report += "🎯 РАСПРЕДЕЛЕНИЕ ПО УРОВНЯМ:\n"
+    for level, count in sorted(level_distribution.items(), key=lambda x: int(x[0].replace('+', ''))):
+        percentage = (count / len(users)) * 100
+        bar_length = 10
+        filled = int(percentage / 10)
+        bar = "█" * filled + "░" * (bar_length - filled)
+        report += f"Уровень {level}: {bar} {percentage:.1f}% ({count} чел.)\n"
+    
+    await status_msg.edit_text(report, reply_markup=get_admin_keyboard())
+
+@command_handler
+@admin_only
+async def admin_cleanup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query:
+        return
+    
+    await query.answer()
+    
+    await query.message.edit_text(
+        "🧹 ОЧИСТКА СИСТЕМЫ\n\n"
+        "Выберите тип очистки:",
+        reply_markup=get_cleanup_keyboard()
+    )
+
+@command_handler
+@admin_only
+async def cleanup_action(update: Update, context: ContextTypes.DEFAULT_TYPE, action: str):
+    query = update.callback_query
+    if not query:
+        return
+    
+    await query.answer()
+    
+    if action == "logs":
+        await perform_cleanup(query.message, "logs")
+    elif action == "temp":
+        await perform_cleanup(query.message, "temp")
+    elif action == "backups":
+        await perform_cleanup(query.message, "backups")
+    elif action == "all":
+        await perform_cleanup(query.message, "all")
+    elif action == "back":
+        await query.message.edit_text(
+            "⚙️ АДМИН-ПАНЕЛЬ\n\nВыберите действие:",
+            reply_markup=get_admin_keyboard()
+        )
+
+async def perform_cleanup(message, cleanup_type):
+    await message.edit_text(f"🧹 Очистка {cleanup_type}...")
+    
+    import glob
+    import os
+    from datetime import datetime, timedelta
+    
+    total_cleaned = 0
+    total_freed = 0
+    now = datetime.now()
+    
+    cleanup_patterns = []
+    
+    if cleanup_type == "logs" or cleanup_type == "all":
+        cleanup_patterns.append({
+            "pattern": "*.log",
+            "max_age_days": 7,
+            "description": "логи"
+        })
+    
+    if cleanup_type == "temp" or cleanup_type == "all":
+        cleanup_patterns.append({
+            "pattern": "*.tmp",
+            "max_age_days": 1,
+            "description": "временные файлы"
+        })
+        cleanup_patterns.append({
+            "pattern": "*_backup_*.json",
+            "max_age_days": 30,
+            "keep_last": 10,
+            "description": "старые бэкапы"
+        })
+    
+    if cleanup_type == "backups" or cleanup_type == "all":
+        cleanup_patterns.append({
+            "pattern": "data/mishok_bot/backups/*.json",
+            "max_age_days": 30,
+            "keep_last": 10,
+            "description": "бэкапы в папке"
+        })
+    
+    for config in cleanup_patterns:
+        files = glob.glob(config["pattern"], recursive=True)
+        
+        if config.get("keep_last"):
+            files_with_mtime = []
+            for f in files:
+                try:
+                    mtime = os.path.getmtime(f)
+                    files_with_mtime.append((f, mtime))
+                except:
+                    continue
+            
+            files_with_mtime.sort(key=lambda x: x[1], reverse=True)
+            files_to_check = files_with_mtime[config["keep_last"]:]
+        else:
+            files_to_check = [(f, os.path.getmtime(f)) for f in files]
+        
+        for filepath, mtime in files_to_check:
+            file_age = now - datetime.fromtimestamp(mtime)
+            
+            if file_age.days > config["max_age_days"]:
+                try:
+                    size = os.path.getsize(filepath)
+                    os.remove(filepath)
+                    total_cleaned += 1
+                    total_freed += size
+                except:
+                    pass
+    
+    freed_mb = total_freed / (1024 * 1024)
+    
+    result_text = (
+        f"✅ ОЧИСТКА ЗАВЕРШЕНА\n\n"
+        f"🗑️ Удалено файлов: {total_cleaned}\n"
+        f"💾 Освобождено: {freed_mb:.2f} MB\n\n"
+        f"Система готова к работе!"
+    )
+    
+    await message.edit_text(result_text, reply_markup=get_admin_keyboard())
+
+@command_handler
+@admin_only
+async def admin_migrate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query:
+        return
+    
+    await query.answer()
+    
+    await query.message.edit_text(
+        "🔄 МИГРАЦИЯ ДАННЫХ\n\n"
+        "Выберите действие:",
+        reply_markup=get_migration_keyboard()
+    )
+
+@command_handler
+@admin_only
+async def migrate_action(update: Update, context: ContextTypes.DEFAULT_TYPE, action: str):
+    query = update.callback_query
+    if not query:
+        return
+    
+    await query.answer()
+    
+    if action == "find":
+        await find_migration_data(query.message)
+    elif action == "all":
+        await confirm_migration(query.message, "all")
+    elif action == "check":
+        await check_structure(query.message)
+    elif action == "back":
+        await query.message.edit_text(
+            "⚙️ АДМИН-ПАНЕЛЬ\n\nВыберите действие:",
+            reply_markup=get_admin_keyboard()
+        )
+
+async def find_migration_data(message):
+    await message.edit_text("🔍 Поиск старых данных...")
+    
+    import os
+    import json
+    
+    migration_sources = [
+        {"path": "mishok_data.json", "name": "Корень проекта"},
+        {"path": "data/mishok_data.json", "name": "Папка data"},
+        {"path": "/data/mishok_bot/mishok_data.json", "name": "Абсолютный путь"},
+        {"path": "/bothost/mishok_data.json", "name": "Bothost корень"},
+        {"path": "/app/mishok_data.json", "name": "App папка"}
+    ]
+    
+    found_data = []
+    for source in migration_sources:
+        if os.path.exists(source["path"]) and source["path"] != DATA_FILE:
+            try:
+                with open(source["path"], 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    users = len(data.get('users', {}))
+                    shleps = data.get('global_stats', {}).get('total_shleps', 0)
+                    found_data.append({
+                        "path": source["path"],
+                        "name": source["name"],
+                        "users": users,
+                        "shleps": shleps,
+                        "size": os.path.getsize(source["path"])
+                    })
+            except:
+                continue
+    
+    if not found_data:
+        await message.edit_text(
+            "📭 Старые данные не найдены.\n"
+            "Будет создан новый файл при первом шлёпке.",
+            reply_markup=get_migration_keyboard()
+        )
+        return
+    
+    text = "📦 НАЙДЕННЫЕ ДАННЫЕ:\n\n"
+    for i, data in enumerate(found_data, 1):
+        text += f"{i}. {data['name']}\n"
+        text += f"   👥 {data['users']} пользователей\n"
+        text += f"   👊 {data['shleps']} шлёпков\n"
+        text += f"   📏 {data['size']/1024:.1f} KB\n\n"
+    
+    text += "Используйте команду /migrate_all для переноса всех данных"
+    
+    context = message._bot.application.context
+    context.user_data['migration_options'] = found_data
+    
+    await message.edit_text(text, reply_markup=get_migration_keyboard())
+
+async def confirm_migration(message, migration_type):
+    await message.edit_text(
+        f"⚠️ ПОДТВЕРЖДЕНИЕ МИГРАЦИИ\n\n"
+        f"Вы уверены, что хотите выполнить миграцию?\n"
+        f"Тип: {migration_type}\n\n"
+        f"Перед миграцией будет создан бэкап текущих данных.",
+        reply_markup=get_confirmation_keyboard("мигрировать")
+    )
+    
+    context = message._bot.application.context
+    context.user_data['pending_migration'] = migration_type
+
+async def check_structure(message):
+    await message.edit_text("🧪 Проверка структуры данных...")
+    
+    result = check_data_integrity()
+    
+    text = "🔍 ПРОВЕРКА СТРУКТУРЫ\n\n"
+    
+    if result['errors']:
+        text += "❌ КРИТИЧЕСКИЕ ОШИБКИ:\n"
+        for error in result['errors'][:3]:
+            text += f"• {error}\n"
+        text += "\n"
+    else:
+        text += "✅ Критических ошибок нет\n\n"
+    
+    if result['warnings']:
+        text += "⚠️ ПРЕДУПРЕЖДЕНИЯ:\n"
+        for warning in result['warnings'][:3]:
+            text += f"• {warning}\n"
+        if len(result['warnings']) > 3:
+            text += f"... и ещё {len(result['warnings']) - 3} предупреждений\n"
+    else:
+        text += "✅ Предупреждений нет\n"
+    
+    text += f"\n📊 СТАТИСТИКА:\n"
+    text += f"👥 Пользователей: {result['stats']['users']}\n"
+    text += f"💬 Чатов: {result['stats']['chats']}\n"
+    text += f"👊 Шлёпков: {result['stats']['total_shleps']}"
+    
+    await message.edit_text(text, reply_markup=get_migration_keyboard())
+
+@command_handler
+@admin_only
+async def admin_backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query:
+        return
+    
+    await query.answer()
+    
+    await backup_cmd_internal(query.message)
+
+async def backup_cmd_internal(message):
+    await message.edit_text("💾 Создание бэкапа...")
+    
+    success, backup_path = create_safe_backup("admin_panel")
+    
+    if success:
+        size = os.path.getsize(backup_path)
+        backups = get_backup_list(3)
+        
+        text = "✅ БЭКАП СОЗДАН!\n\n"
+        text += f"📁 Файл: {os.path.basename(backup_path)}\n"
+        text += f"📏 Размер: {format_file_size(size)}\n\n"
+        text += "📦 ПОСЛЕДНИЕ БЭКАПЫ:\n"
+        
+        for i, backup in enumerate(backups, 1):
+            age = backup['age_days']
+            text += f"{i}. {backup['name']} ({format_file_size(backup['size'])}), {age} дн. назад\n"
+    else:
+        text = f"❌ Ошибка создания бэкапа: {backup_path}"
+    
+    await message.edit_text(text, reply_markup=get_admin_keyboard())
+
+@command_handler
+@admin_only
+async def admin_repair_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query:
+        return
+    
+    await query.answer()
+    
+    await message.edit_text(
+        "⚠️ ПОДТВЕРЖДЕНИЕ ВОССТАНОВЛЕНИЯ\n\n"
+        "Вы уверены, что хотите восстановить структуру данных?\n"
+        "Перед восстановлением будет создан бэкап.",
+        reply_markup=get_confirmation_keyboard("восстановить")
+    )
+    
+    context = query.message._bot.application.context
+    context.user_data['pending_repair'] = True
+
+@command_handler
+@admin_only
+async def admin_storage_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query:
+        return
+    
+    await query.answer()
+    
+    system_stats = get_system_stats()
+    
+    if "error" in system_stats:
+        text = f"❌ Ошибка получения статистики: {system_stats['error']}"
+    else:
+        disk = system_stats['disk']
+        memory = system_stats['memory']
+        db = system_stats['database']
+        
+        text = "📊 СТАТИСТИКА ХРАНИЛИЩА\n\n"
+        text += f"💾 Диск: {disk['percent']}% заполнено\n"
+        text += f"   Свободно: {format_file_size(disk['free'])}\n"
+        text += f"🖥️ Память: {memory['percent']}% использовано\n"
+        text += f"   Свободно: {format_file_size(memory['available'])}\n"
+        
+        if db.get('exists'):
+            text += f"🗃️ База данных: {format_file_size(db['size'])}\n"
+            text += f"👥 Пользователей: {db['users']}\n"
+            text += f"👊 Шлёпков: {db['total_shleps']}\n"
+            text += f"📅 Изменена: {db['last_modified'].strftime('%d.%m.%Y %H:%M')}\n"
+        else:
+            text += "🗃️ База данных: ❌ Не найдена\n"
+    
+    await query.message.edit_text(text, reply_markup=get_admin_keyboard())
+
+@command_handler
+@admin_only
+async def admin_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not query:
+        return
+    
+    await query.answer()
+    await query.message.delete()
+
+@command_handler
+async def check_paths(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from config import DATA_FILE, VOTES_FILE, BACKUP_PATH
+    
+    text = (
+        "🔍 ПРОВЕРКА ПУТЕЙ ДЛЯ ДАННЫХ:\n\n"
+        f"📁 DATA_FILE: {DATA_FILE}\n"
+        f"   Существует: {'✅ Да' if os.path.exists(DATA_FILE) else '❌ Нет'}\n\n"
+        f"🗳️ VOTES_FILE: {VOTES_FILE}\n"
+        f"   Существует: {'✅ Да' if os.path.exists(VOTES_FILE) else '❌ Нет'}\n\n"
+        f"💾 BACKUP_PATH: {BACKUP_PATH}\n"
+        f"   Существует: {'✅ Да' if os.path.exists(BACKUP_PATH) else '❌ Нет'}\n"
+    )
+    
+    if os.path.exists(DATA_FILE):
+        size = os.path.getsize(DATA_FILE)
+        text += f"\n📏 Размер файла данных: {size:,} байт".replace(",", " ")
+    
+    await update.message.reply_text(text)
+
 async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
@@ -931,8 +1504,135 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.edit_reply_markup(reply_markup=None)
         except:
             pass
+    
+    elif data == "admin_cleanup":
+        await admin_cleanup(update, context)
+    elif data == "admin_health":
+        await admin_health(update, context)
+    elif data == "admin_stats":
+        await admin_stats(update, context)
+    elif data == "admin_backup":
+        await admin_backup_cmd(update, context)
+    elif data == "admin_migrate":
+        await admin_migrate(update, context)
+    elif data == "admin_repair":
+        await admin_repair_cmd(update, context)
+    elif data == "admin_storage":
+        await admin_storage_cmd(update, context)
+    elif data == "admin_close":
+        await admin_close(update, context)
+    elif data == "admin_back":
+        await admin_panel(update, context)
+    
+    elif data.startswith("cleanup_"):
+        action = data.replace("cleanup_", "")
+        await cleanup_action(update, context, action)
+    
+    elif data.startswith("migrate_"):
+        action = data.replace("migrate_", "")
+        await migrate_action(update, context, action)
+    
+    elif data.startswith("confirm_"):
+        action = data.replace("confirm_", "")
+        if action == "мигрировать":
+            await perform_migration(query.message, "all")
+        elif action == "восстановить":
+            await perform_repair(query.message)
+    
+    elif data == "cancel_action":
+        await query.message.edit_text(
+            "❌ Действие отменено",
+            reply_markup=get_admin_keyboard()
+        )
+    
     else:
         await query.message.reply_text("⚙️ Эта функция в разработке")
+
+async def perform_migration(message, migration_type):
+    await message.edit_text("🔄 Начинаю миграцию...")
+    
+    await send_progress(message, "Создание бэкапа", 0.1)
+    success, backup_path = create_safe_backup("before_migration")
+    
+    if not success:
+        await message.edit_text(f"❌ Не удалось создать бэкап: {backup_path}")
+        return
+    
+    await send_progress(message, "Поиск старых данных", 0.3)
+    
+    import os
+    import shutil
+    import json
+    
+    old_locations = [
+        "mishok_data.json",
+        "data/mishok_data.json",
+        "/data/mishok_bot/mishok_data.json",
+        "/bothost/mishok_data.json"
+    ]
+    
+    migrated = False
+    for old_path in old_locations:
+        if os.path.exists(old_path) and old_path != DATA_FILE:
+            try:
+                await send_progress(message, f"Копирование {old_path}", 0.5)
+                
+                os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
+                shutil.copy2(old_path, DATA_FILE)
+                
+                await send_progress(message, "Проверка структуры", 0.7)
+                
+                with open(DATA_FILE, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                await send_progress(message, "Миграция завершена", 0.9)
+                
+                migrated = True
+                
+                text = f"✅ Миграция завершена!\n\n"
+                text += f"📁 Источник: {old_path}\n"
+                text += f"👥 Пользователей: {len(data.get('users', {}))}\n"
+                text += f"👊 Шлёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n\n"
+                text += "Теперь используйте /fix_structure для исправления структуры"
+                
+                await message.edit_text(text, reply_markup=get_admin_keyboard())
+                break
+                
+            except Exception as e:
+                logger.error(f"Ошибка миграции {old_path}: {e}")
+    
+    if not migrated:
+        await message.edit_text(
+            "📭 Старые данные не найдены.\n"
+            "Будет создан новый файл при первом шлёпке.",
+            reply_markup=get_admin_keyboard()
+        )
+
+async def perform_repair(message):
+    await message.edit_text("🔧 Восстановление структуры...")
+    
+    await send_progress(message, "Создание бэкапа", 0.2)
+    create_safe_backup("before_repair")
+    
+    await send_progress(message, "Восстановление", 0.5)
+    success = repair_data_structure()
+    
+    if success:
+        await send_progress(message, "Проверка результата", 0.8)
+        from database import load_data
+        data = load_data()
+        
+        text = (
+            "✅ СТРУКТУРА ДАННЫХ ВОССТАНОВЛЕНА\n\n"
+            f"👥 Пользователей: {len(data.get('users', {}))}\n"
+            f"💬 Чатов: {len(data.get('chats', {}))}\n"
+            f"👊 Всего шлёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n\n"
+            "Ошибки больше не должны возникать!"
+        )
+    else:
+        text = "❌ Не удалось восстановить структуру данных"
+    
+    await message.edit_text(text, reply_markup=get_admin_keyboard())
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
@@ -989,26 +1689,6 @@ async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Ошибка: {context.error}", exc_info=True)
 
-@command_handler
-async def check_paths(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    from config import DATA_FILE, VOTES_FILE, BACKUP_PATH
-    
-    text = (
-        "🔍 ПРОВЕРКА ПУТЕЙ ДЛЯ ДАННЫХ:\n\n"
-        f"📁 DATA_FILE: {DATA_FILE}\n"
-        f"   Существует: {'✅ Да' if os.path.exists(DATA_FILE) else '❌ Нет'}\n\n"
-        f"🗳️ VOTES_FILE: {VOTES_FILE}\n"
-        f"   Существует: {'✅ Да' if os.path.exists(VOTES_FILE) else '❌ Нет'}\n\n"
-        f"💾 BACKUP_PATH: {BACKUP_PATH}\n"
-        f"   Существует: {'✅ Да' if os.path.exists(BACKUP_PATH) else '❌ Нет'}\n"
-    )
-    
-    if os.path.exists(DATA_FILE):
-        size = os.path.getsize(DATA_FILE)
-        text += f"\n📏 Размер файла данных: {size:,} байт".replace(",", " ")
-    
-    await update.message.reply_text(text)
-
 def main():
     if not BOT_TOKEN:
         logger.error("❌ Нет токена бота! Установите BOT_TOKEN в config.py или .env файле")
@@ -1035,6 +1715,7 @@ def main():
         ("repair", repair),
         ("data_info", data_info),
         ("check_paths", check_paths),
+        ("admin", admin_panel),
     ]
     
     for name, handler in commands:
@@ -1054,6 +1735,7 @@ def main():
     print("=" * 50)
     print(f"• Токен: {'есть' if BOT_TOKEN else 'НЕТ!'}")
     print(f"• Команд: {len(commands)}")
+    print(f"• Админ-панель: /admin")
     print(f"• Бот готов к работе!")
     print("=" * 50)
     
