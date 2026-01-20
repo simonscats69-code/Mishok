@@ -68,7 +68,10 @@ def main():
         
         create_initial_backup()
         
-        from database import check_data_integrity, repair_data_structure
+        from database import check_data_integrity, repair_data_structure, cleanup_old_votes
+        
+        # Очищаем старые голосования при старте
+        cleanup_old_votes()
         
         result = check_data_integrity()
         if result['errors']:
@@ -84,8 +87,16 @@ def main():
         print("• /shlep - Шлёпнуть Мишка")
         print("• /stats - Статистика")
         print("• /level - Уровень")
+        print("• /my_stats - Детальная статистика")
         print("• /admin - Админ-панель (только для админов)")
         print("• /help - Помощь")
+        print("• /mishok - О Мишке")
+        print("=" * 50)
+        print("\n💬 КОМАНДЫ ДЛЯ ЧАТОВ:")
+        print("• /chat_stats - Статистика чата")
+        print("• /chat_top - Топ игроков чата")
+        print("• /vote [вопрос] - Создать голосование")
+        print("• /vote_end - Завершить голосование (создатель/админ)")
         print("=" * 50)
         print("\n⚙️  АДМИН-ПАНЕЛЬ ВКЛЮЧЕНА!")
         print("Доступные функции:")
