@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 print("🔄 ПЕРЕНОС ДАННЫХ В ЗАЩИЩЕННУЮ ДИРЕКТОРИЮ")
 print("=" * 60)
 
-from config import DATA_FILE, VOTES_FILE, BACKUP_PATH
+from config import DATA_FILE, BACKUP_PATH
 
 OLD_DATA_PATHS = [
     "mishok_data.json",
@@ -18,12 +18,6 @@ OLD_DATA_PATHS = [
     "root/mishok_data.json",
     "bothost/mishok_data.json",
     "app/mishok_data.json"
-]
-
-OLD_VOTES_PATHS = [
-    "data/votes.json",
-    "votes.json",
-    "data/votes.json"
 ]
 
 def migrate_file(old_paths, new_path, file_type="данные"):
@@ -36,12 +30,16 @@ def migrate_file(old_paths, new_path, file_type="данные"):
                     with open(old_path, 'r', encoding='utf-8') as f:
                         data = json.load(f)
                     
-                    if "damage_history" in data.get("users", {}).values().__iter__().__next__() if data.get("users") else False:
-                        print(f"   ⚠️ Обнаружена старая структура, оптимизирую...")
+                    # Оптимизируем старую структуру
+                    if "users" in data:
                         for user_data in data.get("users", {}).values():
                             user_data.pop("damage_history", None)
                             user_data.pop("chat_stats", None)
                         data["version"] = "3.0"
+                    
+                    # Добавляем секцию голосований если её нет
+                    if "votes" not in data:
+                        data["votes"] = {}
                     
                     with open(new_path, 'w', encoding='utf-8') as f:
                         json.dump(data, f, separators=(',', ':'))
@@ -65,10 +63,12 @@ def check_current_data():
                 data = json.load(f)
                 total_shleps = data.get('global_stats', {}).get('total_shleps', 0)
                 users_count = len(data.get('users', {}))
+                votes_count = len(data.get('votes', {}))
                 version = data.get('version', '1.0')
                 print(f"📊 Текущие данные в {DATA_FILE}:")
                 print(f"   👥 Пользователей: {users_count}")
                 print(f"   👊 Шлёпков: {total_shleps}")
+                print(f"   🗳️ Голосований: {votes_count}")
                 print(f"   📋 Версия: {version}")
                 return True
         except Exception as e:
@@ -82,15 +82,11 @@ if not check_current_data():
     if not migrated:
         print("📭 Старые данные не найдены, будет создан новый файл")
 
-if os.path.exists(VOTES_FILE):
-    print(f"✅ Файл голосований уже на месте: {VOTES_FILE}")
-else:
-    migrate_file(OLD_VOTES_PATHS, VOTES_FILE, "голосования")
-
 print("\n🧹 Создание директории для бэкапов...")
 os.makedirs(BACKUP_PATH, exist_ok=True)
 print(f"✅ Директория бэкапов: {BACKUP_PATH}")
 
 print("\n🎉 Перенос данных завершён!")
 print(f"📁 Данные теперь защищены в: {os.path.dirname(DATA_FILE)}")
+print("ℹ️  Голосования теперь хранятся в основном файле данных")
 print("=" * 60)
