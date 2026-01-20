@@ -1,5 +1,3 @@
-[file name]: cache.py
-[file content begin]
 import asyncio
 import logging
 from datetime import datetime, timedelta
@@ -69,4 +67,3 @@ class Cache:
             return True
 
 cache = Cache()
-[file content end]
