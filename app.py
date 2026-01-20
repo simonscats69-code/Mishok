@@ -75,6 +75,34 @@ def migrate_old_data():
     
     return migrated
 
+def check_initial_backup():
+    from config import DATA_FILE, BACKUP_PATH
+    import shutil
+    from datetime import datetime
+    
+    if os.path.exists(DATA_FILE):
+        try:
+            os.makedirs(BACKUP_PATH, exist_ok=True)
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_file = os.path.join(BACKUP_PATH, f"initial_backup_{timestamp}.json")
+            
+            shutil.copy2(DATA_FILE, backup_file)
+            logger.info(f"📦 Создан начальный бэкап: {backup_file}")
+            return True
+        except Exception as e:
+            logger.error(f"❌ Ошибка создания начального бэкапа: {e}")
+            return False
+    return True
+
+def check_admin_config():
+    from config import ADMIN_ID
+    if ADMIN_ID == 0:
+        logger.warning("⚠️ ADMIN_ID не установлен! Админ-панель будет недоступна.")
+        logger.info("💡 Установите ADMIN_ID в .env файле для доступа к админ-панели")
+    else:
+        logger.info(f"✅ ADMIN_ID установлен: {ADMIN_ID}")
+
 def main():
     try:
         logger.info("=" * 50)
@@ -84,9 +112,13 @@ def main():
         if not check_environment():
             sys.exit(1)
         
+        check_admin_config()
+        
         migrated = migrate_old_data()
         if migrated:
             logger.info("✅ Миграция данных завершена")
+        
+        check_initial_backup()
         
         from database import check_data_integrity, repair_data_structure
         
@@ -97,6 +129,25 @@ def main():
             logger.info("✅ Восстановление завершено")
         
         logger.info(f"📊 Данные загружены: {result['stats']['total_shleps']} шлёпков, {result['stats']['users']} пользователей")
+        
+        print("\n" + "=" * 50)
+        print("🎮 ОСНОВНЫЕ КОМАНДЫ:")
+        print("• /start - Начать работу")
+        print("• /shlep - Шлёпнуть Мишка")
+        print("• /stats - Статистика")
+        print("• /level - Уровень")
+        print("• /admin - Админ-панель (только для админов)")
+        print("• /help - Помощь")
+        print("=" * 50)
+        print("\n⚙️  АДМИН-ПАНЕЛЬ ВКЛЮЧЕНА!")
+        print("Доступные функции:")
+        print("• 🧹 Очистка системы")
+        print("• 🩺 Проверка здоровья")
+        print("• 📊 Статистика пользователей")
+        print("• 💾 Бэкапы данных")
+        print("• 🔄 Миграция данных")
+        print("• 🔧 Восстановление структуры")
+        print("=" * 50 + "\n")
         
         from bot import main as bot_main
         bot_main()
