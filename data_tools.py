@@ -12,12 +12,9 @@ from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-print("🛠️ ИНСТРУМЕНТЫ ДЛЯ РАБОТЫ С ДАННЫМИ")
-print("=" * 60)
-
+from texts import DATA_TOOLS_TEXTS, STATUS_TEXTS
 from config import DATA_FILE, BACKUP_PATH
 
-# Пути к старым данным для миграции
 OLD_DATA_PATHS = [
     "mishok_data.json",
     "data/mishok_data.json",
@@ -26,13 +23,16 @@ OLD_DATA_PATHS = [
     "app/mishok_data.json"
 ]
 
+print(DATA_TOOLS_TEXTS['title'])
+print(DATA_TOOLS_TEXTS['divider'])
+
 # ==================== ОБЩИЕ УТИЛИТЫ ====================
 
 def create_backup(description: str = "") -> tuple:
     """Создать резервную копию данных"""
     try:
         if not os.path.exists(DATA_FILE):
-            return False, "Файл данных не существует"
+            return False, DATA_TOOLS_TEXTS['file_not_found'].format(file=DATA_FILE)
         
         os.makedirs(BACKUP_PATH, exist_ok=True)
         
@@ -43,11 +43,11 @@ def create_backup(description: str = "") -> tuple:
         shutil.copy2(DATA_FILE, backup_file)
         
         size = os.path.getsize(backup_file)
-        print(f"✅ Создан бэкап: {backup_file} ({size} байт)")
+        print(DATA_TOOLS_TEXTS['backup_created'].format(file=backup_file, size=size))
         
         return True, backup_file
     except Exception as e:
-        print(f"❌ Ошибка создания бэкапа: {e}")
+        print(DATA_TOOLS_TEXTS['backup_error'].format(error=e))
         return False, str(e)
 
 def check_current_data():
@@ -60,11 +60,13 @@ def check_current_data():
                 users_count = len(data.get('users', {}))
                 votes_count = len(data.get('votes', {}))
                 version = data.get('version', '1.0')
-                print(f"📊 Текущие данные в {DATA_FILE}:")
-                print(f"   👥 Пользователей: {users_count}")
-                print(f"   👊 Шлёпков: {total_shleps}")
-                print(f"   🗳️ Голосований: {votes_count}")
-                print(f"   📋 Версия: {version}")
+                print(DATA_TOOLS_TEXTS['check_data'].format(
+                    file=DATA_FILE,
+                    users=users_count,
+                    shleps=total_shleps,
+                    votes=votes_count,
+                    version=version
+                ))
                 return True
         except Exception as e:
             print(f"❌ Ошибка чтения текущих данных: {e}")
@@ -102,8 +104,8 @@ def migrate_file(old_paths, new_path, file_type="данные"):
                 backup_name = f"{old_path}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
                 shutil.copy2(old_path, backup_name)
                 
-                print(f"✅ Перенесено: {old_path} → {new_path}")
-                print(f"   💾 Бэкап: {backup_name}")
+                print(DATA_TOOLS_TEXTS['migrated_file'].format(old=old_path, new=new_path))
+                print(DATA_TOOLS_TEXTS['file_backup'].format(backup=backup_name))
                 return True
             except Exception as e:
                 print(f"⚠️ Ошибка переноса {old_path}: {e}")
@@ -111,17 +113,17 @@ def migrate_file(old_paths, new_path, file_type="данные"):
 
 def migrate_all():
     """Выполнить полную миграцию данных"""
-    print("\n🔄 ПЕРЕНОС ДАННЫХ В ЗАЩИЩЕННУЮ ДИРЕКТОРИЮ")
+    print("\n" + DATA_TOOLS_TEXTS['migrate_title'])
     
     if not check_current_data():
         migrated = migrate_file(OLD_DATA_PATHS, DATA_FILE, "данные")
         if not migrated:
-            print("📭 Старые данные не найдены, будет создан новый файл")
+            print(DATA_TOOLS_TEXTS['no_old_data'])
     
-    print("\n🧹 Создание директории для бэкапов...")
+    print("\n" + DATA_TOOLS_TEXTS['backup_dir'])
     os.makedirs(BACKUP_PATH, exist_ok=True)
-    print(f"✅ Директория бэкапов: {BACKUP_PATH}")
-    print("\n🎉 Перенос данных завершён!")
+    print(DATA_TOOLS_TEXTS['backup_dir_created'].format(path=BACKUP_PATH))
+    print("\n" + DATA_TOOLS_TEXTS['migration_complete'])
     
     return True
 
@@ -130,8 +132,8 @@ def migrate_all():
 def fix_data_structure():
     """Исправить и оптимизировать структуру данных"""
     if not os.path.exists(DATA_FILE):
-        print(f"❌ Файл не найден: {DATA_FILE}")
-        print("Создаю новый файл с оптимизированной структурой...")
+        print(DATA_TOOLS_TEXTS['file_not_found'].format(file=DATA_FILE))
+        print(DATA_TOOLS_TEXTS['create_new'])
         
         new_data = {
             "version": "3.0",
@@ -157,17 +159,17 @@ def fix_data_structure():
         with open(DATA_FILE, 'w', encoding='utf-8') as f:
             json.dump(new_data, f, separators=(',', ':'))
         
-        print(f"✅ Создан новый файл: {DATA_FILE}")
+        print(DATA_TOOLS_TEXTS['created_new'].format(file=DATA_FILE))
         return True
     
-    print("📦 Создание резервной копии...")
+    print(DATA_TOOLS_TEXTS['backup_creating'])
     success, backup_path = create_backup("before_fix")
     
     if not success:
-        print(f"❌ Ошибка создания резервной копии: {backup_path}")
+        print(DATA_TOOLS_TEXTS['backup_error'].format(error=backup_path))
         return False
     
-    print("\n🔍 Анализ текущей структуры...")
+    print(DATA_TOOLS_TEXTS['analysis'])
     
     try:
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
@@ -177,7 +179,7 @@ def fix_data_structure():
         return False
     
     version = original_data.get("version", "1.0")
-    print(f"   Версия: {version}")
+    print(DATA_TOOLS_TEXTS['version'].format(version=version))
     
     has_damage_history = False
     has_chat_stats = False
@@ -190,10 +192,13 @@ def fix_data_structure():
         if has_damage_history and has_chat_stats:
             break
     
-    print(f"   damage_history: {'⚠️ ЕСТЬ' if has_damage_history else '✅ НЕТ'}")
-    print(f"   chat_stats: {'⚠️ ЕСТЬ' if has_chat_stats else '✅ НЕТ'}")
+    damage_status = STATUS_TEXTS['warning_yes'] if has_damage_history else STATUS_TEXTS['no']
+    chat_status = STATUS_TEXTS['warning_yes'] if has_chat_stats else STATUS_TEXTS['no']
     
-    print("\n🔄 Оптимизация структуры...")
+    print(f"   damage_history: {damage_status}")
+    print(f"   chat_stats: {chat_status}")
+    
+    print(DATA_TOOLS_TEXTS['optimization'])
     
     fixed_data = {
         "version": "3.0",
@@ -214,7 +219,7 @@ def fix_data_structure():
         "votes": original_data.get("votes", {})
     }
     
-    print("   Оптимизирую пользователей...")
+    print(DATA_TOOLS_TEXTS['optimizing_users'])
     for user_id, user_data in original_data.get("users", {}).items():
         fixed_data["users"][user_id] = {
             "username": user_data.get("username", f"User_{user_id}"),
@@ -224,7 +229,7 @@ def fix_data_structure():
             "bonus_damage": user_data.get("bonus_damage", 0)
         }
     
-    print("   Оптимизирую timestamps...")
+    print(DATA_TOOLS_TEXTS['optimizing_timestamps'])
     if "timestamps" in original_data:
         for key, value in original_data["timestamps"].items():
             if isinstance(value, dict) and "count" in value:
@@ -232,14 +237,14 @@ def fix_data_structure():
             else:
                 fixed_data["timestamps"][key] = value
     
-    print("   Ограничиваю records до 5...")
+    print(DATA_TOOLS_TEXTS['limiting_records'])
     if "records" in original_data:
         fixed_data["records"] = original_data["records"][-5:] if len(original_data["records"]) > 5 else original_data["records"]
     
-    print("   Обновляю счётчик пользователей...")
+    print(DATA_TOOLS_TEXTS['updating_counter'])
     fixed_data["global_stats"]["total_users"] = len(fixed_data["users"])
     
-    print("\n💾 Сохранение оптимизированного файла...")
+    print(DATA_TOOLS_TEXTS['saving'])
     try:
         with open(DATA_FILE, 'w', encoding='utf-8') as f:
             json.dump(fixed_data, f, separators=(',', ':'))
@@ -248,90 +253,89 @@ def fix_data_structure():
         new_size = os.path.getsize(DATA_FILE)
         reduction = ((original_size - new_size) / original_size) * 100 if original_size > 0 else 0
         
-        print(f"✅ Файл сохранен: {DATA_FILE}")
+        print(DATA_TOOLS_TEXTS['saved'].format(file=DATA_FILE))
         
-        print(f"\n📊 РЕЗУЛЬТАТЫ ОПТИМИЗАЦИИ:")
-        print(f"   📏 Исходный размер: {original_size:,} байт".replace(",", " "))
-        print(f"   📏 Новый размер: {new_size:,} байт".replace(",", " "))
-        print(f"   📉 Сокращение: {reduction:.1f}%")
-        print(f"   👥 Пользователей: {len(fixed_data['users'])}")
-        print(f"   👊 Шлёпков: {fixed_data['global_stats']['total_shleps']}")
-        print(f"   🗳️ Голосований: {len(fixed_data['votes'])}")
+        print(DATA_TOOLS_TEXTS['optimization_results'])
+        print(DATA_TOOLS_TEXTS['original_size'].format(size=original_size))
+        print(DATA_TOOLS_TEXTS['new_size'].format(size=new_size))
+        print(DATA_TOOLS_TEXTS['reduction'].format(percent=reduction))
+        print(DATA_TOOLS_TEXTS['users_count'].format(count=len(fixed_data['users'])))
+        print(DATA_TOOLS_TEXTS['shleps_count'].format(count=fixed_data['global_stats']['total_shleps']))
+        print(DATA_TOOLS_TEXTS['votes_count'].format(count=len(fixed_data['votes'])))
         
         return True
         
     except Exception as e:
-        print(f"❌ Ошибка сохранения: {e}")
+        print(DATA_TOOLS_TEXTS['save_error'].format(error=e))
         return False
 
 def verify_fixed_data():
     """Проверить исправленные данные"""
-    print("\n🧪 ПРОВЕРКА ОПТИМИЗИРОВАННЫХ ДАННЫХ")
-    print("=" * 60)
+    print("\n" + DATA_TOOLS_TEXTS['verify_title'])
+    print(DATA_TOOLS_TEXTS['divider'])
     
     try:
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
         version = data.get("version", "1.0")
-        print(f"✅ Версия данных: {version}")
+        print(DATA_TOOLS_TEXTS['data_version'].format(version=version))
         
         required_keys = ["users", "chats", "global_stats", "timestamps", "records", "votes"]
         all_keys_present = all(key in data for key in required_keys)
         
         if all_keys_present:
-            print("✅ Все обязательные ключи присутствуют")
+            print(DATA_TOOLS_TEXTS['keys_ok'])
         else:
             missing = [k for k in required_keys if k not in data]
-            print(f"❌ Отсутствуют ключи: {missing}")
+            print(DATA_TOOLS_TEXTS['keys_missing'].format(keys=missing))
             return False
         
-        print("🔍 Проверка структуры пользователей...")
+        print(DATA_TOOLS_TEXTS['checking_users'])
         errors = 0
         for user_id, user_data in data["users"].items():
             required_user_keys = ["username", "total_shleps", "max_damage", "last_shlep", "bonus_damage"]
             missing_keys = [k for k in required_user_keys if k not in user_data]
             if missing_keys:
-                print(f"   ⚠️ {user_id}: отсутствуют {missing_keys}")
+                print(DATA_TOOLS_TEXTS['user_error'].format(id=user_id, keys=missing_keys))
                 errors += 1
         
         if errors == 0:
-            print("✅ Структура пользователей корректна")
+            print(DATA_TOOLS_TEXTS['users_ok'])
         
-        print("\n🔗 Тестирование импорта database.py...")
+        print(DATA_TOOLS_TEXTS['testing_import'])
         try:
             from database import load_data, get_stats
             
             test_data = load_data()
-            print(f"✅ database.load_data() работает")
+            print(DATA_TOOLS_TEXTS['load_ok'])
             
             total, last, maxd, maxu, maxdt = get_stats()
-            print(f"✅ database.get_stats() работает")
-            print(f"   Всего шлёпков: {total}")
+            print(DATA_TOOLS_TEXTS['stats_ok'])
+            print(DATA_TOOLS_TEXTS['total_shleps'].format(count=total))
             
             return True
             
         except ImportError as e:
-            print(f"❌ Ошибка импорта database.py: {e}")
+            print(DATA_TOOLS_TEXTS['import_error'].format(error=e))
             return False
             
     except Exception as e:
-        print(f"❌ Ошибка проверки: {e}")
+        print(DATA_TOOLS_TEXTS['verify_error'].format(error=e))
         return False
 
 def fix_and_verify():
     """Выполнить исправление и проверку данных"""
-    print("\n🛠️ ИСПРАВЛЕНИЕ ДАННЫХ ДЛЯ ВЕРСИИ 3.0")
+    print("\n" + DATA_TOOLS_TEXTS['fix_title'])
     if fix_data_structure():
         if verify_fixed_data():
-            print("\n🎉 ОПТИМИЗАЦИЯ ЗАВЕРШЕНА УСПЕШНО!")
-            print("Бот готов к работе с оптимизированными данными")
+            print(DATA_TOOLS_TEXTS['success'])
             return True
         else:
-            print("\n⚠️ Оптимизация завершена, но есть проблемы с проверкой")
+            print(DATA_TOOLS_TEXTS['warning'])
             return False
     else:
-        print("\n❌ ОПТИМИЗАЦИЯ НЕ УДАЛАСЬ!")
+        print(DATA_TOOLS_TEXTS['error'])
         return False
 
 # ==================== КОМАНДНАЯ СТРОКА ====================
@@ -342,13 +346,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Инструменты для работы с данными бота Мишок Лысый",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Примеры использования:
-  python data_tools.py --migrate    # Перенести данные
-  python data_tools.py --fix        # Исправить структуру
-  python data_tools.py --check      # Проверить данные
-  python data_tools.py --backup     # Создать бэкап
-        """
+        epilog=DATA_TOOLS_TEXTS['examples']
     )
     
     parser.add_argument("--migrate", action="store_true", help="Мигрировать данные в защищенную директорию")
@@ -358,9 +356,8 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    print("\n" + "=" * 60)
-    print("🛠️  ИНСТРУМЕНТЫ ДЛЯ РАБОТЫ С ДАННЫМИ v3.0")
-    print("=" * 60)
+    print("\n" + DATA_TOOLS_TEXTS['script_title'])
+    print(DATA_TOOLS_TEXTS['divider'])
     
     if args.migrate:
         migrate_all()
@@ -369,26 +366,21 @@ if __name__ == "__main__":
         fix_and_verify()
     
     elif args.check:
-        print("\n🔍 ПРОВЕРКА ТЕКУЩИХ ДАННЫХ")
+        print("\n" + DATA_TOOLS_TEXTS['check_title'])
         if check_current_data():
-            print("\n✅ Данные в порядке!")
+            print(DATA_TOOLS_TEXTS['data_ok'])
         else:
-            print("\n❌ Проблемы с данными!")
+            print(DATA_TOOLS_TEXTS['data_problems'])
     
     elif args.backup:
-        print("\n💾 СОЗДАНИЕ РЕЗЕРВНОЙ КОПИИ")
+        print("\n" + DATA_TOOLS_TEXTS['backup_title'])
         success, path = create_backup("manual")
         if success:
-            print(f"\n✅ Бэкап создан: {path}")
+            print(DATA_TOOLS_TEXTS['backup_success'].format(path=path))
         else:
-            print(f"\n❌ Ошибка: {path}")
+            print(DATA_TOOLS_TEXTS['backup_failed'].format(error=path))
     
     else:
-        print("ℹ️  Используйте один из параметров:")
-        print("  --migrate  для переноса данных")
-        print("  --fix      для исправления структуры")
-        print("  --check    для проверки данных")
-        print("  --backup   для создания бэкапа")
-        print("\nИли используйте 'python data_tools.py --help' для справки")
+        print(DATA_TOOLS_TEXTS['usage'])
     
-    print("\n" + "=" * 60)
+    print("\n" + DATA_TOOLS_TEXTS['divider'])
