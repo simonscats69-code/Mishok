@@ -119,3 +119,53 @@ def validate_username(username: str) -> str:
     username = username.replace("@", "(at)").replace("#", "").replace("/", "")
     
     return username if username else "Аноним"
+
+def create_progress_bar(progress: float, length: int = 10) -> str:
+    filled = int(progress * length)
+    empty = length - filled
+    return "█" * filled + "░" * empty
+
+def format_file_size(bytes_size: int) -> str:
+    if bytes_size < 1024:
+        return f"{bytes_size} B"
+    elif bytes_size < 1024 * 1024:
+        return f"{bytes_size/1024:.1f} KB"
+    elif bytes_size < 1024 * 1024 * 1024:
+        return f"{bytes_size/(1024*1024):.1f} MB"
+    else:
+        return f"{bytes_size/(1024*1024*1024):.1f} GB"
+
+def get_timestamp() -> str:
+    return datetime.now().strftime("%Y%m%d_%H%M%S")
+
+def create_backup_filename(prefix: str = "backup") -> str:
+    timestamp = get_timestamp()
+    return f"{prefix}_{timestamp}.json"
+
+def safe_json_dump(data: Any, filepath: str) -> bool:
+    try:
+        import json
+        temp_file = filepath + ".tmp"
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+        import os
+        os.replace(temp_file, filepath)
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка сохранения JSON: {e}")
+        return False
+
+def get_system_info() -> Dict[str, Any]:
+    import platform
+    import sys
+    import os
+    
+    return {
+        "python_version": platform.python_version(),
+        "system": platform.system(),
+        "machine": platform.machine(),
+        "processor": platform.processor(),
+        "cwd": os.getcwd(),
+        "script_dir": os.path.dirname(os.path.abspath(__file__)),
+        "pid": os.getpid()
+    }
