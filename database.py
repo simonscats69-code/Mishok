@@ -8,17 +8,13 @@ import random
 
 logger = logging.getLogger(__name__)
 
-# Используем абсолютные пути
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-DATA_FILE = os.path.join(DATA_DIR, "mishok_data.json")
-BACKUP_DIR = os.path.join(DATA_DIR, "backups")
-VOTES_FILE = os.path.join(DATA_DIR, "votes.json")
+from config import DATA_FILE, VOTES_FILE, BACKUP_PATH, BACKUP_ENABLED, BACKUP_RETENTION_DAYS, MAX_USER_HISTORY
 
-# ========== Функции для работы с голосованиями ==========
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.dirname(DATA_FILE)
+BACKUP_DIR = BACKUP_PATH
 
 def ensure_votes_file():
-    """Создает файл для голосований, если его нет"""
     try:
         if not os.path.exists(VOTES_FILE):
             os.makedirs(os.path.dirname(VOTES_FILE), exist_ok=True)
@@ -28,7 +24,6 @@ def ensure_votes_file():
         logger.error(f"Ошибка создания файла голосований: {e}")
 
 def save_vote_data(vote_data):
-    """Сохраняет данные голосования"""
     ensure_votes_file()
     try:
         with open(VOTES_FILE, 'r', encoding='utf-8') as f:
@@ -42,7 +37,6 @@ def save_vote_data(vote_data):
         return False
 
 def get_vote_data(vote_id):
-    """Получает данные голосования по ID"""
     ensure_votes_file()
     try:
         with open(VOTES_FILE, 'r', encoding='utf-8') as f:
@@ -53,7 +47,6 @@ def get_vote_data(vote_id):
         return None
 
 def get_all_votes():
-    """Получает все голосования"""
     ensure_votes_file()
     try:
         with open(VOTES_FILE, 'r', encoding='utf-8') as f:
@@ -63,7 +56,6 @@ def get_all_votes():
         return {}
 
 def delete_vote_data(vote_id):
-    """Удаляет данные голосования"""
     ensure_votes_file()
     try:
         with open(VOTES_FILE, 'r', encoding='utf-8') as f:
@@ -78,7 +70,6 @@ def delete_vote_data(vote_id):
         return False
 
 def get_user_vote(vote_id, user_id):
-    """Получает голос пользователя в конкретном голосовании"""
     vote_data = get_vote_data(vote_id)
     if not vote_data:
         return None
@@ -90,7 +81,6 @@ def get_user_vote(vote_id, user_id):
     return None
 
 def cleanup_expired_votes():
-    """Удаляет просроченные голосования (старше 1 дня)"""
     try:
         all_votes = get_all_votes()
         now = datetime.now()
@@ -101,7 +91,6 @@ def cleanup_expired_votes():
             if ends_at_str:
                 try:
                     ends_at = datetime.fromisoformat(ends_at_str)
-                    # Удаляем голосования, завершённые более 1 дня назад
                     finished = vote_data.get("finished", False)
                     finished_at_str = vote_data.get("finished_at")
                     
@@ -125,44 +114,44 @@ def cleanup_expired_votes():
     except Exception as e:
         logger.error(f"Ошибка очистки голосований: {e}")
 
-# ========== Функции для работы с основными данными ==========
-
-def ensure_data_file():
-    """Создает файл данных, если его нет"""
+def restore_from_backup():
     try:
-        if not os.path.exists(DATA_FILE):
-            os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-            default_data = create_default_data()
-            save_data(default_data)
-            logger.info(f"Создан новый файл данных: {DATA_FILE}")
-            return default_data
+        if not os.path.exists(BACKUP_DIR):
+            logger.warning("Директория бэкапов не существует")
+            return create_default_data()
         
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        backups = []
+        for filename in os.listdir(BACKUP_DIR):
+            if filename.endswith('.json') and 'backup' in filename:
+                filepath = os.path.join(BACKUP_DIR, filename)
+                mtime = os.path.getmtime(filepath)
+                backups.append((filepath, mtime))
         
-        # Конвертация старой структуры
-        if "user_stats" in data and "users" not in data:
-            logger.info("Автоматическая конвертация user_stats -> users")
-            data["users"] = data.pop("user_stats")
-            for user_id, user_data in data["users"].items():
-                if "count" in user_data:
-                    user_data["total_shleps"] = user_data.pop("count")
-                user_data.setdefault("max_damage", 0)
-                user_data.setdefault("last_shlep", None)
-                user_data.setdefault("damage_history", [])
-                user_data.setdefault("chat_stats", {})
-                user_data.setdefault("bonus_damage", 0)
+        if backups:
+            backups.sort(key=lambda x: x[1], reverse=True)
+            latest_backup = backups[0][0]
+            
+            logger.info(f"Восстанавливаю из бэкапа: {latest_backup}")
+            
+            with open(latest_backup, 'r', encoding='utf-8') as f:
+                data = json.load(f)
             
             save_data(data)
+            logger.info("Восстановление завершено")
+            return data
         
-        return data
+        logger.warning("Бэкапы не найдены")
+        return create_default_data()
+        
     except Exception as e:
-        logger.error(f"Ошибка загрузки файла данных: {e}")
-        return create_new_data_file()
+        logger.error(f"Ошибка восстановления из бэкапа: {e}")
+        return create_default_data()
 
 def create_default_data():
-    """Создает структуру данных по умолчанию"""
     return {
+        "version": "2.0",
+        "created_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat(),
         "users": {},
         "chats": {},
         "global_stats": {
@@ -177,19 +166,61 @@ def create_default_data():
         "records": []
     }
 
+def convert_old_structure(data):
+    if "user_stats" in data and "users" not in data:
+        data["users"] = data.pop("user_stats")
+        for user_id, user_data in data["users"].items():
+            if "count" in user_data:
+                user_data["total_shleps"] = user_data.pop("count")
+            user_data.setdefault("max_damage", 0)
+            user_data.setdefault("last_shlep", None)
+            user_data.setdefault("damage_history", [])
+            user_data.setdefault("chat_stats", {})
+            user_data.setdefault("bonus_damage", 0)
+    
+    data["version"] = "2.0"
+    data["updated_at"] = datetime.now().isoformat()
+    
+    return data
+
+def ensure_data_file():
+    try:
+        os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
+        
+        if not os.path.exists(DATA_FILE):
+            default_data = create_default_data()
+            save_data(default_data)
+            logger.info(f"Создан новый файл данных: {DATA_FILE}")
+            return default_data
+        
+        with open(DATA_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        if "user_stats" in data and "users" not in data:
+            logger.info("Обнаружена старая структура, конвертирую...")
+            data = convert_old_structure(data)
+            save_data(data)
+        
+        logger.info(f"Загружен файл данных: {DATA_FILE}")
+        logger.info(f"   Пользователей: {len(data.get('users', {}))}")
+        logger.info(f"   Шлёпков: {data.get('global_stats', {}).get('total_shleps', 0)}")
+        
+        return data
+        
+    except Exception as e:
+        logger.error(f"Ошибка загрузки файла данных: {e}")
+        return restore_from_backup()
+
 def create_new_data_file():
-    """Создает новый файл данных"""
     default_data = create_default_data()
     save_data(default_data)
     logger.info(f"Создан новый файл данных: {DATA_FILE}")
     return default_data
 
 def repair_data_structure():
-    """Восстанавливает структуру данных при повреждении"""
     try:
         data = load_data_raw()
         
-        # Устанавливаем стандартные ключи
         data.setdefault("users", {})
         data.setdefault("chats", {})
         data.setdefault("global_stats", {
@@ -203,7 +234,6 @@ def repair_data_structure():
         data.setdefault("timestamps", {})
         data.setdefault("records", [])
         
-        # Восстанавливаем структуру пользователей
         for user_id, user_data in data["users"].items():
             user_data.setdefault("username", f"User_{user_id}")
             user_data.setdefault("total_shleps", user_data.get("count", 0))
@@ -216,7 +246,6 @@ def repair_data_structure():
             if "count" in user_data:
                 del user_data["count"]
         
-        # Восстанавливаем структуру чатов
         for chat_id, chat_data in data["chats"].items():
             chat_data.setdefault("total_shleps", 0)
             chat_data.setdefault("users", {})
@@ -242,7 +271,6 @@ def repair_data_structure():
         return False
 
 def load_data_raw():
-    """Загружает сырые данные без обработки"""
     try:
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -251,14 +279,12 @@ def load_data_raw():
         return {}
 
 def load_data():
-    """Загружает и обрабатывает данные"""
     try:
         ensure_data_file()
         
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
-        # Конвертация старой структуры
         if "user_stats" in data and "users" not in data:
             logger.info("Обнаружена старая структура user_stats, конвертирую...")
             data["users"] = data.pop("user_stats")
@@ -273,7 +299,6 @@ def load_data():
             
             save_data(data)
         
-        # Восстановление множеств из списков для timestamps
         if "timestamps" in data:
             for key, value in data["timestamps"].items():
                 if "users" in value and isinstance(value["users"], list):
@@ -284,40 +309,78 @@ def load_data():
         logger.error(f"Ошибка загрузки данных: {e}")
         return load_data_raw()
 
-def save_data(data):
-    """Сохраняет данные в файл"""
+def create_auto_backup():
     try:
+        if not BACKUP_ENABLED:
+            return
+        
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_file = os.path.join(BACKUP_DIR, f"auto_backup_{timestamp}.json")
+        
+        if os.path.exists(DATA_FILE):
+            shutil.copy2(DATA_FILE, backup_file)
+            
+            cleanup_old_backups()
+            
+            logger.debug(f"Автобэкап создан: {backup_file}")
+    except Exception as e:
+        logger.error(f"Ошибка создания автобэкапа: {e}")
+
+def cleanup_old_backups():
+    try:
+        if not os.path.exists(BACKUP_DIR):
+            return
+        
+        now = datetime.now()
+        for filename in os.listdir(BACKUP_DIR):
+            if filename.endswith('.json'):
+                filepath = os.path.join(BACKUP_DIR, filename)
+                mtime = datetime.fromtimestamp(os.path.getmtime(filepath))
+                
+                if (now - mtime).days > BACKUP_RETENTION_DAYS:
+                    os.remove(filepath)
+                    logger.debug(f"Удален старый бэкап: {filename}")
+                    
+    except Exception as e:
+        logger.error(f"Ошибка очистки бэкапов: {e}")
+
+def save_data(data):
+    try:
+        data["updated_at"] = datetime.now().isoformat()
+        
         os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
         
-        # Создаем копию для сериализации
         data_copy = json.loads(json.dumps(data, default=str))
         
-        # Конвертируем множества в списки для сериализации
         if "timestamps" in data_copy:
             for key, value in data_copy["timestamps"].items():
                 if "users" in value:
                     if hasattr(value["users"], '__iter__'):
                         value["users"] = list(value["users"])
         
-        with open(DATA_FILE, 'w', encoding='utf-8') as f:
+        temp_file = DATA_FILE + ".tmp"
+        with open(temp_file, 'w', encoding='utf-8') as f:
             json.dump(data_copy, f, ensure_ascii=False, indent=2)
         
-        logger.debug(f"Данные сохранены в {DATA_FILE}")
+        os.replace(temp_file, DATA_FILE)
+        
+        if BACKUP_ENABLED:
+            create_auto_backup()
+        
+        logger.debug(f"Данные сохранены: {DATA_FILE}")
         return True
     except Exception as e:
         logger.error(f"Ошибка сохранения данных: {e}")
         return False
 
-# ========== Основные функции для работы с шлепами ==========
-
 def add_shlep(user_id: int, username: str, damage: int, chat_id: Optional[int] = None) -> Tuple[int, int, int]:
-    """Добавляет шлеп в статистику"""
     try:
         data = load_data()
         now = datetime.now().isoformat()
         user_id_str = str(user_id)
         
-        # Инициализация пользователя
         if user_id_str not in data["users"]:
             data["users"][user_id_str] = {
                 "username": username,
@@ -351,10 +414,9 @@ def add_shlep(user_id: int, username: str, damage: int, chat_id: Optional[int] =
             "chat_id": chat_id
         })
         
-        if len(user["damage_history"]) > 100:
-            user["damage_history"] = user["damage_history"][-100:]
+        if len(user["damage_history"]) > MAX_USER_HISTORY:
+            user["damage_history"] = user["damage_history"][-MAX_USER_HISTORY:]
         
-        # Обработка статистики по чату
         if chat_id:
             chat_id_str = str(chat_id)
             
@@ -406,7 +468,6 @@ def add_shlep(user_id: int, username: str, damage: int, chat_id: Optional[int] =
             if damage > user_chat_stats["max_damage"]:
                 user_chat_stats["max_damage"] = damage
         
-        # Обновление глобальной статистики
         data["global_stats"]["total_shleps"] += 1
         data["global_stats"]["last_shlep"] = now
         
@@ -415,7 +476,6 @@ def add_shlep(user_id: int, username: str, damage: int, chat_id: Optional[int] =
             data["global_stats"]["max_damage_user"] = username
             data["global_stats"]["max_damage_date"] = now
         
-        # Обновление временных меток
         date_key = datetime.now().strftime("%Y-%m-%d")
         hour_key = datetime.now().strftime("%Y-%m-%d %H:00")
         
@@ -429,7 +489,6 @@ def add_shlep(user_id: int, username: str, damage: int, chat_id: Optional[int] =
         data["timestamps"][hour_key]["count"] += 1
         data["timestamps"][hour_key]["users"].add(user_id_str)
         
-        # Добавление в рекорды если урон >= 30
         if damage >= 30:
             record = {
                 "user_id": user_id,
@@ -453,11 +512,9 @@ def add_shlep(user_id: int, username: str, damage: int, chat_id: Optional[int] =
         
     except Exception as e:
         logger.error(f"Ошибка в add_shlep: {e}", exc_info=True)
-        # Возвращаем значения по умолчанию при ошибке
         return (0, 0, 0)
 
 def get_stats() -> Tuple[int, Optional[datetime], int, Optional[str], Optional[datetime]]:
-    """Получает глобальную статистику"""
     try:
         data = load_data()
         
@@ -476,7 +533,6 @@ def get_stats() -> Tuple[int, Optional[datetime], int, Optional[str], Optional[d
         return (0, None, 0, None, None)
 
 def get_top_users(limit: int = 10) -> List[Tuple[str, int]]:
-    """Получает топ пользователей по количеству шлепов"""
     try:
         data = load_data()
         
@@ -493,7 +549,6 @@ def get_top_users(limit: int = 10) -> List[Tuple[str, int]]:
         return []
 
 def get_user_stats(user_id: int) -> Tuple[Optional[str], int, Optional[datetime]]:
-    """Получает статистику конкретного пользователя"""
     try:
         data = load_data()
         
@@ -512,7 +567,6 @@ def get_user_stats(user_id: int) -> Tuple[Optional[str], int, Optional[datetime]
         return (None, 0, None)
 
 def get_chat_stats(chat_id: int) -> Dict[str, Any]:
-    """Получает статистику чата"""
     try:
         data = load_data()
         
@@ -534,7 +588,6 @@ def get_chat_stats(chat_id: int) -> Dict[str, Any]:
         return {}
 
 def get_chat_top_users(chat_id: int, limit: int = 10) -> List[Tuple[str, int]]:
-    """Получает топ пользователей в конкретном чате"""
     try:
         data = load_data()
         
@@ -555,7 +608,6 @@ def get_chat_top_users(chat_id: int, limit: int = 10) -> List[Tuple[str, int]]:
         return []
 
 def backup_database():
-    """Создает резервную копию базы данных"""
     try:
         if not os.path.exists(BACKUP_DIR):
             os.makedirs(BACKUP_DIR, exist_ok=True)
@@ -565,7 +617,6 @@ def backup_database():
         
         shutil.copy2(DATA_FILE, backup_file)
         
-        # Удаляем старые бэкапы (оставляем последние 10)
         backups = sorted([f for f in os.listdir(BACKUP_DIR) if f.endswith('.json')])
         if len(backups) > 10:
             for old_backup in backups[:-10]:
@@ -578,7 +629,6 @@ def backup_database():
         return False, str(e)
 
 def get_activity_stats(days: int = 7) -> Dict[str, Any]:
-    """Получает статистику активности за указанное количество дней"""
     try:
         data = load_data()
         
@@ -588,7 +638,6 @@ def get_activity_stats(days: int = 7) -> Dict[str, Any]:
         timestamps = data["timestamps"]
         now = datetime.now()
         
-        # Статистика по дням
         daily_stats = []
         for i in range(days):
             date = (now - timedelta(days=i)).strftime("%Y-%m-%d")
@@ -615,7 +664,6 @@ def get_activity_stats(days: int = 7) -> Dict[str, Any]:
         
         daily_stats.reverse()
         
-        # Статистика по часам (текущий день)
         hourly_stats = {}
         for i in range(24):
             hour_key = now.strftime(f"%Y-%m-%d {i:02d}:00")
@@ -624,7 +672,6 @@ def get_activity_stats(days: int = 7) -> Dict[str, Any]:
             else:
                 hourly_stats[f"{i:02d}:00"] = 0
         
-        # Уникальные пользователи за период
         all_users = set()
         for i in range(days):
             date = (now - timedelta(days=i)).strftime("%Y-%m-%d")
@@ -645,7 +692,6 @@ def get_activity_stats(days: int = 7) -> Dict[str, Any]:
         return {"daily": [], "hourly": {}, "active_users": 0}
 
 def get_user_activity(user_id: int, days: int = 14) -> Dict[str, Any]:
-    """Получает статистику активности конкретного пользователя"""
     try:
         data = load_data()
         
@@ -673,7 +719,6 @@ def get_user_activity(user_id: int, days: int = 14) -> Dict[str, Any]:
             except:
                 continue
         
-        # Форматируем статистику по дням
         daily_stats = []
         for i in range(days):
             date = (now - timedelta(days=i)).strftime("%Y-%m-%d")
@@ -684,7 +729,6 @@ def get_user_activity(user_id: int, days: int = 14) -> Dict[str, Any]:
         
         daily_stats.reverse()
         
-        # Форматируем статистику по часам
         formatted_hourly = {}
         for hour in range(24):
             hour_key = f"{hour:02d}:00"
@@ -700,26 +744,22 @@ def get_user_activity(user_id: int, days: int = 14) -> Dict[str, Any]:
         return {"daily": [], "hourly": {}, "total": 0}
 
 def check_data_integrity():
-    """Проверяет целостность данных"""
     try:
         data = load_data()
         
         errors = []
         warnings = []
         
-        # Проверка обязательных ключей
         required_keys = ["users", "chats", "global_stats", "timestamps", "records"]
         for key in required_keys:
             if key not in data:
                 errors.append(f"Отсутствует обязательный ключ: {key}")
         
-        # Проверка чатов на дубликаты пользователей
         for chat_id, chat_data in data.get("chats", {}).items():
             user_ids = list(chat_data.get("users", {}).keys())
             if len(user_ids) != len(set(user_ids)):
                 warnings.append(f"Чат {chat_id}: обнаружены дубликаты пользователей")
         
-        # Проверка структуры пользователей
         for user_id, user_data in data.get("users", {}).items():
             required_user_keys = ["username", "total_shleps", "max_damage", "last_shlep", "damage_history", "chat_stats"]
             missing_keys = []
@@ -730,7 +770,6 @@ def check_data_integrity():
             if missing_keys:
                 warnings.append(f"Пользователь {user_id}: отсутствуют ключи {missing_keys}")
         
-        # Проверка согласованности счетчиков
         total_from_users = sum(user.get("total_shleps", 0) for user in data.get("users", {}).values())
         total_in_global = data.get("global_stats", {}).get("total_shleps", 0)
         
@@ -754,8 +793,6 @@ def check_data_integrity():
             "stats": {}
         }
 
-# ========== Инициализация ==========
 logger.info("База данных готова к работе")
 
-# Очищаем старые голосования при импорте
 cleanup_expired_votes()
