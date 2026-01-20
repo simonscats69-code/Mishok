@@ -13,9 +13,6 @@ print("=" * 60)
 from config import DATA_FILE, BACKUP_PATH
 
 def fix_data_structure():
-    DATA_FILE = "data/mishok_data.json"
-    BACKUP_FILE = "data/mishok_data_backup_before_fix.json"
-    
     if not os.path.exists(DATA_FILE):
         print(f"❌ Файл не найден: {DATA_FILE}")
         print("Создаю новый файл с оптимизированной структурой...")
@@ -35,7 +32,8 @@ def fix_data_structure():
                 "total_users": 0
             },
             "timestamps": {},
-            "records": []
+            "records": [],
+            "votes": {}  # Новая секция голосований
         }
         
         os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
@@ -48,13 +46,18 @@ def fix_data_structure():
     
     print("📦 Создание резервной копии...")
     try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_file = os.path.join(BACKUP_PATH, f"fix_backup_{timestamp}.json")
+        
+        os.makedirs(BACKUP_PATH, exist_ok=True)
+        
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             original_data = json.load(f)
         
-        with open(BACKUP_FILE, 'w', encoding='utf-8') as f:
+        with open(backup_file, 'w', encoding='utf-8') as f:
             json.dump(original_data, f, indent=2, ensure_ascii=False)
         
-        print(f"✅ Резервная копия создана: {BACKUP_FILE}")
+        print(f"✅ Резервная копия создана: {backup_file}")
     except Exception as e:
         print(f"❌ Ошибка создания резервной копии: {e}")
         return False
@@ -95,7 +98,8 @@ def fix_data_structure():
             "total_users": 0
         }),
         "timestamps": {},
-        "records": []
+        "records": [],
+        "votes": original_data.get("votes", {})  # Сохраняем голосования если есть
     }
     
     print("   Оптимизирую пользователей...")
@@ -128,7 +132,7 @@ def fix_data_structure():
         with open(DATA_FILE, 'w', encoding='utf-8') as f:
             json.dump(fixed_data, f, separators=(',', ':'))
         
-        original_size = os.path.getsize(BACKUP_FILE)
+        original_size = os.path.getsize(backup_file)
         new_size = os.path.getsize(DATA_FILE)
         reduction = ((original_size - new_size) / original_size) * 100 if original_size > 0 else 0
         
@@ -140,6 +144,7 @@ def fix_data_structure():
         print(f"   📉 Сокращение: {reduction:.1f}%")
         print(f"   👥 Пользователей: {len(fixed_data['users'])}")
         print(f"   👊 Шлёпков: {fixed_data['global_stats']['total_shleps']}")
+        print(f"   🗳️ Голосований: {len(fixed_data['votes'])}")
         
         return True
         
@@ -148,8 +153,6 @@ def fix_data_structure():
         return False
 
 def verify_fixed_data():
-    DATA_FILE = "data/mishok_data.json"
-    
     print("\n🧪 ПРОВЕРКА ОПТИМИЗИРОВАННЫХ ДАННЫХ")
     print("=" * 60)
     
@@ -160,7 +163,7 @@ def verify_fixed_data():
         version = data.get("version", "1.0")
         print(f"✅ Версия данных: {version}")
         
-        required_keys = ["users", "chats", "global_stats", "timestamps", "records"]
+        required_keys = ["users", "chats", "global_stats", "timestamps", "records", "votes"]
         all_keys_present = all(key in data for key in required_keys)
         
         if all_keys_present:
