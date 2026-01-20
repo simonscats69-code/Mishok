@@ -1,24 +1,29 @@
 #!/usr/bin/env python3
 import json
 import os
-import sys
+import shutil
 from datetime import datetime
-from pathlib import Path
+import sys
 
-sys.path.append(str(Path(__file__).parent))
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-def fix_mishok_data():
+print("🛠️ ИСПРАВЛЕНИЕ ДАННЫХ ДЛЯ ВЕРСИИ 3.0")
+print("=" * 60)
+
+from config import DATA_FILE, BACKUP_PATH
+
+def fix_data_structure():
     DATA_FILE = "data/mishok_data.json"
     BACKUP_FILE = "data/mishok_data_backup_before_fix.json"
     
-    print("🔧 ИСПРАВЛЕНИЕ ФАЙЛА ДАННЫХ МИШОКА")
-    print("=" * 60)
-    
     if not os.path.exists(DATA_FILE):
         print(f"❌ Файл не найден: {DATA_FILE}")
-        print("Создаю новый файл с правильной структурой...")
+        print("Создаю новый файл с оптимизированной структурой...")
         
         new_data = {
+            "version": "3.0",
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
             "users": {},
             "chats": {},
             "global_stats": {
@@ -36,7 +41,7 @@ def fix_mishok_data():
         os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
         
         with open(DATA_FILE, 'w', encoding='utf-8') as f:
-            json.dump(new_data, f, indent=2, ensure_ascii=False)
+            json.dump(new_data, f, separators=(',', ':'))
         
         print(f"✅ Создан новый файл: {DATA_FILE}")
         return True
@@ -56,131 +61,85 @@ def fix_mishok_data():
     
     print("\n🔍 Анализ текущей структуры...")
     
-    has_user_stats = "user_stats" in original_data
-    has_users = "users" in original_data
-    has_global_stats = "global_stats" in original_data
-    has_chat_stats = "chat_stats" in original_data
+    version = original_data.get("version", "1.0")
+    print(f"   Версия: {version}")
     
-    print(f"   user_stats: {'✅' if has_user_stats else '❌'}")
-    print(f"   users: {'✅' if has_users else '❌'}")
-    print(f"   global_stats: {'✅' if has_global_stats else '❌'}")
-    print(f"   chat_stats: {'✅' if has_chat_stats else '❌'}")
+    has_damage_history = False
+    has_chat_stats = False
     
-    print("\n🔄 Создание исправленной структуры...")
+    for user_id, user_data in original_data.get("users", {}).items():
+        if "damage_history" in user_data:
+            has_damage_history = True
+        if "chat_stats" in user_data:
+            has_chat_stats = True
+        if has_damage_history and has_chat_stats:
+            break
+    
+    print(f"   damage_history: {'⚠️ ЕСТЬ' if has_damage_history else '✅ НЕТ'}")
+    print(f"   chat_stats: {'⚠️ ЕСТЬ' if has_chat_stats else '✅ НЕТ'}")
+    
+    print("\n🔄 Оптимизация структуры...")
     
     fixed_data = {
+        "version": "3.0",
+        "created_at": original_data.get("created_at", datetime.now().isoformat()),
+        "updated_at": datetime.now().isoformat(),
         "users": {},
-        "chats": {},
-        "global_stats": {
+        "chats": original_data.get("chats", {}),
+        "global_stats": original_data.get("global_stats", {
             "total_shleps": 0,
             "last_shlep": None,
             "max_damage": 0,
             "max_damage_user": None,
             "max_damage_date": None,
             "total_users": 0
-        },
+        }),
         "timestamps": {},
         "records": []
     }
     
-    if has_user_stats:
-        print("   Конвертируем user_stats -> users...")
-        for user_id_str, user_info in original_data["user_stats"].items():
-            count = user_info.get("count", 0)
-            total_shleps = user_info.get("total_shleps", count)
-            
-            fixed_data["users"][user_id_str] = {
-                "username": user_info.get("username", f"User_{user_id_str}"),
-                "total_shleps": total_shleps,
-                "max_damage": 0,
-                "last_shlep": user_info.get("last_shlep"),
-                "damage_history": [],
-                "chat_stats": {}
-            }
-        print(f"   ✅ Конвертировано {len(fixed_data['users'])} пользователей")
-    elif has_users:
-        print("   Копируем существующих users...")
-        for user_id_str, user_info in original_data["users"].items():
-            fixed_data["users"][user_id_str] = user_info
-        print(f"   ✅ Скопировано {len(fixed_data['users'])} пользователей")
-    
-    if has_global_stats:
-        print("   Обновляем global_stats...")
-        fixed_data["global_stats"] = {
-            "total_shleps": original_data["global_stats"].get("total_shleps", 0),
-            "last_shlep": original_data["global_stats"].get("last_shlep"),
-            "max_damage": original_data["global_stats"].get("max_damage", 0),
-            "max_damage_user": original_data["global_stats"].get("max_damage_user"),
-            "max_damage_date": original_data["global_stats"].get("max_damage_date"),
-            "total_users": len(fixed_data["users"])
+    print("   Оптимизирую пользователей...")
+    for user_id, user_data in original_data.get("users", {}).items():
+        fixed_data["users"][user_id] = {
+            "username": user_data.get("username", f"User_{user_id}"),
+            "total_shleps": user_data.get("total_shleps", user_data.get("count", 0)),
+            "max_damage": user_data.get("max_damage", 0),
+            "last_shlep": user_data.get("last_shlep"),
+            "bonus_damage": user_data.get("bonus_damage", 0)
         }
-        print("   ✅ global_stats обновлены")
     
-    if has_chat_stats:
-        print("   Конвертируем chat_stats...")
-        for chat_id_str, chat_info in original_data["chat_stats"].items():
-            fixed_data["chats"][chat_id_str] = {
-                "total_shleps": chat_info.get("total_shleps", 0),
-                "users": {},
-                "max_damage": chat_info.get("max_damage", 0),
-                "max_damage_user": chat_info.get("max_damage_user"),
-                "max_damage_date": chat_info.get("max_damage_date")
-            }
-            
-            if "users" in chat_info:
-                seen_users = {}
-                for uid, user_data in chat_info["users"].items():
-                    if uid not in seen_users:
-                        count = user_data.get("count", 0)
-                        total_shleps = user_data.get("total_shleps", count)
-                        
-                        seen_users[uid] = {
-                            "username": user_data.get("username", f"User_{uid}"),
-                            "total_shleps": total_shleps,
-                            "max_damage": user_data.get("max_damage", 0)
-                        }
-                    else:
-                        count = user_data.get("count", 0)
-                        total_shleps = user_data.get("total_shleps", count)
-                        seen_users[uid]["total_shleps"] += total_shleps
-                
-                fixed_data["chats"][chat_id_str]["users"] = seen_users
-        
-        print(f"   ✅ Конвертировано {len(fixed_data['chats'])} чатов")
+    print("   Оптимизирую timestamps...")
+    if "timestamps" in original_data:
+        for key, value in original_data["timestamps"].items():
+            if isinstance(value, dict) and "count" in value:
+                fixed_data["timestamps"][key] = value["count"]
+            else:
+                fixed_data["timestamps"][key] = value
     
-    print("   Вычисляем максимальный урон...")
-    for chat_id, chat_data in fixed_data["chats"].items():
-        for user_id, user_data in chat_data["users"].items():
-            if user_id in fixed_data["users"]:
-                user_max_damage = fixed_data["users"][user_id].get("max_damage", 0)
-                chat_user_max_damage = user_data.get("max_damage", 0)
-                
-                if chat_user_max_damage > user_max_damage:
-                    fixed_data["users"][user_id]["max_damage"] = chat_user_max_damage
+    print("   Ограничиваю records до 5...")
+    if "records" in original_data:
+        fixed_data["records"] = original_data["records"][-5:] if len(original_data["records"]) > 5 else original_data["records"]
     
-    print("\n💾 Сохранение исправленного файла...")
+    print("   Обновляю счётчик пользователей...")
+    fixed_data["global_stats"]["total_users"] = len(fixed_data["users"])
+    
+    print("\n💾 Сохранение оптимизированного файла...")
     try:
         with open(DATA_FILE, 'w', encoding='utf-8') as f:
-            json.dump(fixed_data, f, indent=2, ensure_ascii=False)
+            json.dump(fixed_data, f, separators=(',', ':'))
+        
+        original_size = os.path.getsize(BACKUP_FILE)
+        new_size = os.path.getsize(DATA_FILE)
+        reduction = ((original_size - new_size) / original_size) * 100 if original_size > 0 else 0
         
         print(f"✅ Файл сохранен: {DATA_FILE}")
         
-        print("\n📊 СТАТИСТИКА ПОСЛЕ ИСПРАВЛЕНИЯ:")
+        print(f"\n📊 РЕЗУЛЬТАТЫ ОПТИМИЗАЦИИ:")
+        print(f"   📏 Исходный размер: {original_size:,} байт".replace(",", " "))
+        print(f"   📏 Новый размер: {new_size:,} байт".replace(",", " "))
+        print(f"   📉 Сокращение: {reduction:.1f}%")
         print(f"   👥 Пользователей: {len(fixed_data['users'])}")
-        print(f"   💬 Чатов: {len(fixed_data['chats'])}")
-        print(f"   👊 Всего шлёпков: {fixed_data['global_stats']['total_shleps']}")
-        
-        print("\n🔍 Проверка целостности:")
-        errors_found = False
-        
-        for chat_id, chat_data in fixed_data["chats"].items():
-            user_ids = list(chat_data.get("users", {}).keys())
-            if len(user_ids) != len(set(user_ids)):
-                print(f"   ⚠️ Чат {chat_id}: обнаружены дубликаты")
-                errors_found = True
-        
-        if not errors_found:
-            print("   ✅ Дубликатов не обнаружено")
+        print(f"   👊 Шлёпков: {fixed_data['global_stats']['total_shleps']}")
         
         return True
         
@@ -189,14 +148,17 @@ def fix_mishok_data():
         return False
 
 def verify_fixed_data():
-    DATA_FILE = "/data/mishok_data.json"
+    DATA_FILE = "data/mishok_data.json"
     
-    print("\n🧪 ПРОВЕРКА ИСПРАВЛЕННОГО ФАЙЛА")
+    print("\n🧪 ПРОВЕРКА ОПТИМИЗИРОВАННЫХ ДАННЫХ")
     print("=" * 60)
     
     try:
         with open(DATA_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
+        
+        version = data.get("version", "1.0")
+        print(f"✅ Версия данных: {version}")
         
         required_keys = ["users", "chats", "global_stats", "timestamps", "records"]
         all_keys_present = all(key in data for key in required_keys)
@@ -208,18 +170,16 @@ def verify_fixed_data():
             print(f"❌ Отсутствуют ключи: {missing}")
             return False
         
-        user_errors = []
+        print("🔍 Проверка структуры пользователей...")
+        errors = 0
         for user_id, user_data in data["users"].items():
-            required_user_keys = ["username", "total_shleps", "max_damage", "last_shlep", "damage_history", "chat_stats"]
+            required_user_keys = ["username", "total_shleps", "max_damage", "last_shlep", "bonus_damage"]
             missing_keys = [k for k in required_user_keys if k not in user_data]
             if missing_keys:
-                user_errors.append(f"{user_id}: {missing_keys}")
+                print(f"   ⚠️ {user_id}: отсутствуют {missing_keys}")
+                errors += 1
         
-        if user_errors:
-            print(f"⚠️ Ошибки в пользователях: {len(user_errors)}")
-            for error in user_errors[:3]:
-                print(f"   {error}")
-        else:
+        if errors == 0:
             print("✅ Структура пользователей корректна")
         
         print("\n🔗 Тестирование импорта database.py...")
@@ -245,16 +205,16 @@ def verify_fixed_data():
 
 if __name__ == "__main__":
     print("\n" + "=" * 60)
-    print("🛠️  СКРИПТ ИСПРАВЛЕНИЯ ДАННЫХ МИШОКА")
+    print("🛠️  СКРИПТ ОПТИМИЗАЦИИ ДАННЫХ v3.0")
     print("=" * 60)
     
-    if fix_mishok_data():
+    if fix_data_structure():
         if verify_fixed_data():
-            print("\n🎉 ИСПРАВЛЕНИЕ ЗАВЕРШЕНО УСПЕШНО!")
-            print("Бот должен работать корректно с файлом /data/mishok_data.json")
+            print("\n🎉 ОПТИМИЗАЦИЯ ЗАВЕРШЕНА УСПЕШНО!")
+            print("Бот готов к работе с оптимизированными данными")
         else:
-            print("\n⚠️ Исправление завершено, но есть проблемы с проверкой")
+            print("\n⚠️ Оптимизация завершена, но есть проблемы с проверкой")
     else:
-        print("\n❌ ИСПРАВЛЕНИЕ НЕ УДАЛОСЬ!")
+        print("\n❌ ОПТИМИЗАЦИЯ НЕ УДАЛАСЬ!")
     
     print("\n" + "=" * 60)
