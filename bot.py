@@ -19,9 +19,14 @@ from database import (
     get_database_size, create_vote, get_vote, get_active_chat_vote, 
     add_user_vote, finish_vote, update_vote_message_id
 )
-from keyboard import get_shlep_session_keyboard, get_shlep_start_keyboard, get_chat_vote_keyboard, get_main_reply_keyboard, get_main_inline_keyboard, get_admin_keyboard, get_confirmation_keyboard, get_cleanup_keyboard
-from cache import cache
-from statistics import get_comparison_stats
+
+from utils import cache, get_comparison_stats, format_file_size, format_number, create_progress_bar
+from keyboard import (
+    get_shlep_session_keyboard, get_shlep_start_keyboard, 
+    get_chat_vote_keyboard, get_main_reply_keyboard, 
+    get_main_inline_keyboard, get_admin_keyboard, 
+    get_confirmation_keyboard, get_cleanup_keyboard
+)
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -52,23 +57,6 @@ LEVEL_TITLES = {
     5: ("👊 ЗЕЛЁНЫЙ САЛАГ", "Ещё путаешься, но стараешься!"),
     0: ("🌱 ПОЛНЫЙ ДОХЛЯК", "Ты только начал... очень слабо!")
 }
-
-def format_file_size(bytes_size: int) -> str:
-    if bytes_size < 1024:
-        return f"{bytes_size} B"
-    elif bytes_size < 1024 * 1024:
-        return f"{bytes_size/1024:.1f} KB"
-    elif bytes_size < 1024 * 1024 * 1024:
-        return f"{bytes_size/(1024*1024):.1f} MB"
-    else:
-        return f"{bytes_size/(1024*1024*1024):.1f} GB"
-
-def format_number(num: int) -> str:
-    return f"{num:,}".replace(",", " ")
-
-def create_progress_bar(progress: int, length: int = 10) -> str:
-    filled = min(int(progress * length / 100), length)
-    return "█" * filled + "░" * (length - filled)
 
 def escape_text(text: str) -> str:
     return escape_markdown(text or "", version=1)
