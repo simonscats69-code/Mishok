@@ -14,7 +14,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 DATA_PATH = os.getenv("DATA_PATH", "data/mishok_bot")
 DATA_FILE = os.path.join(BASE_DIR, DATA_PATH, "mishok_data.json")
-VOTES_FILE = os.path.join(BASE_DIR, DATA_PATH, "votes.json")
 BACKUP_PATH = os.path.join(BASE_DIR, DATA_PATH, "backups")
 LOG_FILE = os.path.join(BASE_DIR, DATA_PATH, "bot.log")
 
@@ -23,16 +22,16 @@ CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "300"))
 MAX_CACHE_SIZE = int(os.getenv("MAX_CACHE_SIZE", "1000"))
 LOG_CACHE_STATS = os.getenv("LOG_CACHE_STATS", "false").lower() == "true"
 
-CHAT_VOTE_DURATION = int(os.getenv("CHAT_VOTE_DURATION", "300"))
+CHAT_VOTE_DURATION = int(os.getenv("CHAT_VOTE_DURATION", "300"))  # 5 минут
 CHAT_NOTIFICATIONS_ENABLED = os.getenv("CHAT_NOTIFICATIONS_ENABLED", "true").lower() == "true"
 
 BACKUP_ENABLED = os.getenv("BACKUP_ENABLED", "true").lower() == "true"
 BACKUP_RETENTION_DAYS = int(os.getenv("BACKUP_RETENTION_DAYS", "7"))
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-AUTOSAVE_INTERVAL = int(os.getenv("AUTOSAVE_INTERVAL", "30"))  # Сохраняем каждые 30 секунд вместо 300
+AUTOSAVE_INTERVAL = int(os.getenv("AUTOSAVE_INTERVAL", "30"))  # Сохраняем каждые 30 секунд
 
-for directory in [os.path.dirname(DATA_FILE), os.path.dirname(VOTES_FILE), BACKUP_PATH]:
+for directory in [os.path.dirname(DATA_FILE), BACKUP_PATH]:
     if directory and not os.path.exists(directory):
         try:
             os.makedirs(directory, exist_ok=True)
@@ -48,10 +47,10 @@ print(f"👑 Админ ID: {ADMIN_ID}")
 print(f"💾 Защищенные пути:")
 print(f"  📁 Данные: {DATA_PATH}")
 print(f"  📄 Файл данных: {DATA_FILE}")
-print(f"  🗳️ Файл голосований: {VOTES_FILE}")
 print(f"  💾 Бэкапы: {BACKUP_PATH}")
 print(f"  📝 Логи: {LOG_FILE}")
 print(f"  ⏱️ Автосохранение: каждые {AUTOSAVE_INTERVAL} секунд")
+print(f"  🗳️ Длительность голосований: {CHAT_VOTE_DURATION} секунд")
 print("=" * 50)
 
 MISHOK_REACTIONS = [
@@ -152,6 +151,7 @@ MISHOK_INTRO = """👴 *Мишок Лысый — легендарный пер�
 🎮 Веду статистику всех шлёпков
 📊 Сравниваю игроков между собой
 🏆 Определяю чемпионов
+🗳️ Провожу голосования в чатах
 
 *Моя философия:*
 «Чем чаще шлёпаешь — тем мудрее становишься!»
