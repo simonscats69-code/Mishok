@@ -1,3 +1,5 @@
+[file name]: cache.py
+[file content begin]
 import asyncio
 import logging
 from datetime import datetime, timedelta
@@ -65,20 +67,6 @@ class Cache:
                 return False
                 
             return True
-    
-    async def cleanup(self):
-        async with self._lock:
-            now = datetime.now()
-            expired_keys = []
-            
-            for key, (_, expires) in self._cache.items():
-                if now > expires:
-                    expired_keys.append(key)
-            
-            for key in expired_keys:
-                del self._cache[key]
-            
-            if expired_keys:
-                logger.debug(f"Очищено {len(expired_keys)} просроченных записей кэша")
 
 cache = Cache()
+[file content end]
