@@ -15,15 +15,15 @@ from config import DATA_FILE, VOTES_FILE, BACKUP_PATH
 OLD_DATA_PATHS = [
     "mishok_data.json",
     "data/mishok_data.json",
-    "/root/mishok_data.json",
-    "/bothost/mishok_data.json",
-    "/app/mishok_data.json"
+    "root/mishok_data.json",
+    "bothost/mishok_data.json",
+    "app/mishok_data.json"
 ]
 
 OLD_VOTES_PATHS = [
     "data/votes.json",
     "votes.json",
-    "/data/votes.json"
+    "data/votes.json"
 ]
 
 def migrate_file(old_paths, new_path, file_type="данные"):
