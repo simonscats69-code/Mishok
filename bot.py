@@ -18,15 +18,12 @@ from config import BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO, DATA_FILE, VOTES_F
 from database import add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, get_chat_top_users, backup_database, check_data_integrity, repair_data_structure, save_vote_data, get_vote_data, delete_vote_data, get_user_vote, get_all_votes, cleanup_expired_votes, create_safe_backup, get_backup_list, get_database_size
 from keyboard import get_shlep_session_keyboard, get_shlep_start_keyboard, get_chat_vote_keyboard, get_main_reply_keyboard, get_main_inline_keyboard, get_admin_keyboard, get_confirmation_keyboard, get_cleanup_keyboard
 from cache import cache
-from statistics import get_favorite_time, get_comparison_stats
+from statistics import get_comparison_stats
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
-
 def format_file_size(bytes_size: int) -> str:
-    """Форматирует размер файла в читаемый вид."""
     if bytes_size < 1024:
         return f"{bytes_size} B"
     elif bytes_size < 1024 * 1024:
@@ -37,33 +34,26 @@ def format_file_size(bytes_size: int) -> str:
         return f"{bytes_size/(1024*1024*1024):.1f} GB"
 
 def format_number(num: int) -> str:
-    """Форматирование чисел с пробелами."""
     return f"{num:,}".replace(",", " ")
 
 def create_progress_bar(progress: int, length: int = 10) -> str:
-    """Создание прогресс-бара."""
     filled = min(int(progress * length / 100), length)
     return "█" * filled + "░" * (length - filled)
 
 def escape_text(text: str) -> str:
-    """Безопасное экранирование Markdown."""
     return escape_markdown(text or "", version=1)
 
 def get_message(update: Update):
-    """Получение сообщения из update."""
     if update.callback_query and update.callback_query.message:
         return update.callback_query.message
     return update.message
 
 def get_user_info(user: User) -> Dict[str, str]:
-    """Получение информации о пользователе в безопасном формате."""
     return {
         'name': escape_text(user.first_name),
         'username': escape_text(user.username or user.first_name),
         'full_name': escape_text(user.full_name)
     }
-
-# ========== ДЕКОРАТОРЫ ==========
 
 def command_handler(func):
     @wraps(func)
@@ -81,7 +71,6 @@ def command_handler(func):
     return wrapper
 
 def with_message(func):
-    """Декоратор для автоматического получения сообщения."""
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = get_message(update)
@@ -112,10 +101,7 @@ def admin_only(func):
         return await func(update, context, msg)
     return wrapper
 
-# ========== СИСТЕМА УРОВНЕЙ И РЕАКЦИЙ ==========
-
 def calc_level(cnt):
-    """Расчет уровня игрока."""
     if cnt <= 0: 
         return {'level': 1, 'progress': 0, 'min': 10, 'max': 25, 'next': 10}
     
@@ -141,7 +127,6 @@ def calc_level(cnt):
     }
 
 def level_title(lvl):
-    """Получение титула по уровню."""
     if lvl >= 1000: return ("🌌 ВСЕЛЕНСКИЙ ШЛЁПКО-БОГ", "Ты создал свою вселенную шлёпков!")
     if lvl >= 950: return ("⚡ АБСОЛЮТНЫЙ ПОВЕЛИТЕЛЬ", "Даже боги трепещут перед тобой!")
     if lvl >= 900: return ("🔥 БЕССМЕРТНЫЙ ТИТАН", "Твоя сила преодолела смерть!")
@@ -168,13 +153,9 @@ def level_title(lvl):
     return ("🌱 ПОЛНЫЙ ДОХЛЯК", "Ты только начал... очень слабо!")
 
 def get_reaction(): 
-    """Получение случайной реакции."""
     return random.choice(MISHOK_REACTIONS)
 
-# ========== ОСНОВНЫЕ КОМАНДЫ ==========
-
 async def send_progress(message, text, progress=0):
-    """Отправка сообщения с прогресс-баром."""
     bar = create_progress_bar(progress)
     percentage = int(progress * 100)
     status_text = f"🔄 {text}\n[{bar}] {percentage}%"
@@ -187,7 +168,6 @@ async def send_progress(message, text, progress=0):
     return percentage
 
 async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_message=None):
-    """Выполнение шлёпка."""
     try:
         msg = get_message(update)
         if not msg:
@@ -262,7 +242,6 @@ async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit
 @command_handler
 @with_message
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Команда /start."""
     user_info = get_user_info(update.effective_user)
     
     text = f"👋 Привет, {user_info['name']}!\nЯ — Мишок Лысый 👴✨\n\n"
@@ -304,13 +283,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 
 @command_handler
 async def shlep(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /shlep."""
     await perform_shlep(update, context)
 
 @command_handler 
 @with_message
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Команда /stats."""
     cached = await cache.get("global_stats")
     if cached:
         total, last, maxd, maxu, maxdt = cached
@@ -339,7 +316,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @command_handler 
 @with_message
 async def level(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Команда /level."""
     user = update.effective_user
     user_info = get_user_info(user)
     
@@ -364,14 +340,13 @@ async def level(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @command_handler
 @with_message
 async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Команда /my_stats."""
     user = update.effective_user
     
     _, cnt, last = get_user_stats(user.id)
     lvl = calc_level(cnt)
     compare_stats = get_comparison_stats(user.id)
     
-    text = f"📈 ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Всего шлёпков: {format_number(cnt)}\n🎯 Уровень: {lvl['level']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n{get_favorite_time(user.id)}\n📊 Сравнение с другими:\n👥 Всего игроков: {compare_stats.get('total_users', 0)}\n📈 Среднее на игрока: {compare_stats.get('avg_shleps', 0)}\n🏆 Твой ранг: {compare_stats.get('rank', 1)}\n📊 Лучше чем: {compare_stats.get('percentile', 0)}% игроков"
+    text = f"📈 ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Всего шлёпков: {format_number(cnt)}\n🎯 Уровень: {lvl['level']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n📊 Сравнение с другими:\n👥 Всего игроков: {compare_stats.get('total_users', 0)}\n📈 Среднее на игрока: {compare_stats.get('avg_shleps', 0)}\n🏆 Твой ранг: {compare_stats.get('rank', 1)}\n📊 Лучше чем: {compare_stats.get('percentile', 0)}% игроков"
     
     if last:
         text += f"\n⏰ Последний шлёпок: {last.strftime('%d.%m.%Y %H:%M')}"
@@ -381,7 +356,6 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @command_handler
 @chat_only
 async def chat_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Команда /chat_stats."""
     chat = update.effective_chat
     
     cached = await cache.get(f"chat_stats_{chat.id}")
@@ -402,7 +376,6 @@ async def chat_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @command_handler
 @chat_only
 async def chat_top(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Команда /chat_top."""
     chat = update.effective_chat
     top = get_chat_top_users(chat.id, 10)
     
@@ -421,10 +394,7 @@ async def chat_top(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     
     await msg.reply_text(text)
 
-# ========== СИСТЕМА ГОЛОСОВАНИЙ ==========
-
 async def vote_timer(vote_id, chat_id, message_id, context):
-    """Таймер для завершения голосования."""
     try:
         await asyncio.sleep(CHAT_VOTE_DURATION)
         
@@ -440,7 +410,6 @@ async def vote_timer(vote_id, chat_id, message_id, context):
         logger.error(f"Ошибка в таймере голосования {vote_id}: {e}")
 
 async def finish_vote(vote_id, chat_id, message_id, context):
-    """Завершение голосования."""
     try:
         vote_data = get_vote_data(vote_id)
         if not vote_data or vote_data.get("finished", False):
@@ -504,7 +473,6 @@ async def finish_vote(vote_id, chat_id, message_id, context):
 @command_handler
 @chat_only
 async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Команда /vote."""
     question = " ".join(context.args) if context.args else "Шлёпнуть Мишка?"
     kb = get_chat_vote_keyboard()
     question_safe = escape_text(question)
@@ -545,7 +513,6 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @command_handler
 @chat_only
 async def vote_info(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Команда /vote_info."""
     chat_id = msg.chat_id
     
     try:
@@ -582,7 +549,6 @@ async def vote_info(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         await msg.reply_text("❌ Ошибка при получении информации о голосованиях")
 
 async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_type: str):
-    """Обработка голоса."""
     try:
         query = update.callback_query
         if not query:
@@ -672,7 +638,6 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
 @command_handler
 @with_message
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Команда /help."""
     text = """🆘 ПОМОЩЬ
 
 Основные команды:
@@ -695,7 +660,6 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @command_handler
 @with_message
 async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Команда /mishok."""
     try:
         await msg.reply_text(
             MISHOK_INTRO,
@@ -719,7 +683,6 @@ async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @command_handler
 @admin_only
 async def backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Команда /backup."""
     status_msg = await msg.reply_text("💾 Создание бэкапа...")
     
     await send_progress(status_msg, "Создание безопасного бэкапа", 0.3)
@@ -747,7 +710,6 @@ async def backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @command_handler
 @with_message
 async def storage(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Команда /storage."""
     text = "📂 Информация о хранилище:\n"
     paths = [
         ("/root", "Основная папка"),
@@ -772,7 +734,6 @@ async def storage(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @command_handler
 @with_message
 async def check_data(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Команда /check_data."""
     try:
         result = check_data_integrity()
         text = "🔍 ПРОВЕРКА ЦЕЛОСТНОСТИ ДАННЫХ\n\n"
@@ -805,7 +766,6 @@ async def check_data(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @command_handler
 @admin_only
 async def repair_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Команда /repair."""
     status_msg = await msg.reply_text("🔄 Восстановление структуры данных...")
     
     await send_progress(status_msg, "Создание бэкапа перед восстановлением", 0.2)
@@ -834,7 +794,6 @@ async def repair_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @command_handler
 @with_message
 async def data_info(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Команда /data_info."""
     text = "📁 ИНФОРМАЦИЯ О ФАЙЛЕ ДАННЫХ\n\n"
     
     if os.path.exists(DATA_FILE):
@@ -873,7 +832,6 @@ async def data_info(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @command_handler
 @with_message
 async def check_paths(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Команда /check_paths."""
     text = (
         "🔍 ПРОВЕРКА ПУТЕЙ ДЛЯ ДАННЫХ:\n\n"
         f"📁 DATA_FILE: {DATA_FILE}\n"
@@ -890,10 +848,7 @@ async def check_paths(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     
     await msg.reply_text(text)
 
-# ========== ИНЛАЙН КНОПКИ И СЕССИИ ==========
-
 async def start_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Начало сессии шлёпания."""
     query = update.callback_query
     if not query:
         return
@@ -905,7 +860,6 @@ async def start_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYPE
     await perform_shlep(update, context, edit_message=query.message)
 
 async def handle_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYPE, action: str):
-    """Обработка действий в сессии шлёпания."""
     query = update.callback_query
     if not query:
         return
@@ -950,7 +904,7 @@ async def handle_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYP
         lvl = calc_level(cnt)
         compare_stats = get_comparison_stats(user.id)
         
-        text = f"📈 ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Всего шлёпков: {format_number(cnt)}\n🎯 Уровень: {lvl['level']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n{get_favorite_time(user.id)}\n📊 Сравнение с другими:\n👥 Всего игроков: {compare_stats.get('total_users', 0)}\n📈 Среднее на игрока: {compare_stats.get('avg_shleps', 0)}\n🏆 Твой ранг: {compare_stats.get('rank', 1)}\n📊 Лучше чем: {compare_stats.get('percentile', 0)}% игроков"
+        text = f"📈 ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Всего шлёпков: {format_number(cnt)}\n🎯 Уровень: {lvl['level']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n📊 Сравнение с другими:\n👥 Всего игроков: {compare_stats.get('total_users', 0)}\n📈 Среднее на игрока: {compare_stats.get('avg_shleps', 0)}\n🏆 Твой ранг: {compare_stats.get('rank', 1)}\n📊 Лучше чем: {compare_stats.get('percentile', 0)}% игроков"
         
         await query.message.edit_text(text, reply_markup=get_shlep_session_keyboard())
     elif action == "shlep_menu":
@@ -958,12 +912,9 @@ async def handle_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYP
         text = f"👋 Привет, {user_info['name']}!\nЯ — Мишок Лысый 👴✨\n\nНачни шлёпать прямо сейчас!"
         await query.message.edit_text(text, reply_markup=get_shlep_start_keyboard())
 
-# ========== АДМИН-ПАНЕЛЬ ==========
-
 @command_handler
 @admin_only
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Команда /admin."""
     await msg.reply_text(
         "⚙️ АДМИН-ПАНЕЛЬ\n\n"
         "Выберите действие:",
@@ -973,7 +924,6 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @command_handler
 @admin_only
 async def admin_health(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Проверка здоровья системы."""
     await msg.edit_text("🩺 Проверяю здоровье системы...")
     
     try:
@@ -981,13 +931,11 @@ async def admin_health(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         
         status_msg = msg
         
-        # Проверка базы данных
         from database import get_database_size, check_data_integrity
         
         db_stats = get_database_size()
         integrity = check_data_integrity()
         
-        # Простая проверка диска
         try:
             import shutil
             total, used, free = shutil.disk_usage(".")
@@ -1028,7 +976,6 @@ async def admin_health(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @command_handler
 @admin_only
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Статистика пользователей."""
     await msg.edit_text("📊 Собираю статистику пользователей...")
     
     from database import load_data
@@ -1097,7 +1044,6 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @command_handler
 @admin_only
 async def admin_cleanup(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Меню очистки системы."""
     await msg.edit_text(
         "🧹 ОЧИСТКА СИСТЕМЫ\n\n"
         "Выберите тип очистки:",
@@ -1105,7 +1051,6 @@ async def admin_cleanup(update: Update, context: ContextTypes.DEFAULT_TYPE, msg)
     )
 
 async def perform_cleanup(message, cleanup_type):
-    """Выполнение очистки."""
     await message.edit_text(f"🧹 Очистка {cleanup_type}...")
     
     import glob
@@ -1164,7 +1109,6 @@ async def perform_cleanup(message, cleanup_type):
     await message.edit_text(result_text, reply_markup=get_admin_keyboard())
 
 async def cleanup_action(update: Update, context: ContextTypes.DEFAULT_TYPE, action: str):
-    """Обработка действий очистки."""
     query = update.callback_query
     if not query:
         return
@@ -1184,7 +1128,6 @@ async def cleanup_action(update: Update, context: ContextTypes.DEFAULT_TYPE, act
         )
 
 async def admin_backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Создание бэкапа из админ-панели."""
     query = update.callback_query
     if not query:
         return
@@ -1194,7 +1137,6 @@ async def admin_backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await backup_cmd_internal(query.message)
 
 async def backup_cmd_internal(message):
-    """Внутренняя функция создания бэкапа."""
     await message.edit_text("💾 Создание бэкапа...")
     
     success, backup_path = create_safe_backup("admin_panel")
@@ -1219,7 +1161,6 @@ async def backup_cmd_internal(message):
 @command_handler
 @admin_only
 async def admin_repair_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Меню восстановления данных."""
     await msg.edit_text(
         "⚠️ ПОДТВЕРЖДЕНИЕ ВОССТАНОВЛЕНИЯ\n\n"
         "Вы уверены, что хотите восстановить структуру данных?\n"
@@ -1228,7 +1169,6 @@ async def admin_repair_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, m
     )
 
 async def admin_storage_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Статистика хранилища."""
     query = update.callback_query
     if not query:
         return
@@ -1264,7 +1204,6 @@ async def admin_storage_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.edit_text(text, reply_markup=get_admin_keyboard())
 
 async def admin_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Закрытие админ-панели."""
     query = update.callback_query
     if not query:
         return
@@ -1273,19 +1212,16 @@ async def admin_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.delete()
 
 async def perform_repair(message):
-    """Выполнение восстановления."""
     await message.edit_text("🔧 Восстановление структуры...")
     
     from database import repair_data_structure, create_safe_backup
     
-    # Создаем бэкап перед восстановлением
     success_backup, backup_path = create_safe_backup("before_repair")
     
     if not success_backup:
         await message.edit_text("⚠️ Не удалось создать бэкап перед восстановлением")
         return
     
-    # Выполняем восстановление
     success = repair_data_structure()
     
     if success:
@@ -1304,10 +1240,7 @@ async def perform_repair(message):
     
     await message.edit_text(text, reply_markup=get_admin_keyboard())
 
-# ========== ОБРАБОТЧИКИ КОЛБЭКОВ ==========
-
 async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Главный обработчик колбэков."""
     query = update.callback_query
     if not query:
         return
@@ -1316,13 +1249,11 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     logger.info(f"Callback received: {data}")
     
-    # Сессии шлёпания
     if data == "start_shlep_session":
         await start_shlep_session(update, context)
     elif data in ["shlep_again", "shlep_level", "shlep_stats", "shlep_my_stats", "shlep_menu"]:
         await handle_shlep_session(update, context, data)
     
-    # Основные команды
     elif data == "shlep_mishok":
         await perform_shlep(update, context)
     elif data == "stats_inline":
@@ -1338,11 +1269,9 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "mishok_info":
         await mishok(update, context)
     
-    # Голосования
     elif data in ["vote_yes", "vote_no"]:
         await handle_vote(update, context, data)
     
-    # Дуэли (заглушка)
     elif data.startswith("duel_"):
         await query.answer("❌ Система дуэлей временно отключена", show_alert=True)
         try:
@@ -1350,7 +1279,6 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
     
-    # Админ-панель
     elif data == "admin_cleanup":
         await admin_cleanup(update, context)
     elif data == "admin_health":
@@ -1368,18 +1296,15 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "admin_back":
         await admin_panel(update, context)
     
-    # Очистка
     elif data.startswith("cleanup_"):
         action = data.replace("cleanup_", "")
         await cleanup_action(update, context, action)
     
-    # Подтверждения
     elif data.startswith("confirm_"):
         action = data.replace("confirm_", "")
         if action == "восстановить":
             await perform_repair(query.message)
     
-    # Отмена
     elif data == "cancel_action":
         await query.message.edit_text(
             "❌ Действие отменено",
@@ -1389,10 +1314,7 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await query.message.reply_text("⚙️ Эта функция в разработке")
 
-# ========== ОБРАБОТЧИКИ КНОПОК И ОШИБОК ==========
-
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик текстовых кнопок."""
     if not update.message:
         return
     
@@ -1426,7 +1348,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
 async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Приветствие бота в чате."""
     if update.message and update.message.new_chat_members:
         for m in update.message.new_chat_members:
             if m.id == context.bot.id:
@@ -1446,13 +1367,9 @@ async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик ошибок."""
     logger.error(f"Ошибка: {context.error}", exc_info=True)
 
-# ========== ЗАПУСК БОТА ==========
-
 def main():
-    """Главная функция запуска бота."""
     if not BOT_TOKEN:
         logger.error("❌ Нет токена бота! Установите BOT_TOKEN в config.py или .env файле")
         sys.exit(1)
