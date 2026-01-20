@@ -1,3 +1,5 @@
+[file name]: bot.py
+[file content begin]
 import logging
 import random
 import sys
@@ -16,16 +18,13 @@ from telegram.helpers import escape_markdown
 
 from config import BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO, DATA_FILE, VOTES_FILE, BACKUP_PATH, LOG_FILE, CHAT_VOTE_DURATION
 from database import add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, get_chat_top_users, backup_database, check_data_integrity, repair_data_structure, save_vote_data, get_vote_data, delete_vote_data, get_user_vote, get_all_votes, cleanup_expired_votes, create_safe_backup, get_backup_list, get_database_size
-from keyboard import get_shlep_session_keyboard, get_shlep_start_keyboard, get_chat_vote_keyboard, get_inline_keyboard, get_admin_keyboard, get_confirmation_keyboard, get_cleanup_keyboard, get_main_reply_keyboard, get_main_inline_keyboard
+from keyboard import get_shlep_session_keyboard, get_shlep_start_keyboard, get_chat_vote_keyboard, get_main_reply_keyboard, get_main_inline_keyboard, get_admin_keyboard, get_confirmation_keyboard, get_cleanup_keyboard
 from cache import cache
 from statistics import get_favorite_time, get_comparison_stats
-from utils import create_progress_bar, format_file_size, get_system_info
+from utils import format_file_size
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-shlep_sessions = {}
-admin_sessions = {}
 
 def command_handler(func):
     @wraps(func)
@@ -38,7 +37,7 @@ def command_handler(func):
                 if update.message:
                     await update.message.reply_text("⚠️ Ошибка выполнения команды")
                 elif update.callback_query:
-                    await update.callback_query.message.reply_text("⚠️ Ошибка выполнения команда")
+                    await update.callback_query.message.reply_text("⚠️ Ошибка выполнения команды")
             except:
                 pass
     return wrapper
@@ -1529,3 +1528,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+[file content end]
