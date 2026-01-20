@@ -442,35 +442,6 @@ def get_database_size() -> Dict[str, Any]:
         logger.error(f"Ошибка получения размера БД: {e}")
         return {"exists": False, "size": 0, "error": str(e)}
 
-def get_system_stats() -> Dict[str, Any]:
-    try:
-        import psutil
-        
-        disk = psutil.disk_usage('.')
-        memory = psutil.virtual_memory()
-        
-        db_stats = get_database_size()
-        
-        return {
-            "disk": {
-                "total": disk.total,
-                "used": disk.used,
-                "free": disk.free,
-                "percent": disk.percent
-            },
-            "memory": {
-                "total": memory.total,
-                "available": memory.available,
-                "percent": memory.percent
-            },
-            "database": db_stats
-        }
-    except ImportError:
-        return {"error": "psutil не установлен"}
-    except Exception as e:
-        logger.error(f"Ошибка получения системной статистики: {e}")
-        return {"error": str(e)}
-
 def add_shlep(user_id: int, username: str, damage: int, chat_id: Optional[int] = None) -> Tuple[int, int, int]:
     try:
         data = load_data()
