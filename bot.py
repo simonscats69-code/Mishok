@@ -966,43 +966,41 @@ async def admin_health(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.edit_text("🩺 Проверяю здоровье системы...")
     
     try:
-        import psutil
+        import os
         import platform
         
         status_msg = query.message
         
-        await send_progress(status_msg, "Проверка памяти", 0.1)
-        memory = psutil.virtual_memory()
+        # Проверка базы данных
+        from database import get_database_size, check_data_integrity
         
-        await send_progress(status_msg, "Проверка диска", 0.3)
-        disk = psutil.disk_usage('.')
-        
-        await send_progress(status_msg, "Проверка базы данных", 0.5)
         db_stats = get_database_size()
-        
-        await send_progress(status_msg, "Проверка целостности", 0.7)
         integrity = check_data_integrity()
         
-        system_info = get_system_info()
+        # Простая проверка диска
+        try:
+            import shutil
+            total, used, free = shutil.disk_usage(".")
+            disk_info = f"Диск: {used/(1024**3):.1f} GB из {total/(1024**3):.1f} GB использовано ({used/total*100:.1f}%)"
+        except:
+            disk_info = "Информация о диске: доступно"
         
         report = "🏥 ОТЧЕТ О ЗДОРОВЬЕ СИСТЕМЫ\n\n"
         
-        report += f"💾 Память: {memory.percent}% ({memory.available/1024/1024:.0f} MB свободно)\n"
-        report += f"📁 Диск: {disk.percent}% ({disk.free/1024/1024:.0f} MB свободно)\n"
+        report += f"🐍 Python: {platform.python_version()}\n"
+        report += f"🖥️ Система: {platform.system()} {platform.machine()}\n"
+        report += f"💾 {disk_info}\n"
         
         if db_stats.get("exists"):
-            report += f"🗃️ База данных: {format_file_size(db_stats['size'])}\n"
-            report += f"👥 Пользователей: {db_stats['users']}\n"
-            report += f"👊 Шлёпков: {db_stats['total_shleps']}\n"
+            report += f"🗃️ База данных: {db_stats.get('size', 0)/1024:.1f} KB\n"
+            report += f"👥 Пользователей: {db_stats.get('users', 0)}\n"
+            report += f"👊 Шлёпков: {db_stats.get('total_shleps', 0)}\n"
         else:
             report += "🗃️ База данных: ❌ Не найдена\n"
         
         report += f"🔍 Целостность: {len(integrity['errors'])} ошибок, {len(integrity['warnings'])} предупреждений\n"
-        report += f"🐍 Python: {system_info['python_version']}\n"
-        report += f"🖥️ Система: {system_info['system']} {system_info['machine']}\n"
         
-        all_good = (memory.percent < 90 and disk.percent < 90 and 
-                   not integrity['errors'] and db_stats.get("exists", False))
+        all_good = (not integrity['errors'] and db_stats.get("exists", False))
         
         if all_good:
             report += "\n🎉 ВСЕ СИСТЕМЫ РАБОТАЮТ НОРМАЛЬНО"
@@ -1011,12 +1009,6 @@ async def admin_health(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         await status_msg.edit_text(report, reply_markup=get_admin_keyboard())
         
-    except ImportError as e:
-        await query.message.edit_text(
-            f"❌ Не удалось проверить здоровье системы: {str(e)}\n"
-            f"Установите psutil: pip install psutil",
-            reply_markup=get_admin_keyboard()
-        )
     except Exception as e:
         await query.message.edit_text(
             f"❌ Ошибка проверки здоровья: {str(e)[:200]}",
@@ -1116,29 +1108,6 @@ async def admin_cleanup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=get_cleanup_keyboard()
     )
 
-@command_handler
-@admin_only
-async def cleanup_action(update: Update, context: ContextTypes.DEFAULT_TYPE, action: str):
-    query = update.callback_query
-    if not query:
-        return
-    
-    await query.answer()
-    
-    if action == "logs":
-        await perform_cleanup(query.message, "logs")
-    elif action == "temp":
-        await perform_cleanup(query.message, "temp")
-    elif action == "backups":
-        await perform_cleanup(query.message, "backups")
-    elif action == "all":
-        await perform_cleanup(query.message, "all")
-    elif action == "back":
-        await query.message.edit_text(
-            "⚙️ АДМИН-ПАНЕЛЬ\n\nВыберите действие:",
-            reply_markup=get_admin_keyboard()
-        )
-
 async def perform_cleanup(message, cleanup_type):
     await message.edit_text(f"🧹 Очистка {cleanup_type}...")
     
@@ -1148,64 +1117,46 @@ async def perform_cleanup(message, cleanup_type):
     
     total_cleaned = 0
     total_freed = 0
-    now = datetime.now()
     
-    cleanup_patterns = []
+    if cleanup_type == "logs":
+        # Удаляем старые log файлы
+        log_files = glob.glob("*.log")
+        for log_file in log_files:
+            try:
+                size = os.path.getsize(log_file)
+                os.remove(log_file)
+                total_cleaned += 1
+                total_freed += size
+            except:
+                pass
     
-    if cleanup_type == "logs" or cleanup_type == "all":
-        cleanup_patterns.append({
-            "pattern": "*.log",
-            "max_age_days": 7,
-            "description": "логи"
-        })
-    
-    if cleanup_type == "temp" or cleanup_type == "all":
-        cleanup_patterns.append({
-            "pattern": "*.tmp",
-            "max_age_days": 1,
-            "description": "временные файлы"
-        })
-        cleanup_patterns.append({
-            "pattern": "*_backup_*.json",
-            "max_age_days": 30,
-            "keep_last": 10,
-            "description": "старые бэкапы"
-        })
-    
-    if cleanup_type == "backups" or cleanup_type == "all":
-        cleanup_patterns.append({
-            "pattern": "data/mishok_bot/backups/*.json",
-            "max_age_days": 30,
-            "keep_last": 10,
-            "description": "бэкапы в папке"
-        })
-    
-    for config in cleanup_patterns:
-        files = glob.glob(config["pattern"], recursive=True)
-        
-        if config.get("keep_last"):
-            files_with_mtime = []
-            for f in files:
-                try:
-                    mtime = os.path.getmtime(f)
-                    files_with_mtime.append((f, mtime))
-                except:
-                    continue
-            
-            files_with_mtime.sort(key=lambda x: x[1], reverse=True)
-            files_to_check = files_with_mtime[config["keep_last"]:]
-        else:
-            files_to_check = [(f, os.path.getmtime(f)) for f in files]
-        
-        for filepath, mtime in files_to_check:
-            file_age = now - datetime.fromtimestamp(mtime)
-            
-            if file_age.days > config["max_age_days"]:
-                try:
-                    size = os.path.getsize(filepath)
-                    os.remove(filepath)
+    elif cleanup_type == "temp":
+        # Удаляем временные файлы
+        temp_files = glob.glob("*.tmp") + glob.glob("*_backup_*.json")
+        for temp_file in temp_files:
+            try:
+                if os.path.exists(temp_file):
+                    size = os.path.getsize(temp_file)
+                    os.remove(temp_file)
                     total_cleaned += 1
                     total_freed += size
+            except:
+                pass
+    
+    elif cleanup_type == "backups":
+        # Удаляем старые бэкапы (оставляем последние 10)
+        from database import get_backup_list
+        backups = get_backup_list()
+        
+        if len(backups) > 10:
+            backups_to_delete = backups[10:]
+            for backup in backups_to_delete:
+                try:
+                    if os.path.exists(backup["path"]):
+                        size = os.path.getsize(backup["path"])
+                        os.remove(backup["path"])
+                        total_cleaned += 1
+                        total_freed += size
                 except:
                     pass
     
@@ -1222,136 +1173,24 @@ async def perform_cleanup(message, cleanup_type):
 
 @command_handler
 @admin_only
-async def admin_migrate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cleanup_action(update: Update, context: ContextTypes.DEFAULT_TYPE, action: str):
     query = update.callback_query
     if not query:
         return
     
     await query.answer()
     
-    await query.message.edit_text(
-        "🔄 МИГРАЦИЯ ДАННЫХ\n\n"
-        "Выберите действие:",
-        reply_markup=get_migration_keyboard()
-    )
-
-@command_handler
-@admin_only
-async def migrate_action(update: Update, context: ContextTypes.DEFAULT_TYPE, action: str):
-    query = update.callback_query
-    if not query:
-        return
-    
-    await query.answer()
-    
-    if action == "find":
-        await find_migration_data(query.message)
-    elif action == "all":
-        await confirm_migration(query.message, "all")
-    elif action == "check":
-        await check_structure(query.message)
+    if action == "logs":
+        await perform_cleanup(query.message, "logs")
+    elif action == "temp":
+        await perform_cleanup(query.message, "temp")
+    elif action == "backups":
+        await perform_cleanup(query.message, "backups")
     elif action == "back":
         await query.message.edit_text(
             "⚙️ АДМИН-ПАНЕЛЬ\n\nВыберите действие:",
             reply_markup=get_admin_keyboard()
         )
-
-async def find_migration_data(message):
-    await message.edit_text("🔍 Поиск старых данных...")
-    
-    import os
-    import json
-    
-    migration_sources = [
-        {"path": "mishok_data.json", "name": "Корень проекта"},
-        {"path": "data/mishok_data.json", "name": "Папка data"},
-        {"path": "/data/mishok_bot/mishok_data.json", "name": "Абсолютный путь"},
-        {"path": "/bothost/mishok_data.json", "name": "Bothost корень"},
-        {"path": "/app/mishok_data.json", "name": "App папка"}
-    ]
-    
-    found_data = []
-    for source in migration_sources:
-        if os.path.exists(source["path"]) and source["path"] != DATA_FILE:
-            try:
-                with open(source["path"], 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    users = len(data.get('users', {}))
-                    shleps = data.get('global_stats', {}).get('total_shleps', 0)
-                    found_data.append({
-                        "path": source["path"],
-                        "name": source["name"],
-                        "users": users,
-                        "shleps": shleps,
-                        "size": os.path.getsize(source["path"])
-                    })
-            except:
-                continue
-    
-    if not found_data:
-        await message.edit_text(
-            "📭 Старые данные не найдены.\n"
-            "Будет создан новый файл при первом шлёпке.",
-            reply_markup=get_migration_keyboard()
-        )
-        return
-    
-    text = "📦 НАЙДЕННЫЕ ДАННЫЕ:\n\n"
-    for i, data in enumerate(found_data, 1):
-        text += f"{i}. {data['name']}\n"
-        text += f"   👥 {data['users']} пользователей\n"
-        text += f"   👊 {data['shleps']} шлёпков\n"
-        text += f"   📏 {data['size']/1024:.1f} KB\n\n"
-    
-    text += "Используйте команду /migrate_all для переноса всех данных"
-    
-    context = message._bot.application.context
-    context.user_data['migration_options'] = found_data
-    
-    await message.edit_text(text, reply_markup=get_migration_keyboard())
-
-async def confirm_migration(message, migration_type):
-    await message.edit_text(
-        f"⚠️ ПОДТВЕРЖДЕНИЕ МИГРАЦИИ\n\n"
-        f"Вы уверены, что хотите выполнить миграцию?\n"
-        f"Тип: {migration_type}\n\n"
-        f"Перед миграцией будет создан бэкап текущих данных.",
-        reply_markup=get_confirmation_keyboard("мигрировать")
-    )
-    
-    context = message._bot.application.context
-    context.user_data['pending_migration'] = migration_type
-
-async def check_structure(message):
-    await message.edit_text("🧪 Проверка структуры данных...")
-    
-    result = check_data_integrity()
-    
-    text = "🔍 ПРОВЕРКА СТРУКТУРЫ\n\n"
-    
-    if result['errors']:
-        text += "❌ КРИТИЧЕСКИЕ ОШИБКИ:\n"
-        for error in result['errors'][:3]:
-            text += f"• {error}\n"
-        text += "\n"
-    else:
-        text += "✅ Критических ошибок нет\n\n"
-    
-    if result['warnings']:
-        text += "⚠️ ПРЕДУПРЕЖДЕНИЯ:\n"
-        for warning in result['warnings'][:3]:
-            text += f"• {warning}\n"
-        if len(result['warnings']) > 3:
-            text += f"... и ещё {len(result['warnings']) - 3} предупреждений\n"
-    else:
-        text += "✅ Предупреждений нет\n"
-    
-    text += f"\n📊 СТАТИСТИКА:\n"
-    text += f"👥 Пользователей: {result['stats']['users']}\n"
-    text += f"💬 Чатов: {result['stats']['chats']}\n"
-    text += f"👊 Шлёпков: {result['stats']['total_shleps']}"
-    
-    await message.edit_text(text, reply_markup=get_migration_keyboard())
 
 @command_handler
 @admin_only
@@ -1395,15 +1234,13 @@ async def admin_repair_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.answer()
     
+    message = query.message
     await message.edit_text(
         "⚠️ ПОДТВЕРЖДЕНИЕ ВОССТАНОВЛЕНИЯ\n\n"
         "Вы уверены, что хотите восстановить структуру данных?\n"
         "Перед восстановлением будет создан бэкап.",
         reply_markup=get_confirmation_keyboard("восстановить")
     )
-    
-    context = query.message._bot.application.context
-    context.user_data['pending_repair'] = True
 
 @command_handler
 @admin_only
@@ -1414,28 +1251,33 @@ async def admin_storage_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.answer()
     
-    system_stats = get_system_stats()
+    from database import get_database_size
     
-    if "error" in system_stats:
-        text = f"❌ Ошибка получения статистики: {system_stats['error']}"
+    db_stats = get_database_size()
+    
+    if "error" in db_stats:
+        text = f"❌ Ошибка получения статистики: {db_stats['error']}"
     else:
-        disk = system_stats['disk']
-        memory = system_stats['memory']
-        db = system_stats['database']
-        
         text = "📊 СТАТИСТИКА ХРАНИЛИЩА\n\n"
-        text += f"💾 Диск: {disk['percent']}% заполнено\n"
-        text += f"   Свободно: {format_file_size(disk['free'])}\n"
-        text += f"🖥️ Память: {memory['percent']}% использовано\n"
-        text += f"   Свободно: {format_file_size(memory['available'])}\n"
         
-        if db.get('exists'):
-            text += f"🗃️ База данных: {format_file_size(db['size'])}\n"
-            text += f"👥 Пользователей: {db['users']}\n"
-            text += f"👊 Шлёпков: {db['total_shleps']}\n"
-            text += f"📅 Изменена: {db['last_modified'].strftime('%d.%m.%Y %H:%M')}\n"
+        if db_stats.get('exists'):
+            text += f"🗃️ База данных: {db_stats['size']/1024:.1f} KB\n"
+            text += f"👥 Пользователей: {db_stats['users']}\n"
+            text += f"👊 Шлёпков: {db_stats['total_shleps']}\n"
+            text += f"💬 Чатов: {db_stats['chats']}\n"
+            if db_stats.get('last_modified'):
+                text += f"📅 Изменена: {db_stats['last_modified'].strftime('%d.%m.%Y %H:%M')}\n"
         else:
             text += "🗃️ База данных: ❌ Не найдена\n"
+        
+        # Простая проверка доступного места
+        import os
+        try:
+            statvfs = os.statvfs('.')
+            free_gb = (statvfs.f_bavail * statvfs.f_frsize) / (1024**3)
+            text += f"\n💾 Свободное место на диске: {free_gb:.1f} GB"
+        except:
+            text += "\n💾 Информация о диске: доступно"
     
     await query.message.edit_text(text, reply_markup=get_admin_keyboard())
 
@@ -1448,6 +1290,37 @@ async def admin_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.answer()
     await query.message.delete()
+
+async def perform_repair(message):
+    await message.edit_text("🔧 Восстановление структуры...")
+    
+    from database import repair_data_structure, create_safe_backup
+    
+    # Создаем бэкап перед восстановлением
+    success_backup, backup_path = create_safe_backup("before_repair")
+    
+    if not success_backup:
+        await message.edit_text("⚠️ Не удалось создать бэкап перед восстановлением")
+        return
+    
+    # Выполняем восстановление
+    success = repair_data_structure()
+    
+    if success:
+        from database import load_data
+        data = load_data()
+        
+        text = (
+            "✅ СТРУКТУРА ДАННЫХ ВОССТАНОВЛЕНА\n\n"
+            f"👥 Пользователей: {len(data.get('users', {}))}\n"
+            f"💬 Чатов: {len(data.get('chats', {}))}\n"
+            f"👊 Всего шлёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n\n"
+            "Ошибки должны быть исправлены!"
+        )
+    else:
+        text = "❌ Не удалось восстановить структуру данных"
+    
+    await message.edit_text(text, reply_markup=get_admin_keyboard())
 
 @command_handler
 async def check_paths(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1513,8 +1386,6 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await admin_stats(update, context)
     elif data == "admin_backup":
         await admin_backup_cmd(update, context)
-    elif data == "admin_migrate":
-        await admin_migrate(update, context)
     elif data == "admin_repair":
         await admin_repair_cmd(update, context)
     elif data == "admin_storage":
@@ -1528,15 +1399,9 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         action = data.replace("cleanup_", "")
         await cleanup_action(update, context, action)
     
-    elif data.startswith("migrate_"):
-        action = data.replace("migrate_", "")
-        await migrate_action(update, context, action)
-    
     elif data.startswith("confirm_"):
         action = data.replace("confirm_", "")
-        if action == "мигрировать":
-            await perform_migration(query.message, "all")
-        elif action == "восстановить":
+        if action == "восстановить":
             await perform_repair(query.message)
     
     elif data == "cancel_action":
@@ -1547,92 +1412,6 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     else:
         await query.message.reply_text("⚙️ Эта функция в разработке")
-
-async def perform_migration(message, migration_type):
-    await message.edit_text("🔄 Начинаю миграцию...")
-    
-    await send_progress(message, "Создание бэкапа", 0.1)
-    success, backup_path = create_safe_backup("before_migration")
-    
-    if not success:
-        await message.edit_text(f"❌ Не удалось создать бэкап: {backup_path}")
-        return
-    
-    await send_progress(message, "Поиск старых данных", 0.3)
-    
-    import os
-    import shutil
-    import json
-    
-    old_locations = [
-        "mishok_data.json",
-        "data/mishok_data.json",
-        "/data/mishok_bot/mishok_data.json",
-        "/bothost/mishok_data.json"
-    ]
-    
-    migrated = False
-    for old_path in old_locations:
-        if os.path.exists(old_path) and old_path != DATA_FILE:
-            try:
-                await send_progress(message, f"Копирование {old_path}", 0.5)
-                
-                os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-                shutil.copy2(old_path, DATA_FILE)
-                
-                await send_progress(message, "Проверка структуры", 0.7)
-                
-                with open(DATA_FILE, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                
-                await send_progress(message, "Миграция завершена", 0.9)
-                
-                migrated = True
-                
-                text = f"✅ Миграция завершена!\n\n"
-                text += f"📁 Источник: {old_path}\n"
-                text += f"👥 Пользователей: {len(data.get('users', {}))}\n"
-                text += f"👊 Шлёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n\n"
-                text += "Теперь используйте /fix_structure для исправления структуры"
-                
-                await message.edit_text(text, reply_markup=get_admin_keyboard())
-                break
-                
-            except Exception as e:
-                logger.error(f"Ошибка миграции {old_path}: {e}")
-    
-    if not migrated:
-        await message.edit_text(
-            "📭 Старые данные не найдены.\n"
-            "Будет создан новый файл при первом шлёпке.",
-            reply_markup=get_admin_keyboard()
-        )
-
-async def perform_repair(message):
-    await message.edit_text("🔧 Восстановление структуры...")
-    
-    await send_progress(message, "Создание бэкапа", 0.2)
-    create_safe_backup("before_repair")
-    
-    await send_progress(message, "Восстановление", 0.5)
-    success = repair_data_structure()
-    
-    if success:
-        await send_progress(message, "Проверка результата", 0.8)
-        from database import load_data
-        data = load_data()
-        
-        text = (
-            "✅ СТРУКТУРА ДАННЫХ ВОССТАНОВЛЕНА\n\n"
-            f"👥 Пользователей: {len(data.get('users', {}))}\n"
-            f"💬 Чатов: {len(data.get('chats', {}))}\n"
-            f"👊 Всего шлёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n\n"
-            "Ошибки больше не должны возникать!"
-        )
-    else:
-        text = "❌ Не удалось восстановить структуру данных"
-    
-    await message.edit_text(text, reply_markup=get_admin_keyboard())
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
