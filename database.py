@@ -9,7 +9,7 @@ import time
 
 logger = logging.getLogger(__name__)
 
-from config import DATA_FILE, VOTES_FILE, BACKUP_PATH, BACKUP_ENABLED, AUTOSAVE_INTERVAL
+from config import DATA_FILE, BACKUP_PATH, BACKUP_ENABLED, AUTOSAVE_INTERVAL
 
 # Глобальная переменная для хранения данных в памяти
 _in_memory_data = None
@@ -17,117 +17,14 @@ _data_lock = threading.Lock()
 _last_save_time = time.time()
 _data_modified = False
 
-def ensure_votes_file():
-    """Создаёт файл голосований если его нет"""
-    try:
-        if not os.path.exists(VOTES_FILE):
-            os.makedirs(os.path.dirname(VOTES_FILE), exist_ok=True)
-            with open(VOTES_FILE, 'w', encoding='utf-8') as f:
-                json.dump({}, f)
-    except Exception as e:
-        logger.error(f"Ошибка создания файла голосований: {e}")
-
-def save_vote_data(vote_data):
-    """Сохраняет данные голосования"""
-    ensure_votes_file()
-    try:
-        with open(VOTES_FILE, 'r', encoding='utf-8') as f:
-            all_votes = json.load(f)
-        all_votes[vote_data["id"]] = vote_data
-        with open(VOTES_FILE, 'w', encoding='utf-8') as f:
-            json.dump(all_votes, f, indent=2, ensure_ascii=False, default=str)
-        return True
-    except Exception as e:
-        logger.error(f"Ошибка сохранения голосования: {e}")
-        return False
-
-def get_vote_data(vote_id):
-    """Получает данные голосования"""
-    ensure_votes_file()
-    try:
-        with open(VOTES_FILE, 'r', encoding='utf-8') as f:
-            all_votes = json.load(f)
-        return all_votes.get(vote_id)
-    except Exception as e:
-        logger.error(f"Ошибка чтения голосования: {e}")
-        return None
-
-def get_all_votes():
-    """Получает все голосования"""
-    ensure_votes_file()
-    try:
-        with open(VOTES_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error(f"Ошибка чтения всех голосований: {e}")
-        return {}
-
-def delete_vote_data(vote_id):
-    """Удаляет данные голосования"""
-    ensure_votes_file()
-    try:
-        with open(VOTES_FILE, 'r', encoding='utf-8') as f:
-            all_votes = json.load(f)
-        if vote_id in all_votes:
-            del all_votes[vote_id]
-        with open(VOTES_FILE, 'w', encoding='utf-8') as f:
-            json.dump(all_votes, f, indent=2, ensure_ascii=False, default=str)
-        return True
-    except Exception as e:
-        logger.error(f"Ошибка удаления голосования: {e}")
-        return False
-
-def get_user_vote(vote_id, user_id):
-    """Получает голос пользователя"""
-    vote_data = get_vote_data(vote_id)
-    if not vote_data:
-        return None
-    user_id_str = str(user_id)
-    if user_id_str in vote_data.get("votes_yes", []):
-        return "yes"
-    elif user_id_str in vote_data.get("votes_no", []):
-        return "no"
-    return None
-
-def cleanup_expired_votes():
-    """Удаляет просроченные голосования (старше 30 дней)"""
-    try:
-        all_votes = get_all_votes()
-        now = datetime.now()
-        expired = []
-        
-        for vote_id, vote_data in all_votes.items():
-            ends_at_str = vote_data.get("ends_at")
-            if ends_at_str:
-                try:
-                    ends_at = datetime.fromisoformat(ends_at_str)
-                    finished = vote_data.get("finished", False)
-                    
-                    # Удаляем голосования старше 30 дней
-                    if now > ends_at + timedelta(days=30):
-                        expired.append(vote_id)
-                except:
-                    continue
-        
-        for vote_id in expired:
-            del all_votes[vote_id]
-        
-        if expired:
-            with open(VOTES_FILE, 'w', encoding='utf-8') as f:
-                json.dump(all_votes, f, indent=2, ensure_ascii=False, default=str)
-            logger.info(f"Удалено {len(expired)} просроченных голосований")
-            
-    except Exception as e:
-        logger.error(f"Ошибка очистки голосований: {e}")
-
 def create_default_data():
     """Создаёт структуру данных по умолчанию"""
     return {
-        "version": "3.0",  # Новая версия структуры
+        "version": "3.0",
         "created_at": datetime.now().isoformat(),
         "updated_at": datetime.now().isoformat(),
-        "users": {},  # Основные данные пользователей
-        "chats": {},  # Минимальные данные чатов
+        "users": {},
+        "chats": {},
         "global_stats": {
             "total_shleps": 0,
             "last_shlep": None,
@@ -136,8 +33,10 @@ def create_default_data():
             "max_damage_date": None,
             "total_users": 0
         },
-        "timestamps": {},  # Только счётчики по дням
-        "records": []  # Только топ-5 рекордов
+        "timestamps": {},
+        "records": [],
+        # Новое: простые голосования
+        "votes": {}
     }
 
 def ensure_data_file():
@@ -229,6 +128,7 @@ def repair_data_structure():
         })
         data.setdefault("timestamps", {})
         data.setdefault("records", [])
+        data.setdefault("votes", {})
         
         # Упрощаем пользователей
         for user_id, user_data in data["users"].items():
@@ -252,7 +152,7 @@ def repair_data_structure():
             for user_id, user_data in chat_data["users"].items():
                 user_data.setdefault("username", f"User_{user_id}")
                 user_data.setdefault("total_shleps", 0)
-                user_data.pop("max_damage", None)  # Не храним в чатах
+                user_data.pop("max_damage", None)
         
         # Обновляем счётчик пользователей
         data["global_stats"]["total_users"] = len(data["users"])
@@ -283,7 +183,7 @@ def save_data_to_disk(data):
         # Упрощённая сериализация
         temp_file = DATA_FILE + ".tmp"
         with open(temp_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, separators=(',', ':'))  # Минимизируем JSON
+            json.dump(data, f, ensure_ascii=False, separators=(',', ':'))
         
         os.replace(temp_file, DATA_FILE)
         
@@ -294,7 +194,7 @@ def save_data_to_disk(data):
         return False
 
 def schedule_save():
-    """Планировщик автосохранения (раз в AUTOSAVE_INTERVAL секунд)"""
+    """Планировщик автосохранения"""
     global _data_modified, _last_save_time
     
     with _data_lock:
@@ -743,7 +643,7 @@ def check_data_integrity():
         errors = []
         warnings = []
         
-        required_keys = ["users", "chats", "global_stats", "timestamps", "records"]
+        required_keys = ["users", "chats", "global_stats", "timestamps", "records", "votes"]
         for key in required_keys:
             if key not in data:
                 errors.append(f"Отсутствует обязательный ключ: {key}")
@@ -777,6 +677,140 @@ def check_data_integrity():
             "stats": {}
         }
 
+# ===== НОВЫЕ ФУНКЦИИ ДЛЯ ГОЛОСОВАНИЙ =====
+
+def create_vote(chat_id: int, question: str, duration_minutes: int = 5) -> str:
+    """Создаёт новое голосование"""
+    try:
+        data = load_data()
+        
+        vote_id = f"{chat_id}_{int(datetime.now().timestamp())}"
+        ends_at = datetime.now() + timedelta(minutes=duration_minutes)
+        
+        vote_data = {
+            "id": vote_id,
+            "chat_id": chat_id,
+            "question": question,
+            "created_at": datetime.now().isoformat(),
+            "ends_at": ends_at.isoformat(),
+            "votes_yes": [],
+            "votes_no": [],
+            "active": True,
+            "message_id": None
+        }
+        
+        data["votes"][vote_id] = vote_data
+        save_data(data)
+        
+        return vote_id
+    except Exception as e:
+        logger.error(f"Ошибка создания голосования: {e}")
+        return ""
+
+def get_vote(vote_id: str):
+    """Получает голосование по ID"""
+    try:
+        data = load_data()
+        return data["votes"].get(vote_id)
+    except:
+        return None
+
+def get_active_chat_vote(chat_id: int):
+    """Получает активное голосование в чате"""
+    try:
+        data = load_data()
+        now = datetime.now()
+        
+        for vote_id, vote in data["votes"].items():
+            if (vote.get("chat_id") == chat_id and 
+                vote.get("active", False) and
+                datetime.fromisoformat(vote["ends_at"]) > now):
+                return vote
+        return None
+    except:
+        return None
+
+def add_user_vote(vote_id: str, user_id: int, vote_type: str) -> bool:
+    """Добавляет голос пользователя"""
+    try:
+        data = load_data()
+        vote = data["votes"].get(vote_id)
+        
+        if not vote or not vote.get("active", False):
+            return False
+        
+        user_id_str = str(user_id)
+        
+        # Удаляем старый голос если был
+        if user_id_str in vote["votes_yes"]:
+            vote["votes_yes"].remove(user_id_str)
+        if user_id_str in vote["votes_no"]:
+            vote["votes_no"].remove(user_id_str)
+        
+        # Добавляем новый
+        if vote_type == "yes":
+            vote["votes_yes"].append(user_id_str)
+        else:
+            vote["votes_no"].append(user_id_str)
+        
+        save_data(data)
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка добавления голоса: {e}")
+        return False
+
+def finish_vote(vote_id: str):
+    """Завершает голосование"""
+    try:
+        data = load_data()
+        vote = data["votes"].get(vote_id)
+        
+        if vote:
+            vote["active"] = False
+            vote["finished_at"] = datetime.now().isoformat()
+            save_data(data)
+            return vote
+        return None
+    except Exception as e:
+        logger.error(f"Ошибка завершения голосования: {e}")
+        return None
+
+def cleanup_old_votes():
+    """Очищает старые голосования (>1 дня)"""
+    try:
+        data = load_data()
+        now = datetime.now()
+        to_delete = []
+        
+        for vote_id, vote in data["votes"].items():
+            ends_at = datetime.fromisoformat(vote["ends_at"])
+            # Удаляем завершённые голосования старше 1 дня
+            if not vote.get("active", False) and (now - ends_at).days >= 1:
+                to_delete.append(vote_id)
+        
+        for vote_id in to_delete:
+            del data["votes"][vote_id]
+        
+        if to_delete:
+            save_data(data)
+            logger.info(f"Очищено {len(to_delete)} старых голосований")
+    except Exception as e:
+        logger.error(f"Ошибка очистки голосований: {e}")
+
+def update_vote_message_id(vote_id: str, message_id: int):
+    """Обновляет ID сообщения голосования"""
+    try:
+        data = load_data()
+        vote = data["votes"].get(vote_id)
+        
+        if vote:
+            vote["message_id"] = message_id
+            save_data(data)
+            return True
+        return False
+    except:
+        return False
+
 # Запускаем очистку при импорте
-cleanup_expired_votes()
-logger.info("Оптимизированная база данных готова к работе")
+cleanup_old_votes()
+logger.info("База данных с упрощёнными голосованиями готова к работе")
