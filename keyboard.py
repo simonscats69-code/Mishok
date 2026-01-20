@@ -62,9 +62,11 @@ def get_main_reply_keyboard():
 def get_admin_keyboard():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🧹 Очистка", callback_data="admin_cleanup"),
-         InlineKeyboardButton("📊 Статистика", callback_data="admin_stats")],
-        [InlineKeyboardButton("💾 Бэкап", callback_data="admin_backup"),
-         InlineKeyboardButton("🔧 Исправление", callback_data="admin_repair")],
+         InlineKeyboardButton("🩺 Здоровье", callback_data="admin_health")],
+        [InlineKeyboardButton("📊 Статистика", callback_data="admin_stats"),
+         InlineKeyboardButton("💾 Бэкап", callback_data="admin_backup")],
+        [InlineKeyboardButton("🔧 Исправление", callback_data="admin_repair"),
+         InlineKeyboardButton("🗃️ Хранилище", callback_data="admin_storage")],
         [InlineKeyboardButton("❌ Закрыть", callback_data="admin_close")]
     ])
 
