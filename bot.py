@@ -247,7 +247,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📊 /chat_stats — Статистика чата
 🏆 /chat_top — Топ игроков
 🗳️ /vote [вопрос] — Голосование
-👑 /roles — Роли в чате
 
 Личные команды (в лс с ботом):
 📊 /stats — Глобальная статистика
@@ -641,17 +640,6 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
             pass
 
 @command_handler
-@chat_only
-async def roles(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = get_message_from_update(update)
-    if not msg:
-        return
-    
-    text = "👑 РОЛИ В ЧАТЕ\n\nКак получить роли:\n• 👑 Король шлёпков — быть топ-1 в чате\n• 🎯 Самый меткий — нанести максимальный урон\n• ⚡ Спринтер — сделать 10+ шлёпков за 5 минут\n• 💪 Силач — нанести урон 40+ единиц\n\nИспользуй /chat_top чтобы увидеть текущих лидеров!"
-    
-    await msg.reply_text(text)
-
-@command_handler
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = get_message_from_update(update)
     if not msg:
@@ -671,7 +659,6 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /chat_stats — Статистика чата
 /chat_top — Топ игроков чата
 /vote — Голосование
-/roles — Роли в чате
 
 Новое: Шлёпай в одном окне без спама сообщений!"""
     
@@ -1484,7 +1471,6 @@ def main():
         ("chat_top", chat_top),
         ("vote", vote),
         ("vote_info", vote_info),
-        ("roles", roles),
         ("backup", backup),
         ("storage", storage),
         ("check_data", check_data),
