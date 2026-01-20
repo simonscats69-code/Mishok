@@ -1,3 +1,5 @@
+[file name]: database.py
+[file content begin]
 import json
 import os
 from datetime import datetime, timedelta
@@ -695,121 +697,6 @@ def backup_database():
         logger.error(f"Ошибка создания бэкапа: {e}")
         return False, str(e)
 
-def get_activity_stats(days: int = 7) -> Dict[str, Any]:
-    try:
-        data = load_data()
-        
-        if "timestamps" not in data:
-            return {"daily": [], "hourly": {}, "active_users": 0}
-        
-        timestamps = data["timestamps"]
-        now = datetime.now()
-        
-        daily_stats = []
-        for i in range(days):
-            date = (now - timedelta(days=i)).strftime("%Y-%m-%d")
-            if date in timestamps:
-                users_list = timestamps[date]["users"]
-                if isinstance(users_list, set):
-                    users_count = len(users_list)
-                elif isinstance(users_list, list):
-                    users_count = len(set(users_list))
-                else:
-                    users_count = 0
-                    
-                daily_stats.append({
-                    "date": date,
-                    "count": timestamps[date]["count"],
-                    "users": users_count
-                })
-            else:
-                daily_stats.append({
-                    "date": date,
-                    "count": 0,
-                    "users": 0
-                })
-        
-        daily_stats.reverse()
-        
-        hourly_stats = {}
-        for i in range(24):
-            hour_key = now.strftime(f"%Y-%m-%d {i:02d}:00")
-            if hour_key in timestamps:
-                hourly_stats[f"{i:02d}:00"] = timestamps[hour_key]["count"]
-            else:
-                hourly_stats[f"{i:02d}:00"] = 0
-        
-        all_users = set()
-        for i in range(days):
-            date = (now - timedelta(days=i)).strftime("%Y-%m-%d")
-            if date in timestamps:
-                users_data = timestamps[date]["users"]
-                if isinstance(users_data, set):
-                    all_users.update(users_data)
-                elif isinstance(users_data, list):
-                    all_users.update(users_data)
-        
-        return {
-            "daily": daily_stats,
-            "hourly": hourly_stats,
-            "active_users": len(all_users)
-        }
-    except Exception as e:
-        logger.error(f"Ошибка в get_activity_stats: {e}")
-        return {"daily": [], "hourly": {}, "active_users": 0}
-
-def get_user_activity(user_id: int, days: int = 14) -> Dict[str, Any]:
-    try:
-        data = load_data()
-        
-        user_data = data["users"].get(str(user_id))
-        if not user_data or "damage_history" not in user_data:
-            return {"daily": [], "hourly": {}, "total": 0}
-        
-        now = datetime.now()
-        user_history = user_data["damage_history"]
-        
-        daily_counts = {}
-        hourly_counts = {}
-        
-        for record in user_history:
-            try:
-                record_time = datetime.fromisoformat(record["timestamp"])
-                days_diff = (now - record_time).days
-                
-                if days_diff <= days:
-                    date_key = record_time.strftime("%Y-%m-%d")
-                    hour_key = record_time.strftime("%H:00")
-                    
-                    daily_counts[date_key] = daily_counts.get(date_key, 0) + 1
-                    hourly_counts[hour_key] = hourly_counts.get(hour_key, 0) + 1
-            except:
-                continue
-        
-        daily_stats = []
-        for i in range(days):
-            date = (now - timedelta(days=i)).strftime("%Y-%m-%d")
-            daily_stats.append({
-                "date": date,
-                "count": daily_counts.get(date, 0)
-            })
-        
-        daily_stats.reverse()
-        
-        formatted_hourly = {}
-        for hour in range(24):
-            hour_key = f"{hour:02d}:00"
-            formatted_hourly[hour_key] = hourly_counts.get(hour_key, 0)
-        
-        return {
-            "daily": daily_stats,
-            "hourly": formatted_hourly,
-            "total": len(user_history)
-        }
-    except Exception as e:
-        logger.error(f"Ошибка в get_user_activity: {e}")
-        return {"daily": [], "hourly": {}, "total": 0}
-
 def check_data_integrity():
     try:
         data = load_data()
@@ -863,3 +750,4 @@ def check_data_integrity():
 logger.info("База данных готова к работе")
 
 cleanup_expired_votes()
+[file content end]
