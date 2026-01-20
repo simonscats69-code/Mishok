@@ -15,7 +15,7 @@ from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 
 from config import BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO
-from database import add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, get_chat_top_users, backup_database, check_data_integrity, repair_data_structure, save_vote_data, get_vote_data, delete_vote_data, get_user_vote, get_all_votes
+from database import add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, get_chat_top_users, backup_database, check_data_integrity, repair_data_structure, save_vote_data, get_vote_data, delete_vote_data, get_user_vote, get_all_votes, cleanup_expired_votes
 from keyboard import get_shlep_session_keyboard, get_shlep_start_keyboard, get_chat_vote_keyboard, get_inline_keyboard
 from cache import cache
 from statistics import get_favorite_time, get_comparison_stats
@@ -444,6 +444,13 @@ async def finish_vote(vote_id, chat_id, message_id, context):
                 logger.warning(f"Сообщение голосования {vote_id} было удалено")
             else:
                 logger.error(f"Ошибка обновления сообщения голосования: {e}")
+        
+        # ОЧИСТКА СТАРЫХ ГОЛОСОВАНИЙ ПОСЛЕ ЗАВЕРШЕНИЯ
+        try:
+            cleanup_expired_votes()
+            logger.info(f"Очистка старых голосований выполнена после завершения {vote_id}")
+        except Exception as cleanup_error:
+            logger.error(f"Ошибка очистки после голосования: {cleanup_error}")
                 
     except Exception as e:
         logger.error(f"Ошибка завершения голосования {vote_id}: {e}")
@@ -508,6 +515,9 @@ async def vote_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = msg.chat_id
     
     try:
+        # Очищаем старые голосования перед показом информации
+        cleanup_expired_votes()
+        
         all_votes = get_all_votes()
         active_votes = []
         now = datetime.now()
