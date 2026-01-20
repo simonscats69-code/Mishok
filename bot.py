@@ -168,7 +168,8 @@ async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit
         lvl = calc_level(cnt)
         title, _ = level_title(lvl['level'])
         
-        text = f"{get_reaction()}{rec}\n💥 Урон: {total_damage}\n👤 {user.first_name}: {cnt} шлёпков\n🎯 Уровень {lvl['level']} ({title})\n📊 До уровня: {lvl['next']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n📈 Всего шлёпков в игре: {format_num(total)}"
+        # ИСПРАВЛЕННЫЙ ТЕКСТ - убрали лишнюю информацию
+        text = f"{get_reaction()}{rec}\n💥 Урон: {total_damage}\n👤 {user.first_name}: {cnt} шлёпков\n🎯 Уровень {lvl['level']} ({title})"
         
         kb = get_shlep_session_keyboard()
         
