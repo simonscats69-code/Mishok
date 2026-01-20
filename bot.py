@@ -276,6 +276,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 📊 /chat_stats — Статистика чата
 🏆 /chat_top — Топ игроков
 🗳️ /vote [вопрос] — Голосование
+🗳️ /vote_end — Завершить голосование
 
 Личные команды (в лс с ботом):
 📊 /stats — Глобальная статистика
@@ -400,10 +401,7 @@ async def chat_top(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     
     await msg.reply_text(text)
 
-# ===== УПРОЩЕННАЯ СИСТЕМА ГОЛОСОВАНИЙ =====
-
 async def vote_timer(vote_id: str, chat_id: int, message_id: int, context: ContextTypes.DEFAULT_TYPE):
-    """Таймер завершения голосования"""
     try:
         vote = get_vote(vote_id)
         if not vote:
@@ -415,7 +413,6 @@ async def vote_timer(vote_id: str, chat_id: int, message_id: int, context: Conte
         if wait_time > 0:
             await asyncio.sleep(wait_time)
         
-        # Проверяем ещё раз
         vote = get_vote(vote_id)
         if vote and vote.get("active", False):
             await finish_vote_task(vote_id, chat_id, message_id, context)
@@ -426,7 +423,6 @@ async def vote_timer(vote_id: str, chat_id: int, message_id: int, context: Conte
         logger.error(f"Ошибка в таймере голосования: {e}")
 
 async def finish_vote_task(vote_id: str, chat_id: int, message_id: int, context: ContextTypes.DEFAULT_TYPE):
-    """Завершает голосование и обновляет сообщение"""
     try:
         vote = finish_vote(vote_id)
         if not vote:
@@ -436,15 +432,92 @@ async def finish_vote_task(vote_id: str, chat_id: int, message_id: int, context:
         no_count = len(vote.get("votes_no", []))
         total_votes = yes_count + no_count
         
-        # Определяем результат
         if total_votes == 0:
             result_text = "🤷 *НИКТО НЕ ПРОГОЛОСОВАЛ!*"
+            action_text = "\n\nНикто не решил судьбу моей лысины... 😔"
         elif yes_count > no_count:
             result_text = "✅ *БОЛЬШИНСТВО ЗА!*"
+            action_text = "\n\n👊 *ДАВАЙТЕ НАШЛЁПАЕМ ЭТОМУ ЛЫСОМУ!*"
+            
+            async def send_shlep_message():
+                await asyncio.sleep(1)
+                try:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text="👴 *Мишок:* Ой-ой, народ решил меня отшлёпать! Принимаю свою судьбу! 👊\n\n" +
+                             random.choice([
+                                 "Давайте, шлёпайте! Моя лысина готова!",
+                                 "Ой, боюсь! Но раз народ решил...",
+                                 "Ну что ж, принимаю народное решение!",
+                                 "Лысина дрожит от ожидания!",
+                                 "Только аккуратнее, а то искры полетят!",
+                                 "Шлёпайте, я приготовился!",
+                                 "Народ сказал — надо шлёпать! Подчиняюсь!",
+                                 "Моя лысина ждёт ваших ладоней!",
+                                 "Ох, сейчас будет больно... но интересно!",
+                                 "Давайте же, не тяните! Шлёпайте смелее!"
+                             ])
+                    )
+                except Exception as e:
+                    logger.error(f"Ошибка отправки сообщения Мишка: {e}")
+            
+            asyncio.create_task(send_shlep_message())
+            
         elif no_count > yes_count:
             result_text = "❌ *БОЛЬШИНСТВО ПРОТИВ!*"
+            action_text = "\n\n🙏 *СПАСИБО ЗА МИЛОСЕРДИЕ!*"
+            
+            async def send_mercy_message():
+                await asyncio.sleep(1)
+                try:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text="👴 *Мишок:* Фух, народ пощадил мою лысину! Спасибо за милосердие! 🙏\n\n" +
+                             random.choice([
+                                 "Моя лысина цела и невредима!",
+                                 "Спасибо, что пожалели старика!",
+                                 "Уф, пронесло! Лысина отдыхает!",
+                                 "Благодарю за гуманность!",
+                                 "Лысина вздохнула с облегчением!",
+                                 "Народ добрый, пожалел меня!",
+                                 "Спасибо, что не стали шлёпать!",
+                                 "Моя лысина благодарит вас!",
+                                 "Ой, как хорошо, что пожалели!",
+                                 "Лысина рада остаться целой!"
+                             ])
+                    )
+                except Exception as e:
+                    logger.error(f"Ошибка отправки сообщения благодарности: {e}")
+            
+            asyncio.create_task(send_mercy_message())
+            
         else:
             result_text = "⚖️ *НИЧЬЯ!*"
+            action_text = "\n\n🤔 *САМ РЕШАЙ, ШЛЁПАТЬ ИЛИ НЕТ!*"
+            
+            async def send_tie_message():
+                await asyncio.sleep(1)
+                try:
+                    await context.bot.send_message(
+                        chat_id=chat_id,
+                        text="👴 *Мишок:* Голоса разделились поровну! Сам решай, что делать с моей лысиной! 🤔\n\n" +
+                             random.choice([
+                                 "Половина за, половина против... что же делать?",
+                                 "Решай сам, шлёпать или нет!",
+                                 "Голоса разделились 50/50! Твоя очередь решать!",
+                                 "Ничья! Теперь ты решаешь судьбу моей лысины!",
+                                 "50 на 50! Выбор за тобой!",
+                                 "Равные силы! Ты — решающий голос!",
+                                 "Патовая ситуация! Твоя очередь!",
+                                 "Голоса уравнялись! Что решишь?",
+                                 "Ничья в голосовании! Твой ход!",
+                                 "Равновесие! Теперь ты выбираешь!"
+                             ])
+                    )
+                except Exception as e:
+                    logger.error(f"Ошибка отправки сообщения о ничье: {e}")
+            
+            asyncio.create_task(send_tie_message())
         
         text = (
             f"🗳️ *ГОЛОСОВАНИЕ ЗАВЕРШЕНО*\n\n"
@@ -453,10 +526,9 @@ async def finish_vote_task(vote_id: str, chat_id: int, message_id: int, context:
             f"✅ За: {yes_count} голосов\n"
             f"❌ Против: {no_count} голосов\n"
             f"👥 Всего: {total_votes}\n\n"
-            f"{result_text}"
+            f"{result_text}{action_text}"
         )
         
-        # Пытаемся обновить сообщение
         try:
             await context.bot.edit_message_text(
                 chat_id=chat_id,
@@ -468,7 +540,6 @@ async def finish_vote_task(vote_id: str, chat_id: int, message_id: int, context:
         except Exception as e:
             if "Message to edit not found" not in str(e):
                 logger.error(f"Ошибка обновления сообщения голосования: {e}")
-                # Отправляем новое сообщение
                 await context.bot.send_message(
                     chat_id=chat_id,
                     text=text,
@@ -483,8 +554,6 @@ async def finish_vote_task(vote_id: str, chat_id: int, message_id: int, context:
 @command_handler
 @chat_only
 async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Создаёт голосование в чате"""
-    # Проверяем активное голосование
     active_vote = get_active_chat_vote(msg.chat_id)
     if active_vote:
         ends_at = datetime.fromisoformat(active_vote["ends_at"])
@@ -502,7 +571,6 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         )
         return
     
-    # Создаём новое
     question = " ".join(context.args) if context.args else "Шлёпнуть Мишка?"
     question_safe = escape_text(question)
     
@@ -512,7 +580,6 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         await msg.reply_text("❌ Не удалось создать голосование")
         return
     
-    # Отправляем сообщение
     text = (
         f"🗳️ *ГОЛОСОВАНИЕ*\n\n"
         f"❓ *Вопрос:* {question_safe}\n\n"
@@ -527,10 +594,8 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         parse_mode=ParseMode.MARKDOWN
     )
     
-    # Сохраняем ID сообщения
     update_vote_message_id(vote_id, sent_message.message_id)
     
-    # Запускаем таймер
     asyncio.create_task(vote_timer(vote_id, msg.chat_id, sent_message.message_id, context))
     
     logger.info(f"Создано голосование: {question} в чате {msg.chat_id}")
@@ -538,18 +603,15 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @command_handler
 @chat_only  
 async def vote_end(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    """Ручное завершение голосования"""
     active_vote = get_active_chat_vote(msg.chat_id)
     
     if not active_vote:
         await msg.reply_text("⚠️ В этом чате нет активных голосований")
         return
     
-    # Только создатель или админ
     from config import ADMIN_ID
     user = update.effective_user
     
-    # Получаем creator_id из vote_id (формат: chatid_timestamp)
     try:
         creator_id = int(active_vote["id"].split("_")[0])
     except:
@@ -559,11 +621,9 @@ async def vote_end(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         await msg.reply_text("❌ Только создатель голосования или администратор может завершить голосование")
         return
     
-    # Завершаем
     await finish_vote_task(active_vote["id"], msg.chat_id, active_vote.get("message_id"), context)
 
 def get_vote_message_text(vote_data):
-    """Форматирует текст сообщения голосования"""
     ends_at = datetime.fromisoformat(vote_data["ends_at"])
     time_left = (ends_at - datetime.now()).seconds
     minutes = time_left // 60
@@ -578,7 +638,6 @@ def get_vote_message_text(vote_data):
     )
 
 async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_type: str):
-    """Обрабатывает голос пользователя"""
     try:
         query = update.callback_query
         if not query:
@@ -587,20 +646,26 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
         await query.answer()
         user = update.effective_user
         
-        # Ищем активное голосование в чате
         active_vote = get_active_chat_vote(query.message.chat.id)
         if not active_vote:
             await query.answer("❌ Нет активного голосования", show_alert=True)
             return
         
-        # Добавляем голос
+        if vote_type not in ["yes", "no"]:
+            await query.answer("❌ Неизвестный тип голоса", show_alert=True)
+            return
+        
         success = add_user_vote(active_vote["id"], user.id, vote_type)
         
         if not success:
             await query.answer("❌ Ошибка голосования", show_alert=True)
             return
         
-        # Обновляем сообщение
+        active_vote = get_vote(active_vote["id"])
+        if not active_vote:
+            await query.answer("❌ Голосование не найдено", show_alert=True)
+            return
+        
         vote_text = get_vote_message_text(active_vote)
         
         try:
@@ -612,12 +677,15 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
         except Exception as e:
             logger.error(f"Ошибка обновления сообщения: {e}")
         
-        await query.answer("✅ Голос учтён!")
+        if vote_type == "yes":
+            await query.answer("✅ Ваш голос 'ЗА' учтён!")
+        else:
+            await query.answer("✅ Ваш голос 'ПРОТИВ' учтён!")
         
     except Exception as e:
-        logger.error(f"Ошибка обработки голоса: {e}")
+        logger.error(f"Ошибка обработки голоса: {e}", exc_info=True)
         try:
-            await query.answer("❌ Ошибка", show_alert=True)
+            await query.answer("❌ Ошибка при голосовании", show_alert=True)
         except:
             pass
 
@@ -1153,7 +1221,6 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await query.answer()
     data = query.data
-    logger.info(f"Callback received: {data}")
     
     if data == "start_shlep_session":
         await start_shlep_session(update, context)
@@ -1176,7 +1243,8 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await mishok(update, context)
     
     elif data in ["vote_yes", "vote_no"]:
-        await handle_vote(update, context, data)
+        vote_type = data.replace("vote_", "")
+        await handle_vote(update, context, vote_type)
     
     elif data.startswith("duel_"):
         await query.answer("❌ Система дуэлей временно отключена", show_alert=True)
@@ -1225,7 +1293,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     text = update.message.text
-    logger.info(f"Button pressed: {text}")
     
     try:
         if text == "👊 Шлёпнуть Мишка":
