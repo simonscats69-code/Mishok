@@ -27,55 +27,15 @@ def check_environment():
     
     return True
 
-def migrate_old_data():
-    from config import DATA_FILE, VOTES_FILE
-    
-    old_data_locations = [
-        "mishok_data.json",
-        "data/mishok_data.json",
-        "/root/mishok_data.json",
-        "/bothost/mishok_data.json",
-        "/app/mishok_data.json"
-    ]
-    
-    old_votes_locations = [
-        "data/votes.json",
-        "votes.json",
-        "/data/votes.json"
-    ]
-    
-    migrated = False
-    
-    for old_location in old_data_locations:
-        if os.path.exists(old_location) and old_location != DATA_FILE:
-            try:
-                import shutil
-                os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-                shutil.copy2(old_location, DATA_FILE)
-                
-                backup_name = f"{old_location}.migration_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                shutil.copy2(old_location, backup_name)
-                
-                logger.info(f"📦 Перенесены данные из {old_location} в {DATA_FILE}")
-                logger.info(f"💾 Создан бэкап старого файла: {backup_name}")
-                migrated = True
-                break
-            except Exception as e:
-                logger.error(f"⚠️ Ошибка переноса {old_location}: {e}")
-    
-    for old_location in old_votes_locations:
-        if os.path.exists(old_location) and old_location != VOTES_FILE:
-            try:
-                import shutil
-                os.makedirs(os.path.dirname(VOTES_FILE), exist_ok=True)
-                shutil.copy2(old_location, VOTES_FILE)
-                logger.info(f"🗳️ Перенесены голосования из {old_location} в {VOTES_FILE}")
-            except Exception as e:
-                logger.error(f"⚠️ Ошибка переноса голосований {old_location}: {e}")
-    
-    return migrated
+def check_admin_config():
+    from config import ADMIN_ID
+    if ADMIN_ID == 0:
+        logger.warning("⚠️ ADMIN_ID не установлен! Админ-панель будет недоступна.")
+        logger.info("💡 Установите ADMIN_ID в .env файле для доступа к админ-панели")
+    else:
+        logger.info(f"✅ ADMIN_ID установлен: {ADMIN_ID}")
 
-def check_initial_backup():
+def create_initial_backup():
     from config import DATA_FILE, BACKUP_PATH
     import shutil
     from datetime import datetime
@@ -95,18 +55,10 @@ def check_initial_backup():
             return False
     return True
 
-def check_admin_config():
-    from config import ADMIN_ID
-    if ADMIN_ID == 0:
-        logger.warning("⚠️ ADMIN_ID не установлен! Админ-панель будет недоступна.")
-        logger.info("💡 Установите ADMIN_ID в .env файле для доступа к админ-панели")
-    else:
-        logger.info(f"✅ ADMIN_ID установлен: {ADMIN_ID}")
-
 def main():
     try:
         logger.info("=" * 50)
-        logger.info("🚀 Запуск Мишок Лысый Бота")
+        logger.info("🚀 Запуск Мишок Лысый Бота v3.0")
         logger.info("=" * 50)
         
         if not check_environment():
@@ -114,11 +66,7 @@ def main():
         
         check_admin_config()
         
-        migrated = migrate_old_data()
-        if migrated:
-            logger.info("✅ Миграция данных завершена")
-        
-        check_initial_backup()
+        create_initial_backup()
         
         from database import check_data_integrity, repair_data_structure
         
@@ -145,7 +93,6 @@ def main():
         print("• 🩺 Проверка здоровья")
         print("• 📊 Статистика пользователей")
         print("• 💾 Бэкапы данных")
-        print("• 🔄 Миграция данных")
         print("• 🔧 Восстановление структуры")
         print("=" * 50 + "\n")
         
