@@ -10,11 +10,13 @@ if not BOT_TOKEN:
 
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
-DATA_PATH = os.getenv("DATA_PATH", "/data/mishok_bot")
-DATA_FILE = os.getenv("DATA_FILE", os.path.join(DATA_PATH, "mishok_data.json"))
-VOTES_FILE = os.getenv("VOTES_FILE", os.path.join(DATA_PATH, "votes.json"))
-BACKUP_PATH = os.getenv("BACKUP_PATH", os.path.join(DATA_PATH, "backups"))
-LOG_FILE = os.getenv("LOG_FILE", os.path.join(DATA_PATH, "bot.log"))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+DATA_PATH = os.getenv("DATA_PATH", "data/mishok_bot")
+DATA_FILE = os.path.join(BASE_DIR, DATA_PATH, "mishok_data.json")
+VOTES_FILE = os.path.join(BASE_DIR, DATA_PATH, "votes.json")
+BACKUP_PATH = os.path.join(BASE_DIR, DATA_PATH, "backups")
+LOG_FILE = os.path.join(BASE_DIR, DATA_PATH, "bot.log")
 
 CACHE_ENABLED = os.getenv("CACHE_ENABLED", "true").lower() == "true"
 CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "300"))
@@ -32,7 +34,7 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 AUTOSAVE_INTERVAL = int(os.getenv("AUTOSAVE_INTERVAL", "300"))
 MAX_USER_HISTORY = int(os.getenv("MAX_USER_HISTORY", "100"))
 
-for directory in [DATA_PATH, BACKUP_PATH]:
+for directory in [os.path.dirname(DATA_FILE), os.path.dirname(VOTES_FILE), BACKUP_PATH]:
     if directory and not os.path.exists(directory):
         try:
             os.makedirs(directory, exist_ok=True)
@@ -182,7 +184,6 @@ MISHOK_INTRO = """👴 *Мишок Лысый* — легендарный пер
 📊 Сравниваю игроков между собой
 🏆 Определяю чемпионов
 👑 Назначаю роли в чатах
-⚔️ Организую дуэли
 
 *Моя философия:*
 «Чем чаще шлёпаешь — тем мудрее становишься!»
