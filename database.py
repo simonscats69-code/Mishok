@@ -10,6 +10,7 @@ import time
 logger = logging.getLogger(__name__)
 
 from config import DATA_FILE, BACKUP_PATH, BACKUP_ENABLED, AUTOSAVE_INTERVAL
+from texts import DATABASE_TEXTS
 
 _in_memory_data = None
 _data_lock = threading.Lock()
@@ -43,7 +44,7 @@ def ensure_data_file():
         if not os.path.exists(DATA_FILE):
             default_data = create_default_data()
             save_data_to_disk(default_data)
-            logger.info(f"Создан новый файл данных: {DATA_FILE}")
+            logger.info(DATABASE_TEXTS['file_created'].format(file=DATA_FILE))
             return default_data
         
         return load_data_from_disk()
@@ -53,7 +54,7 @@ def ensure_data_file():
         return create_default_data()
 
 def convert_old_structure(data):
-    logger.info("Конвертируем старую структуру в новую...")
+    logger.info(DATABASE_TEXTS['converting'])
     
     for user_id, user_data in data.get("users", {}).items():
         if "damage_history" in user_data:
@@ -87,9 +88,9 @@ def load_data_from_disk():
             data = convert_old_structure(data)
             save_data_to_disk(data)
         
-        logger.info(f"Загружен файл данных: {DATA_FILE}")
-        logger.info(f"   Пользователей: {len(data.get('users', {}))}")
-        logger.info(f"   Шлёпков: {data.get('global_stats', {}).get('total_shleps', 0)}")
+        logger.info(DATABASE_TEXTS['file_loaded'].format(file=DATA_FILE))
+        logger.info(DATABASE_TEXTS['users_count'].format(count=len(data.get('users', {}))))
+        logger.info(DATABASE_TEXTS['shleps_count'].format(count=data.get('global_stats', {}).get('total_shleps', 0)))
         
         return data
         
@@ -138,10 +139,10 @@ def repair_data_structure():
         data["global_stats"]["total_users"] = len(data["users"])
         
         save_data(data)
-        logger.info("Структура данных восстановлена")
+        logger.info(DATABASE_TEXTS['structure_repaired'])
         return True
     except Exception as e:
-        logger.error(f"Ошибка восстановления структуры данных: {e}")
+        logger.error(DATABASE_TEXTS['repair_error'].format(error=e))
         return False
 
 def load_data():
@@ -164,10 +165,10 @@ def save_data_to_disk(data):
         
         os.replace(temp_file, DATA_FILE)
         
-        logger.debug(f"Данные сохранены на диск: {DATA_FILE}")
+        logger.debug(DATABASE_TEXTS['data_saved'].format(file=DATA_FILE))
         return True
     except Exception as e:
-        logger.error(f"Ошибка сохранения данных на диск: {e}")
+        logger.error(DATABASE_TEXTS['save_error'].format(error=e))
         return False
 
 def schedule_save():
@@ -185,7 +186,7 @@ def schedule_save():
             
             _data_modified = False
             _last_save_time = current_time
-            logger.debug(f"Автосохранение через {current_time - _last_save_time:.1f} секунд")
+            logger.debug(DATABASE_TEXTS['autosave'].format(seconds=current_time - _last_save_time))
             return True
     
     return False
@@ -202,6 +203,7 @@ def should_create_backup():
                 last_backup_date = f.read().strip()
             
             if last_backup_date == datetime.now().strftime("%Y-%m-%d"):
+                logger.debug(DATABASE_TEXTS['backup_skipped'])
                 return False
     except:
         pass
@@ -224,7 +226,7 @@ def create_daily_backup():
                     last_backup_date = f.read().strip()
                 
                 if last_backup_date == today:
-                    logger.debug("Бэкап сегодня уже создавался, пропускаем")
+                    logger.debug(DATABASE_TEXTS['backup_skipped'])
                     return False
         except:
             pass
@@ -240,11 +242,11 @@ def create_daily_backup():
         cleanup_backups(max_backups=5)
         
         size = os.path.getsize(backup_file)
-        logger.info(f"Создан дневной бэкап: {backup_file} ({size} байт)")
+        logger.info(DATABASE_TEXTS['daily_backup'].format(file=backup_file, size=size))
         
         return True
     except Exception as e:
-        logger.error(f"Ошибка создания дневного бэкапа: {e}")
+        logger.error(DATABASE_TEXTS['daily_backup_error'].format(error=e))
         return False
 
 def cleanup_backups(max_backups=5):
@@ -264,12 +266,12 @@ def cleanup_backups(max_backups=5):
         for backup in backups[max_backups:]:
             try:
                 os.remove(backup[0])
-                logger.debug(f"Удален старый бэкап: {backup[2]}")
+                logger.debug(DATABASE_TEXTS['old_backup_deleted'].format(file=backup[2]))
             except Exception as e:
-                logger.error(f"Ошибка удаления старого бэкапа {backup[2]}: {e}")
+                logger.error(DATABASE_TEXTS['delete_backup_error'].format(file=backup[2], error=e))
                 
     except Exception as e:
-        logger.error(f"Ошибка очистки бэкапов: {e}")
+        logger.error(DATABASE_TEXTS['cleanup_error'].format(error=e))
 
 def save_data(data):
     global _in_memory_data, _data_modified
@@ -285,7 +287,7 @@ def save_data(data):
 def create_safe_backup(description: str = "") -> Tuple[bool, str]:
     try:
         if not os.path.exists(DATA_FILE):
-            return False, "Файл данных не существует"
+            return False, DATABASE_TEXTS['file_not_found'].format(file=DATA_FILE)
         
         os.makedirs(BACKUP_PATH, exist_ok=True)
         
@@ -302,11 +304,11 @@ def create_safe_backup(description: str = "") -> Tuple[bool, str]:
         cleanup_manual_backups(max_backups=3)
         
         size = os.path.getsize(backup_file)
-        logger.info(f"Создан ручной бэкап: {backup_file} ({size} байт)")
+        logger.info(DATABASE_TEXTS['manual_backup'].format(file=backup_file, size=size))
         
         return True, backup_file
     except Exception as e:
-        logger.error(f"Ошибка создания ручного бэкапа: {e}")
+        logger.error(DATABASE_TEXTS['manual_backup_error'].format(error=e))
         return False, str(e)
 
 def cleanup_manual_backups(max_backups=3):
@@ -326,12 +328,12 @@ def cleanup_manual_backups(max_backups=3):
         for backup in manual_backups[max_backups:]:
             try:
                 os.remove(backup[0])
-                logger.debug(f"Удален старый ручной бэкап: {backup[2]}")
+                logger.debug(DATABASE_TEXTS['manual_delete'].format(file=backup[2]))
             except Exception as e:
-                logger.error(f"Ошибка удаления старого ручного бэкапа {backup[2]}: {e}")
+                logger.error(DATABASE_TEXTS['manual_delete_error'].format(file=backup[2], error=e))
                 
     except Exception as e:
-        logger.error(f"Ошибка очистки ручных бэкапов: {e}")
+        logger.error(DATABASE_TEXTS['manual_cleanup_error'].format(error=e))
 
 def get_backup_list(limit: int = 10) -> List[Dict]:
     try:
@@ -356,7 +358,7 @@ def get_backup_list(limit: int = 10) -> List[Dict]:
         backups.sort(key=lambda x: x["modified"], reverse=True)
         return backups[:limit]
     except Exception as e:
-        logger.error(f"Ошибка получения списка бэкапов: {e}")
+        logger.error(DATABASE_TEXTS['backup_list_error'].format(error=e))
         return []
 
 def get_database_size() -> Dict[str, Any]:
@@ -378,7 +380,7 @@ def get_database_size() -> Dict[str, Any]:
             "last_modified": datetime.fromtimestamp(os.path.getmtime(DATA_FILE))
         }
     except Exception as e:
-        logger.error(f"Ошибка получения размера БД: {e}")
+        logger.error(DATABASE_TEXTS['db_size_error'].format(error=e))
         return {"exists": False, "size": 0, "error": str(e)}
 
 def add_shlep(user_id: int, username: str, damage: int, chat_id: Optional[int] = None) -> Tuple[int, int, int]:
@@ -468,7 +470,7 @@ def add_shlep(user_id: int, username: str, damage: int, chat_id: Optional[int] =
             )
             
     except Exception as e:
-        logger.error(f"Ошибка в add_shlep: {e}", exc_info=True)
+        logger.error(DATABASE_TEXTS['add_shlep_error'].format(error=e), exc_info=True)
         return (0, 0, 0)
 
 def get_stats() -> Tuple[int, Optional[datetime], int, Optional[str], Optional[datetime]]:
@@ -486,7 +488,7 @@ def get_stats() -> Tuple[int, Optional[datetime], int, Optional[str], Optional[d
             datetime.fromisoformat(max_damage_date) if max_damage_date else None
         )
     except Exception as e:
-        logger.error(f"Ошибка в get_stats: {e}")
+        logger.error(DATABASE_TEXTS['get_stats_error'].format(error=e))
         return (0, None, 0, None, None)
 
 def get_top_users(limit: int = 10) -> List[Tuple[str, int]]:
@@ -502,7 +504,7 @@ def get_top_users(limit: int = 10) -> List[Tuple[str, int]]:
         users_list.sort(key=lambda x: x[1], reverse=True)
         return users_list[:limit]
     except Exception as e:
-        logger.error(f"Ошибка в get_top_users: {e}")
+        logger.error(DATABASE_TEXTS['top_users_error'].format(error=e))
         return []
 
 def get_user_stats(user_id: int) -> Tuple[Optional[str], int, Optional[datetime]]:
@@ -520,7 +522,7 @@ def get_user_stats(user_id: int) -> Tuple[Optional[str], int, Optional[datetime]
             datetime.fromisoformat(last_shlep) if last_shlep else None
         )
     except Exception as e:
-        logger.error(f"Ошибка в get_user_stats: {e}")
+        logger.error(DATABASE_TEXTS['user_stats_error'].format(error=e))
         return (None, 0, None)
 
 def get_chat_stats(chat_id: int) -> Dict[str, Any]:
@@ -548,7 +550,7 @@ def get_chat_stats(chat_id: int) -> Dict[str, Any]:
             "max_damage_user": max_damage_user
         }
     except Exception as e:
-        logger.error(f"Ошибка в get_chat_stats: {e}")
+        logger.error(DATABASE_TEXTS['chat_stats_error'].format(error=e))
         return {}
 
 def get_chat_top_users(chat_id: int, limit: int = 10) -> List[Tuple[str, int]]:
@@ -568,7 +570,7 @@ def get_chat_top_users(chat_id: int, limit: int = 10) -> List[Tuple[str, int]]:
         users_list.sort(key=lambda x: x[1], reverse=True)
         return users_list[:limit]
     except Exception as e:
-        logger.error(f"Ошибка в get_chat_top_users: {e}")
+        logger.error(DATABASE_TEXTS['chat_top_error'].format(error=e))
         return []
 
 def backup_database():
@@ -602,7 +604,7 @@ def check_data_integrity():
             }
         }
     except Exception as e:
-        logger.error(f"Ошибка в check_data_integrity: {e}")
+        logger.error(DATABASE_TEXTS['integrity_error'].format(error=e))
         return {
             "errors": [f"Ошибка проверки: {str(e)}"],
             "warnings": [],
@@ -633,7 +635,7 @@ def create_vote(chat_id: int, question: str, duration_minutes: int = 5) -> str:
         
         return vote_id
     except Exception as e:
-        logger.error(f"Ошибка создания голосования: {e}")
+        logger.error(DATABASE_TEXTS['create_vote_error'].format(error=e))
         return ""
 
 def get_vote(vote_id: str):
@@ -680,7 +682,7 @@ def add_user_vote(vote_id: str, user_id: int, vote_type: str) -> bool:
         save_data(data)
         return True
     except Exception as e:
-        logger.error(f"Ошибка добавления голоса: {e}")
+        logger.error(DATABASE_TEXTS['add_vote_error'].format(error=e))
         return False
 
 def finish_vote(vote_id: str):
@@ -695,7 +697,7 @@ def finish_vote(vote_id: str):
             return vote
         return None
     except Exception as e:
-        logger.error(f"Ошибка завершения голосования: {e}")
+        logger.error(DATABASE_TEXTS['finish_vote_error'].format(error=e))
         return None
 
 def cleanup_old_votes():
@@ -714,9 +716,9 @@ def cleanup_old_votes():
         
         if to_delete:
             save_data(data)
-            logger.info(f"Очищено {len(to_delete)} старых голосований")
+            logger.info(DATABASE_TEXTS['cleanup_votes'].format(count=len(to_delete)))
     except Exception as e:
-        logger.error(f"Ошибка очистки голосований: {e}")
+        logger.error(DATABASE_TEXTS['cleanup_votes_error'].format(error=e))
 
 def update_vote_message_id(vote_id: str, message_id: int):
     try:
@@ -732,4 +734,4 @@ def update_vote_message_id(vote_id: str, message_id: int):
         return False
 
 cleanup_old_votes()
-logger.info("База данных с упрощёнными голосованиями готова к работе")
+logger.info(DATABASE_TEXTS['ready'])
