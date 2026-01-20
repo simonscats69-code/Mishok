@@ -28,7 +28,6 @@ from keyboard import (
     get_confirmation_keyboard, get_cleanup_keyboard
 )
 
-# Импортируем все тексты из texts.py
 from texts import (
     MISHOK_REACTIONS, MISHOK_INTRO, COMMAND_TEXTS, VOTE_TEXTS, 
     ADMIN_TEXTS, ERROR_TEXTS, LEVEL_TITLES,
@@ -100,28 +99,40 @@ def admin_only(func):
     return wrapper
 
 def calc_level(cnt):
-    if cnt <= 0: 
-        return {'level': 1, 'progress': 0, 'min': 10, 'max': 25, 'next': 10}
+    if cnt is None or cnt < 0:
+        cnt = 0
     
-    lvl = (cnt // 10) + 1
-    prog = (cnt % 10) * 10
+    if cnt == 0:
+        return {
+            'level': 1,
+            'progress': 0,
+            'min': 10,
+            'max': 25,
+            'next': 10
+        }
     
-    if lvl > 1000:
-        min_dmg = 10 + 1000 * 2 + (lvl - 1000) * 1
-        max_dmg = 15 + 1000 * 3 + (lvl - 1000) * 2
+    level = max(1, (cnt - 1) // 10 + 1)
+    
+    progress = (cnt % 10) * 10 if cnt % 10 != 0 else 0
+    
+    if level > 1000:
+        min_dmg = 10 + 1000 * 2 + (level - 1000) * 1
+        max_dmg = 15 + 1000 * 3 + (level - 1000) * 2
     else:
-        min_dmg = int(10 * (1.02 ** min(lvl - 1, 100)))
-        max_dmg = int(20 * (1.08 ** min(lvl - 1, 100)))
+        min_dmg = int(10 * (1.02 ** min(level - 1, 100)))
+        max_dmg = int(20 * (1.08 ** min(level - 1, 100)))
     
-    if max_dmg <= min_dmg: 
+    if max_dmg <= min_dmg:
         max_dmg = min_dmg + 10
     
+    next_shleps = 10 - (cnt % 10) if cnt % 10 != 0 else 0
+    
     return {
-        'level': lvl,
-        'progress': prog,
+        'level': level,
+        'progress': progress,
         'min': min_dmg,
         'max': max_dmg,
-        'next': 10 - (cnt % 10) if (cnt % 10) < 10 else 0
+        'next': next_shleps
     }
 
 def level_title(lvl):
@@ -266,35 +277,61 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @command_handler 
 @with_message
 async def level(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    user = update.effective_user
-    user_info = get_user_info(user)
-    
-    cached = await cache.get(f"user_stats_{user.id}")
-    if cached:
-        u, cnt, last = cached
-    else:
-        u, cnt, last = get_user_stats(user.id)
-        await cache.set(f"user_stats_{user.id}", (u, cnt, last))
-    
-    lvl = calc_level(cnt)
-    title, advice = level_title(lvl['level'])
-    bar = create_progress_bar(lvl['progress'])
-    
-    last_date = last.strftime('%d.%m.%Y %H:%M') if last else None
-    text = format_level_text(
-        user_info['name'], format_number(cnt), lvl['level'], title, 
-        bar, lvl['progress'], lvl['min'], lvl['max'], 
-        lvl['next'], advice, last_date
-    )
-    
-    await msg.reply_text(text)
+    try:
+        user = update.effective_user
+        user_info = get_user_info(user)
+        
+        cached = await cache.get(f"user_stats_{user.id}")
+        if cached:
+            username, cnt, last_shlep = cached
+        else:
+            username, cnt, last_shlep = get_user_stats(user.id)
+            await cache.set(f"user_stats_{user.id}", (username, cnt, last_shlep))
+        
+        if cnt is None:
+            cnt = 0
+        
+        lvl = calc_level(cnt)
+        title, advice = level_title(lvl['level'])
+        bar = create_progress_bar(lvl['progress'])
+        
+        last_date_str = None
+        if last_shlep:
+            if isinstance(last_shlep, datetime):
+                last_date_str = last_shlep.strftime('%d.%m.%Y %H:%M')
+            elif isinstance(last_shlep, str):
+                try:
+                    dt_obj = datetime.fromisoformat(last_shlep.replace('Z', '+00:00'))
+                    last_date_str = dt_obj.strftime('%d.%m.%Y %H:%M')
+                except Exception:
+                    last_date_str = last_shlep
+        
+        text = format_level_text(
+            user_info['name'], 
+            format_number(cnt), 
+            lvl['level'], 
+            title, 
+            bar, 
+            lvl['progress'], 
+            lvl['min'], 
+            lvl['max'], 
+            lvl['next'], 
+            advice, 
+            last_date_str
+        )
+        
+        await msg.reply_text(text)
+        
+    except Exception as e:
+        logger.error(f"Ошибка в команде level: {e}", exc_info=True)
+        await msg.reply_text("⚠️ Произошла ошибка при получении уровня. Попробуйте позже.")
 
 @command_handler
 @with_message
 async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     user = update.effective_user
     
-    _, cnt, last = get_user_stats(user.id)
+    username, cnt, last_shlep = get_user_stats(user.id)
     lvl = calc_level(cnt)
     compare_stats = get_comparison_stats(user.id)
     
@@ -309,8 +346,12 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     text += f"{COMMAND_TEXTS['my_stats']['rank'].format(rank=compare_stats.get('rank', 1))}\n"
     text += f"{COMMAND_TEXTS['my_stats']['percentile'].format(percent=compare_stats.get('percentile', 0))}\n"
     
-    if last:
-        text += f"\n{COMMAND_TEXTS['my_stats']['last_shlep'].format(date=last.strftime('%d.%m.%Y %H:%M'))}"
+    if last_shlep:
+        if isinstance(last_shlep, datetime):
+            date_str = last_shlep.strftime('%d.%m.%Y %H:%M')
+        else:
+            date_str = str(last_shlep)
+        text += f"\n{COMMAND_TEXTS['my_stats']['last_shlep'].format(date=date_str)}"
     
     await msg.reply_text(text)
 
@@ -1092,6 +1133,33 @@ async def perform_repair(message):
     
     await message.edit_text(text, reply_markup=get_admin_keyboard())
 
+@command_handler
+@admin_only
+async def debug_user(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
+    user = update.effective_user
+    
+    data = load_data()
+    user_data = data["users"].get(str(user.id), {})
+    
+    text = f"🔍 ДЕБАГ ДАННЫХ ДЛЯ user_id={user.id}\n\n"
+    text += f"📊 Сырые данные:\n"
+    
+    for key, value in user_data.items():
+        text += f"  {key}: {value} (тип: {type(value).__name__})\n"
+    
+    text += f"\n🧪 Результат get_user_stats:\n"
+    username, cnt, last_shlep = get_user_stats(user.id)
+    text += f"  username: {username}\n"
+    text += f"  cnt: {cnt} (тип: {type(cnt).__name__})\n"
+    text += f"  last_shlep: {last_shlep} (тип: {type(last_shlep).__name__})\n"
+    
+    text += f"\n🎯 Результат calc_level({cnt}):\n"
+    lvl = calc_level(cnt)
+    for key, value in lvl.items():
+        text += f"  {key}: {value}\n"
+    
+    await msg.reply_text(f"<pre>{text}</pre>", parse_mode=ParseMode.HTML)
+
 async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
@@ -1147,6 +1215,8 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await admin_close(update, context)
     elif data == "admin_back":
         await admin_panel(update, context)
+    elif data == "debug_user":
+        await debug_user(update, context)
     
     elif data.startswith("cleanup_"):
         action = data.replace("cleanup_", "")
@@ -1226,6 +1296,7 @@ def main():
         ("check_data", check_data),
         ("repair", repair_cmd),
         ("admin", admin_panel),
+        ("debug_user", debug_user),
     ]
     
     for name, handler in commands:
