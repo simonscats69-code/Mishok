@@ -21,7 +21,7 @@ LOG_FILE = os.path.join(BASE_DIR, DATA_PATH, "bot.log")
 CACHE_ENABLED = os.getenv("CACHE_ENABLED", "true").lower() == "true"
 CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "300"))
 MAX_CACHE_SIZE = int(os.getenv("MAX_CACHE_SIZE", "1000"))
-LOG_CACHE_STATS = os.getenv("LOG_CACHE_STATS", "true").lower() == "true"
+LOG_CACHE_STATS = os.getenv("LOG_CACHE_STATS", "false").lower() == "true"
 
 CHAT_VOTE_DURATION = int(os.getenv("CHAT_VOTE_DURATION", "300"))
 CHAT_NOTIFICATIONS_ENABLED = os.getenv("CHAT_NOTIFICATIONS_ENABLED", "true").lower() == "true"
@@ -30,8 +30,7 @@ BACKUP_ENABLED = os.getenv("BACKUP_ENABLED", "true").lower() == "true"
 BACKUP_RETENTION_DAYS = int(os.getenv("BACKUP_RETENTION_DAYS", "7"))
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-AUTOSAVE_INTERVAL = int(os.getenv("AUTOSAVE_INTERVAL", "300"))
-MAX_USER_HISTORY = int(os.getenv("MAX_USER_HISTORY", "100"))
+AUTOSAVE_INTERVAL = int(os.getenv("AUTOSAVE_INTERVAL", "30"))  # Сохраняем каждые 30 секунд вместо 300
 
 for directory in [os.path.dirname(DATA_FILE), os.path.dirname(VOTES_FILE), BACKUP_PATH]:
     if directory and not os.path.exists(directory):
@@ -52,6 +51,7 @@ print(f"  📄 Файл данных: {DATA_FILE}")
 print(f"  🗳️ Файл голосований: {VOTES_FILE}")
 print(f"  💾 Бэкапы: {BACKUP_PATH}")
 print(f"  📝 Логи: {LOG_FILE}")
+print(f"  ⏱️ Автосохранение: каждые {AUTOSAVE_INTERVAL} секунд")
 print("=" * 50)
 
 MISHOK_REACTIONS = [
@@ -139,7 +139,7 @@ MISHOK_REACTIONS = [
 MISHOK_INTRO = """👴 *Мишок Лысый — легендарный персонаж!*
 
 *Немного истории:*
-Я — старый, мудрый и слегка лысый медведь, который любит, когда его шлёпают по лысине! Каждый шлёпок делает меня мудрее и сильнее. 
+Я — старый и слегка лысый, люблю когда меня шлёпают по лысине! Каждый шлёпок делает меня мудрее и сильнее. 
 
 *Почему шлёпать полезно:*
 • 🧠 Улучшает концентрацию
@@ -152,7 +152,6 @@ MISHOK_INTRO = """👴 *Мишок Лысый — легендарный пер�
 🎮 Веду статистику всех шлёпков
 📊 Сравниваю игроков между собой
 🏆 Определяю чемпионов
-👑 Назначаю роли в чатах
 
 *Моя философия:*
 «Чем чаще шлёпаешь — тем мудрее становишься!»
