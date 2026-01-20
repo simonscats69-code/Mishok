@@ -11,7 +11,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 
-from config import BOT_TOKEN, MISHOK_REACTIONS, MISHOK_INTRO, DATA_FILE, BACKUP_PATH, LOG_FILE
+from config import BOT_TOKEN, DATA_FILE, BACKUP_PATH, LOG_FILE
 from database import (
     add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, 
     get_chat_top_users, backup_database, check_data_integrity, 
@@ -28,35 +28,15 @@ from keyboard import (
     get_confirmation_keyboard, get_cleanup_keyboard
 )
 
+# Импортируем все тексты из texts.py
+from texts import (
+    MISHOK_REACTIONS, MISHOK_INTRO, COMMAND_TEXTS, VOTE_TEXTS, 
+    ADMIN_TEXTS, ERROR_TEXTS, LEVEL_TITLES,
+    format_stats_text, format_level_text, format_vote_text, format_vote_results
+)
+
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-LEVEL_TITLES = {
-    1000: ("🌌 ВСЕЛЕНСКИЙ ШЛЁПКО-БОГ", "Ты создал свою вселенную шлёпков!"),
-    950: ("⚡ АБСОЛЮТНЫЙ ПОВЕЛИТЕЛЬ", "Даже боги трепещут перед тобой!"),
-    900: ("🔥 БЕССМЕРТНЫЙ ТИТАН", "Твоя сила преодолела смерть!"),
-    850: ("🌟 ХРАНИТЕЛЬ ГАЛАКТИКИ", "Целые галактики под твоей властью!"),
-    800: ("👑 ВЛАСТЕЛИН ВСЕХ ИЗМЕРЕНИЙ", "Пространство и время подчиняются тебе!"),
-    750: ("💎 БОЖЕСТВЕННЫЙ АРХИТЕКТОР", "Ты строишь реальность шлёпками!"),
-    700: ("⭐ ВЕЧНЫЙ ИМПЕРАТОР", "Твоя империя будет существовать вечно!"),
-    650: ("🌠 КОСМИЧЕСКИЙ ДЕМИУРГ", "Создаёшь звёзды одним шлёпком!"),
-    600: ("⚡ ПРЕВОСХОДНЫЙ БОГО-ЦАРЬ", "Ты — высшая форма существования!"),
-    550: ("🔥 МИРОТВОРЕЦ ВСЕЛЕННОЙ", "Твоим шлёпком устанавливается мир!"),
-    500: ("🌟 ВЕРХОВНЫЙ БОГ ШЛЁПКОВ", "Тебе поклоняются миллионы!"),
-    450: ("👑 НЕБЕСНЫЙ ПАТРИАРХ", "Твоя династия будет править вечно!"),
-    400: ("💎 ЗВЁЗДНЫЙ МОНАРХ", "Царствуешь среди звёзд!"),
-    350: ("⭐ ГАЛАКТИЧЕСКИЙ ИМПЕРАТОР", "Подчинена целая галактика!"),
-    300: ("🌠 ПОВЕЛИТЕЛЬ ТЫСЯЧИ МИРОВ", "Миллионы планет под твоим контролем!"),
-    250: ("⚡ БОЖЕСТВЕННЫЙ ВЛАСТЕЛИН", "Ты достиг божественного статуса!"),
-    200: ("🔥 ЦАРЬ ВСЕХ ШЛЁПКОВ", "Коронация состоялась!"),
-    150: ("🌟 ЛЕГЕНДАРНЫЙ ИМПЕРАТОР", "Твоё имя войдёт в легенды!"),
-    100: ("👑 ВЕЛИКИЙ ПОВЕЛИТЕЛЬ", "Власть над континентами!"),
-    50: ("💎 МАГИСТР ШЛЁПКОВ", "Уважаемый мастер!"),
-    20: ("⭐ ПРОФЕССИОНАЛ", "Уже что-то получается!"),
-    10: ("🔥 УВЕРЕННЫЙ НОВИЧОК", "Начинаешь понимать основы!"),
-    5: ("👊 ЗЕЛЁНЫЙ САЛАГ", "Ещё путаешься, но стараешься!"),
-    0: ("🌱 ПОЛНЫЙ ДОХЛЯК", "Ты только начал... очень слабо!")
-}
 
 def escape_text(text: str) -> str:
     return escape_markdown(text or "", version=1)
@@ -83,7 +63,7 @@ def command_handler(func):
             try:
                 msg = get_message(update)
                 if msg:
-                    await msg.reply_text("⚠️ Ошибка выполнения команды")
+                    await msg.reply_text(ERROR_TEXTS['generic'])
             except:
                 pass
     return wrapper
@@ -103,7 +83,7 @@ def chat_only(func):
     @with_message
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         if update.effective_chat.type == "private":
-            await msg.reply_text("Эта команда работает только в группах!")
+            await msg.reply_text(ERROR_TEXTS['chat_only'])
             return
         return await func(update, context, msg)
     return wrapper
@@ -114,7 +94,7 @@ def admin_only(func):
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         from config import ADMIN_ID
         if update.effective_user.id != ADMIN_ID:
-            await msg.reply_text("⚠️ Эта команда только для администраторов!")
+            await msg.reply_text(ERROR_TEXTS['admin_only'])
             return
         return await func(update, context, msg)
     return wrapper
@@ -233,7 +213,7 @@ async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit
         try:
             msg = get_message(update)
             if msg:
-                await msg.reply_text("⚠️ Произошла ошибка при обработке шлёпка. Попробуйте еще раз.")
+                await msg.reply_text(ERROR_TEXTS['shlep'])
         except Exception as e2:
             logger.error(f"Не удалось отправить сообщение об ошибке: {e2}")
 
@@ -242,43 +222,14 @@ async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     user_info = get_user_info(update.effective_user)
     
-    text = f"👋 Привет, {user_info['name']}!\nЯ — Мишок Лысый 👴✨\n\n"
-    
     if update.effective_chat.type == "private":
-        text += """Начни шлёпать прямо сейчас!
-
-Просто нажми кнопку ниже или используй команды:
-
-👊 /shlep — Шлёпнуть Мишка
-📊 /stats — Глобальная статистика
-🎯 /level — Твой уровень и прогресс
-📈 /my_stats — Детальная статистика
-❓ /help — Помощь по командам
-👴 /mishok — О Мишке
-
-Новая фича: Теперь шлёпай в одном окне без спама сообщений!"""
-        
+        text = COMMAND_TEXTS['start']['private'].format(name=user_info['name'])
         kb = get_main_reply_keyboard()
-        await msg.reply_text(text, reply_markup=kb)
     else:
-        text += """Я бот для шлёпков!
-
-Команды для чата:
-👊 /shlep — Шлёпнуть Мишка
-📊 /chat_stats — Статистика чата
-🏆 /chat_top — Топ игроков
-🗳️ /vote [вопрос] — Голосование
-🗳️ /vote_end — Завершить голосование
-
-Личные команды (в лс с ботом):
-📊 /stats — Глобальная статистика
-🎯 /level — Твой уровень
-📈 /my_stats — Детальная статистика
-
-Нажми кнопку ниже или введи команду!"""
-        
+        text = COMMAND_TEXTS['start']['group']
         kb = get_main_inline_keyboard()
-        await msg.reply_text(text, reply_markup=kb)
+    
+    await msg.reply_text(text, reply_markup=kb)
 
 @command_handler
 async def shlep(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -298,10 +249,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     
     maxu_safe = escape_text(maxu or 'Нет')
     
-    text = f"📊 ГЛОБАЛЬНАЯ СТАТИСТИКА\n👑 РЕКОРД УРОНА: {maxd} единиц\n👤 Рекордсмен: {maxu_safe}\n📅 Дата рекорда: {maxdt.strftime('%d.%m.%Y %H:%M') if maxdt else '—'}\n🔢 Всего шлёпков: {format_number(total)}\n⏰ Последний шлёпок: {last.strftime('%d.%m.%Y %H:%M') if last else 'нет'}"
+    text = format_stats_text(total, last, maxd, maxu_safe, maxdt)
     
     if top:
-        text += "\n\n🏆 ТОП ШЛЁПАТЕЛЕЙ:\n"
+        text += COMMAND_TEXTS['stats']['top_header']
         for i, (u, c) in enumerate(top[:5], 1):
             u_safe = escape_text(u or f'Игрок{i}')
             lvl = calc_level(c)
@@ -329,10 +280,12 @@ async def level(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     title, advice = level_title(lvl['level'])
     bar = create_progress_bar(lvl['progress'])
     
-    text = f"🎯 ТВОЙ УРОВЕНЬ\n👤 Игрок: {user_info['name']}\n📊 Шлёпков: {format_number(cnt)}\n🎯 Уровень: {lvl['level']} ({title})\n{bar} {lvl['progress']}%\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n🎯 До след. уровня: {lvl['next']} шлёпков\n💡 {advice}"
-    
-    if last:
-        text += f"\n⏰ Последний шлёпок: {last.strftime('%d.%m.%Y %H:%M')}"
+    last_date = last.strftime('%d.%m.%Y %H:%M') if last else None
+    text = format_level_text(
+        user_info['name'], format_number(cnt), lvl['level'], title, 
+        bar, lvl['progress'], lvl['min'], lvl['max'], 
+        lvl['next'], advice, last_date
+    )
     
     await msg.reply_text(text)
 
@@ -345,10 +298,19 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     lvl = calc_level(cnt)
     compare_stats = get_comparison_stats(user.id)
     
-    text = f"📈 ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Всего шлёпков: {format_number(cnt)}\n🎯 Уровень: {lvl['level']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n📊 Сравнение с другими:\n👥 Всего игроков: {compare_stats.get('total_users', 0)}\n📈 Среднее на игрока: {compare_stats.get('avg_shleps', 0)}\n🏆 Твой ранг: {compare_stats.get('rank', 1)}\n📊 Лучше чем: {compare_stats.get('percentile', 0)}% игроков"
+    text = f"{COMMAND_TEXTS['my_stats']['header']}\n"
+    text += f"{COMMAND_TEXTS['my_stats']['player'].format(name=user.first_name)}\n"
+    text += f"{COMMAND_TEXTS['my_stats']['shlep_count'].format(count=format_number(cnt))}\n"
+    text += f"{COMMAND_TEXTS['my_stats']['level'].format(level=lvl['level'])}\n"
+    text += f"{COMMAND_TEXTS['my_stats']['damage_range'].format(min=lvl['min'], max=lvl['max'])}\n"
+    text += f"{COMMAND_TEXTS['my_stats']['comparison_header']}\n"
+    text += f"{COMMAND_TEXTS['my_stats']['total_users'].format(count=compare_stats.get('total_users', 0))}\n"
+    text += f"{COMMAND_TEXTS['my_stats']['avg_shleps'].format(avg=compare_stats.get('avg_shleps', 0))}\n"
+    text += f"{COMMAND_TEXTS['my_stats']['rank'].format(rank=compare_stats.get('rank', 1))}\n"
+    text += f"{COMMAND_TEXTS['my_stats']['percentile'].format(percent=compare_stats.get('percentile', 0))}\n"
     
     if last:
-        text += f"\n⏰ Последний шлёпок: {last.strftime('%d.%m.%Y %H:%M')}"
+        text += f"\n{COMMAND_TEXTS['my_stats']['last_shlep'].format(date=last.strftime('%d.%m.%Y %H:%M'))}"
     
     await msg.reply_text(text)
 
@@ -365,10 +327,14 @@ async def chat_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         await cache.set(f"chat_stats_{chat.id}", cs)
     
     if not cs:
-        text = "📊 СТАТИСТИКА ЧАТА\n\nВ этом чате ещё не было шлёпков!\nИспользуй /shlep чтобы стать первым! 🎯"
+        text = COMMAND_TEXTS['chat_stats']['empty']
     else:
         max_user_safe = escape_text(cs.get('max_damage_user', 'Нет'))
-        text = f"📊 СТАТИСТИКА ЧАТА\n👥 Участников: {cs.get('total_users', 0)}\n👊 Всего шлёпков: {format_number(cs.get('total_shleps', 0))}\n🏆 Рекорд урона: {cs.get('max_damage', 0)} единиц\n👑 Рекордсмен: {max_user_safe}"
+        text = f"{COMMAND_TEXTS['chat_stats']['header']}\n"
+        text += f"{COMMAND_TEXTS['chat_stats']['users'].format(count=cs.get('total_users', 0))}\n"
+        text += f"{COMMAND_TEXTS['chat_stats']['shleps'].format(count=format_number(cs.get('total_shleps', 0)))}\n"
+        text += f"{COMMAND_TEXTS['chat_stats']['record_damage'].format(damage=cs.get('max_damage', 0))}\n"
+        text += f"{COMMAND_TEXTS['chat_stats']['record_user'].format(user=max_user_safe)}"
     
     await msg.reply_text(text)
 
@@ -379,10 +345,10 @@ async def chat_top(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     top = get_chat_top_users(chat.id, 10)
     
     if not top:
-        await msg.reply_text("🏆 ТОП ЧАТА\n\nВ этом чате пока никто не шлёпал Мишка! Будь первым!")
+        await msg.reply_text(COMMAND_TEXTS['chat_top']['empty'])
         return
     
-    text = "🏆 ТОП ШЛЁПАТЕЛЕЙ ЧАТА:\n\n"
+    text = COMMAND_TEXTS['chat_top']['header']
     for i, (u, c) in enumerate(top, 1):
         u_safe = escape_text(u)
         lvl = calc_level(c)
@@ -425,101 +391,23 @@ async def finish_vote_task(vote_id: str, chat_id: int, message_id: int, context:
         total_votes = yes_count + no_count
         
         if total_votes == 0:
-            result_text = "🤷 *НИКТО НЕ ПРОГОЛОСОВАЛ!*"
-            action_text = "\n\nНикто не решил судьбу моей лысины... 😔"
+            result_key = 'none'
+            action_key = 'none'
+            mishok_text = None
         elif yes_count > no_count:
-            result_text = "✅ *БОЛЬШИНСТВО ЗА!*"
-            action_text = "\n\n👊 *ДАВАЙТЕ НАШЛЁПАЕМ ЭТОМУ ЛЫСОМУ!*"
-            
-            async def send_shlep_message():
-                await asyncio.sleep(1)
-                try:
-                    await context.bot.send_message(
-                        chat_id=chat_id,
-                        text="👴 *Мишок:* Ой-ой, народ решил меня отшлёпать! Принимаю свою судьбу! 👊\n\n" +
-                             random.choice([
-                                 "Давайте, шлёпайте! Моя лысина готова!",
-                                 "Ой, боюсь! Но раз народ решил...",
-                                 "Ну что ж, принимаю народное решение!",
-                                 "Лысина дрожит от ожидания!",
-                                 "Только аккуратнее, а то искры полетят!",
-                                 "Шлёпайте, я приготовился!",
-                                 "Народ сказал — надо шлёпать! Подчиняюсь!",
-                                 "Моя лысина ждёт ваших ладоней!",
-                                 "Ох, сейчас будет больно... но интересно!",
-                                 "Давайте же, не тяните! Шлёпайте смелее!"
-                             ])
-                    )
-                except Exception as e:
-                    logger.error(f"Ошибка отправки сообщения Мишка: {e}")
-            
-            asyncio.create_task(send_shlep_message())
-            
+            result_key = 'yes'
+            action_key = 'yes'
+            mishok_text = random.choice(VOTE_TEXTS['mishok_reactions']['yes'])
         elif no_count > yes_count:
-            result_text = "❌ *БОЛЬШИНСТВО ПРОТИВ!*"
-            action_text = "\n\n🙏 *СПАСИБО ЗА МИЛОСЕРДИЕ!*"
-            
-            async def send_mercy_message():
-                await asyncio.sleep(1)
-                try:
-                    await context.bot.send_message(
-                        chat_id=chat_id,
-                        text="👴 *Мишок:* Фух, народ пощадил мою лысину! Спасибо за милосердие! 🙏\n\n" +
-                             random.choice([
-                                 "Моя лысина цела и невредима!",
-                                 "Спасибо, что пожалели старика!",
-                                 "Уф, пронесло! Лысина отдыхает!",
-                                 "Благодарю за гуманность!",
-                                 "Лысина вздохнула с облегчением!",
-                                 "Народ добрый, пожалел меня!",
-                                 "Спасибо, что не стали шлёпать!",
-                                 "Моя лысина благодарит вас!",
-                                 "Ой, как хорошо, что пожалели!",
-                                 "Лысина рада остаться целой!"
-                             ])
-                    )
-                except Exception as e:
-                    logger.error(f"Ошибка отправки сообщения благодарности: {e}")
-            
-            asyncio.create_task(send_mercy_message())
-            
+            result_key = 'no'
+            action_key = 'no'
+            mishok_text = random.choice(VOTE_TEXTS['mishok_reactions']['no'])
         else:
-            result_text = "⚖️ *НИЧЬЯ!*"
-            action_text = "\n\n🤔 *САМ РЕШАЙ, ШЛЁПАТЬ ИЛИ НЕТ!*"
-            
-            async def send_tie_message():
-                await asyncio.sleep(1)
-                try:
-                    await context.bot.send_message(
-                        chat_id=chat_id,
-                        text="👴 *Мишок:* Голоса разделились поровну! Сам решай, что делать с моей лысиной! 🤔\n\n" +
-                             random.choice([
-                                 "Половина за, половина против... что же делать?",
-                                 "Решай сам, шлёпать или нет!",
-                                 "Голоса разделились 50/50! Твоя очередь решать!",
-                                 "Ничья! Теперь ты решаешь судьбу моей лысины!",
-                                 "50 на 50! Выбор за тобой!",
-                                 "Равные силы! Ты — решающий голос!",
-                                 "Патовая ситуация! Твоя очередь!",
-                                 "Голоса уравнялись! Что решишь?",
-                                 "Ничья в голосовании! Твой ход!",
-                                 "Равновесие! Теперь ты выбираешь!"
-                             ])
-                    )
-                except Exception as e:
-                    logger.error(f"Ошибка отправки сообщения о ничье: {e}")
-            
-            asyncio.create_task(send_tie_message())
+            result_key = 'tie'
+            action_key = 'tie'
+            mishok_text = random.choice(VOTE_TEXTS['mishok_reactions']['tie'])
         
-        text = (
-            f"🗳️ *ГОЛОСОВАНИЕ ЗАВЕРШЕНО*\n\n"
-            f"❓ *Вопрос:* {vote['question']}\n\n"
-            f"📊 *Результаты:*\n"
-            f"✅ За: {yes_count} голосов\n"
-            f"❌ Против: {no_count} голосов\n"
-            f"👥 Всего: {total_votes}\n\n"
-            f"{result_text}{action_text}"
-        )
+        text = format_vote_results(vote['question'], yes_count, no_count, result_key, action_key)
         
         try:
             await context.bot.edit_message_text(
@@ -538,7 +426,17 @@ async def finish_vote_task(vote_id: str, chat_id: int, message_id: int, context:
                     parse_mode=ParseMode.MARKDOWN
                 )
         
-        logger.info(f"Голосование завершено: {vote_id}, результат: {result_text}")
+        if mishok_text:
+            async def send_mishok_message():
+                await asyncio.sleep(1)
+                try:
+                    await context.bot.send_message(chat_id=chat_id, text=mishok_text)
+                except Exception as e:
+                    logger.error(f"Ошибка отправки сообщения Мишка: {e}")
+            
+            asyncio.create_task(send_mishok_message())
+        
+        logger.info(f"Голосование завершено: {vote_id}, результат: {result_key}")
         
     except Exception as e:
         logger.error(f"Ошибка завершения голосования: {e}")
@@ -554,12 +452,13 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         seconds = time_left % 60
         
         await msg.reply_text(
-            f"⚠️ В этом чате уже есть активное голосование:\n"
-            f"❓ {active_vote['question']}\n\n"
-            f"✅ За: {len(active_vote.get('votes_yes', []))}\n"
-            f"❌ Против: {len(active_vote.get('votes_no', []))}\n\n"
-            f"⏰ Осталось: {minutes:02d}:{seconds:02d}\n\n"
-            f"Дождитесь окончания или завершите командой /vote_end"
+            VOTE_TEXTS['active_exists'].format(
+                question=active_vote['question'],
+                yes_count=len(active_vote.get('votes_yes', [])),
+                no_count=len(active_vote.get('votes_no', [])),
+                minutes=minutes,
+                seconds=seconds
+            )
         )
         return
     
@@ -569,16 +468,10 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     vote_id = create_vote(msg.chat_id, question, duration_minutes=5)
     
     if not vote_id:
-        await msg.reply_text("❌ Не удалось создать голосование")
+        await msg.reply_text(ERROR_TEXTS['vote'])
         return
     
-    text = (
-        f"🗳️ *ГОЛОСОВАНИЕ*\n\n"
-        f"❓ *Вопрос:* {question_safe}\n\n"
-        f"✅ *За:* 0 голосов\n"
-        f"❌ *Против:* 0 голосов\n\n"
-        f"⏰ *Завершится через 5 минут*"
-    )
+    text = format_vote_text(question_safe, 0, 0)
     
     sent_message = await msg.reply_text(
         text, 
@@ -598,7 +491,7 @@ async def vote_end(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     active_vote = get_active_chat_vote(msg.chat_id)
     
     if not active_vote:
-        await msg.reply_text("⚠️ В этом чате нет активных голосований")
+        await msg.reply_text(ERROR_TEXTS['vote_not_found'])
         return
     
     from config import ADMIN_ID
@@ -610,7 +503,7 @@ async def vote_end(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         creator_id = None
     
     if user.id != ADMIN_ID and (creator_id and user.id != creator_id):
-        await msg.reply_text("❌ Только создатель голосования или администратор может завершить голосование")
+        await msg.reply_text(ERROR_TEXTS['vote_permission'])
         return
     
     await finish_vote_task(active_vote["id"], msg.chat_id, active_vote.get("message_id"), context)
@@ -621,12 +514,11 @@ def get_vote_message_text(vote_data):
     minutes = time_left // 60
     seconds = time_left % 60
     
-    return (
-        f"🗳️ *ГОЛОСОВАНИЕ*\n\n"
-        f"❓ *Вопрос:* {vote_data['question']}\n\n"
-        f"✅ *За:* {len(vote_data.get('votes_yes', []))} голосов\n"
-        f"❌ *Против:* {len(vote_data.get('votes_no', []))} голосов\n\n"
-        f"⏰ *Осталось:* {minutes:02d}:{seconds:02d}"
+    return format_vote_text(
+        vote_data['question'],
+        len(vote_data.get('votes_yes', [])),
+        len(vote_data.get('votes_no', [])),
+        action=f"Осталось: {minutes:02d}:{seconds:02d}"
     )
 
 async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_type: str):
@@ -640,22 +532,22 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
         
         active_vote = get_active_chat_vote(query.message.chat.id)
         if not active_vote:
-            await query.answer("❌ Нет активного голосования", show_alert=True)
+            await query.answer(ERROR_TEXTS['vote_active'], show_alert=True)
             return
         
         if vote_type not in ["yes", "no"]:
-            await query.answer("❌ Неизвестный тип голоса", show_alert=True)
+            await query.answer(ERROR_TEXTS['vote_type'], show_alert=True)
             return
         
         success = add_user_vote(active_vote["id"], user.id, vote_type)
         
         if not success:
-            await query.answer("❌ Ошибка голосования", show_alert=True)
+            await query.answer(ERROR_TEXTS['vote_error'], show_alert=True)
             return
         
         active_vote = get_vote(active_vote["id"])
         if not active_vote:
-            await query.answer("❌ Голосование не найдено", show_alert=True)
+            await query.answer(ERROR_TEXTS['vote_not_found_alert'], show_alert=True)
             return
         
         vote_text = get_vote_message_text(active_vote)
@@ -670,39 +562,21 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
             logger.error(f"Ошибка обновления сообщения: {e}")
         
         if vote_type == "yes":
-            await query.answer("✅ Ваш голос 'ЗА' учтён!")
+            await query.answer(ERROR_TEXTS['vote_counted_yes'])
         else:
-            await query.answer("✅ Ваш голос 'ПРОТИВ' учтён!")
+            await query.answer(ERROR_TEXTS['vote_counted_no'])
         
     except Exception as e:
         logger.error(f"Ошибка обработки голоса: {e}", exc_info=True)
         try:
-            await query.answer("❌ Ошибка при голосовании", show_alert=True)
+            await query.answer(ERROR_TEXTS['vote_processing_alert'], show_alert=True)
         except:
             pass
 
 @command_handler
 @with_message
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    text = """🆘 ПОМОЩЬ
-
-Основные команды:
-/start — Начало работы
-/shlep — Шлёпнуть Мишка
-/stats — Глобальная статистика
-/level — Твой уровень
-/my_stats — Детальная статистика
-/mishok — О Мишке
-
-Для чатов:
-/chat_stats — Статистика чата
-/chat_top — Топ игроков чата
-/vote — Голосование
-/vote_end — Завершить голосование (создатель/админ)
-
-Новое: Шлёпай в одном окне без спама сообщений!"""
-    
-    await msg.reply_text(text)
+    await msg.reply_text(COMMAND_TEXTS['help'])
 
 @command_handler
 @with_message
@@ -730,7 +604,7 @@ async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @command_handler
 @admin_only
 async def backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    status_msg = await msg.reply_text("💾 Создание бэкапа...")
+    status_msg = await msg.reply_text(ADMIN_TEXTS['backup'])
     
     await send_progress(status_msg, "Создание безопасного бэкапа", 0.3)
     success, backup_path = create_safe_backup("manual")
@@ -741,10 +615,10 @@ async def backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         size = os.path.getsize(backup_path)
         backups = get_backup_list(5)
         
-        text = "✅ БЭКАП СОЗДАН!\n\n"
-        text += f"📁 Файл: {os.path.basename(backup_path)}\n"
-        text += f"📏 Размер: {format_file_size(size)}\n\n"
-        text += "📦 ПОСЛЕДНИЕ БЭКАПЫ:\n"
+        text = ADMIN_TEXTS['backup_result']['success']
+        text += ADMIN_TEXTS['backup_result']['file'].format(name=os.path.basename(backup_path))
+        text += ADMIN_TEXTS['backup_result']['size'].format(size=format_file_size(size))
+        text += ADMIN_TEXTS['backup_result']['list_header']
         
         for i, backup in enumerate(backups, 1):
             age = backup['age_days']
@@ -752,7 +626,7 @@ async def backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         
         await status_msg.edit_text(text)
     else:
-        await status_msg.edit_text(f"❌ Ошибка создания бэкапа: {backup_path}")
+        await status_msg.edit_text(ADMIN_TEXTS['backup_result']['error'].format(error=backup_path))
 
 @command_handler
 @with_message
@@ -784,7 +658,7 @@ async def check_data(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         
         await msg.reply_text(text)
     except Exception as e:
-        await msg.reply_text(f"❌ Ошибка проверки: {str(e)}")
+        await msg.reply_text(ERROR_TEXTS['data_check'].format(error=str(e)))
 
 @command_handler
 @admin_only
@@ -802,15 +676,13 @@ async def repair_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         from database import load_data
         data = load_data()
         
-        text = (
-            "✅ СТРУКТУРА ДАННЫХ ВОССТАНОВЛЕНА\n\n"
-            f"👥 Пользователей: {len(data.get('users', {}))}\n"
-            f"💬 Чатов: {len(data.get('chats', {}))}\n"
-            f"👊 Всего шлёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n\n"
-            "Ошибки больше не должны возникать!"
+        text = ADMIN_TEXTS['repair_result']['success'].format(
+            users=len(data.get('users', {})),
+            chats=len(data.get('chats', {})),
+            shleps=data.get('global_stats', {}).get('total_shleps', 0)
         )
     else:
-        text = "❌ Не удалось восстановить структуру данных"
+        text = ADMIN_TEXTS['repair_result']['error']
     
     await status_msg.edit_text(text)
 
@@ -849,7 +721,12 @@ async def handle_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYP
         title, advice = level_title(lvl['level'])
         bar = create_progress_bar(lvl['progress'])
         
-        text = f"🎯 ТВОЙ УРОВЕНЬ\n👤 Игрок: {user_info['name']}\n📊 Шлёпков: {format_number(cnt)}\n🎯 Уровень: {lvl['level']} ({title})\n{bar} {lvl['progress']}%\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n🎯 До след. уровня: {lvl['next']} шлёпков\n💡 {advice}"
+        last_date = last.strftime('%d.%m.%Y %H:%M') if last else None
+        text = format_level_text(
+            user_info['name'], format_number(cnt), lvl['level'], title, 
+            bar, lvl['progress'], lvl['min'], lvl['max'], 
+            lvl['next'], advice, last_date
+        )
         
         await query.message.edit_text(text, reply_markup=get_shlep_session_keyboard())
     elif action == "shlep_stats":
@@ -861,7 +738,7 @@ async def handle_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYP
             await cache.set("global_stats", (total, last, maxd, maxu, maxdt))
         
         maxu_safe = escape_text(maxu or 'Нет')
-        text = f"📊 ГЛОБАЛЬНАЯ СТАТИСТИКА\n👑 РЕКОРД УРОНА: {maxd} единиц\n👤 Рекордсмен: {maxu_safe}\n📅 Дата рекорда: {maxdt.strftime('%d.%m.%Y %H:%M') if maxdt else '—'}\n🔢 Всего шлёпков: {format_number(total)}\n⏰ Последний шлёпок: {last.strftime('%d.%m.%Y %H:%M') if last else 'нет'}"
+        text = format_stats_text(total, last, maxd, maxu_safe, maxdt)
         
         await query.message.edit_text(text, reply_markup=get_shlep_session_keyboard())
     elif action == "shlep_my_stats":
@@ -870,7 +747,19 @@ async def handle_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYP
         lvl = calc_level(cnt)
         compare_stats = get_comparison_stats(user.id)
         
-        text = f"📈 ТВОЯ ДЕТАЛЬНАЯ СТАТИСТИКА\n👤 Игрок: {user.first_name}\n📊 Всего шлёпков: {format_number(cnt)}\n🎯 Уровень: {lvl['level']}\n⚡ Диапазон урона: {lvl['min']}-{lvl['max']}\n📊 Сравнение с другими:\n👥 Всего игроков: {compare_stats.get('total_users', 0)}\n📈 Среднее на игрока: {compare_stats.get('avg_shleps', 0)}\n🏆 Твой ранг: {compare_stats.get('rank', 1)}\n📊 Лучше чем: {compare_stats.get('percentile', 0)}% игроков"
+        text = f"{COMMAND_TEXTS['my_stats']['header']}\n"
+        text += f"{COMMAND_TEXTS['my_stats']['player'].format(name=user.first_name)}\n"
+        text += f"{COMMAND_TEXTS['my_stats']['shlep_count'].format(count=format_number(cnt))}\n"
+        text += f"{COMMAND_TEXTS['my_stats']['level'].format(level=lvl['level'])}\n"
+        text += f"{COMMAND_TEXTS['my_stats']['damage_range'].format(min=lvl['min'], max=lvl['max'])}\n"
+        text += f"{COMMAND_TEXTS['my_stats']['comparison_header']}\n"
+        text += f"{COMMAND_TEXTS['my_stats']['total_users'].format(count=compare_stats.get('total_users', 0))}\n"
+        text += f"{COMMAND_TEXTS['my_stats']['avg_shleps'].format(avg=compare_stats.get('avg_shleps', 0))}\n"
+        text += f"{COMMAND_TEXTS['my_stats']['rank'].format(rank=compare_stats.get('rank', 1))}\n"
+        text += f"{COMMAND_TEXTS['my_stats']['percentile'].format(percent=compare_stats.get('percentile', 0))}\n"
+        
+        if last:
+            text += f"\n{COMMAND_TEXTS['my_stats']['last_shlep'].format(date=last.strftime('%d.%m.%Y %H:%M'))}"
         
         await query.message.edit_text(text, reply_markup=get_shlep_session_keyboard())
     elif action == "shlep_menu":
@@ -882,15 +771,14 @@ async def handle_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYP
 @admin_only
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     await msg.reply_text(
-        "⚙️ АДМИН-ПАНЕЛЬ\n\n"
-        "Выберите действие:",
+        ADMIN_TEXTS['panel'],
         reply_markup=get_admin_keyboard()
     )
 
 @command_handler
 @admin_only
 async def admin_health(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    await msg.edit_text("🩺 Проверяю здоровье системы...")
+    await msg.edit_text(ADMIN_TEXTS['health_check'])
     
     try:
         import platform
@@ -909,40 +797,43 @@ async def admin_health(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         except:
             disk_info = "Информация о диске: доступно"
         
-        report = "🏥 ОТЧЕТ О ЗДОРОВЬЕ СИСТЕМЫ\n\n"
+        report = ADMIN_TEXTS['health_report']['header']
         
-        report += f"🐍 Python: {platform.python_version()}\n"
-        report += f"🖥️ Система: {platform.system()} {platform.machine()}\n"
-        report += f"💾 {disk_info}\n"
+        report += ADMIN_TEXTS['health_report']['python'].format(version=platform.python_version()) + "\n"
+        report += ADMIN_TEXTS['health_report']['system'].format(system=platform.system(), machine=platform.machine()) + "\n"
+        report += ADMIN_TEXTS['health_report']['disk'].format(info=disk_info) + "\n"
         
         if db_stats.get("exists"):
-            report += f"🗃️ База данных: {db_stats.get('size', 0)/1024:.1f} KB\n"
-            report += f"👥 Пользователей: {db_stats.get('users', 0)}\n"
-            report += f"👊 Шлёпков: {db_stats.get('total_shleps', 0)}\n"
+            report += ADMIN_TEXTS['health_report']['db_exists'].format(size=db_stats.get('size', 0)/1024) + "\n"
+            report += ADMIN_TEXTS['health_report']['users'].format(count=db_stats.get('users', 0)) + "\n"
+            report += ADMIN_TEXTS['health_report']['shleps'].format(count=db_stats.get('total_shleps', 0)) + "\n"
         else:
-            report += "🗃️ База данных: ❌ Не найдена\n"
+            report += ADMIN_TEXTS['health_report']['db_not_exists'] + "\n"
         
-        report += f"🔍 Целостность: {len(integrity['errors'])} ошибок, {len(integrity['warnings'])} предупреждений\n"
+        report += ADMIN_TEXTS['health_report']['integrity'].format(
+            errors=len(integrity['errors']), 
+            warnings=len(integrity['warnings'])
+        ) + "\n"
         
         all_good = (not integrity['errors'] and db_stats.get("exists", False))
         
         if all_good:
-            report += "\n🎉 ВСЕ СИСТЕМЫ РАБОТАЮТ НОРМАЛЬНО"
+            report += ADMIN_TEXTS['health_report']['all_good']
         else:
-            report += "\n⚠️ ТРЕБУЕТСЯ ВНИМАНИЕ АДМИНИСТРАТОРА"
+            report += ADMIN_TEXTS['health_report']['attention']
         
         await status_msg.edit_text(report, reply_markup=get_admin_keyboard())
         
     except Exception as e:
         await msg.edit_text(
-            f"❌ Ошибка проверки здоровья: {str(e)[:200]}",
+            ERROR_TEXTS['health_check'].format(error=str(e)[:200]),
             reply_markup=get_admin_keyboard()
         )
 
 @command_handler
 @admin_only
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    await msg.edit_text("📊 Собираю статистику пользователей...")
+    await msg.edit_text(ADMIN_TEXTS['user_stats'])
     
     from database import load_data
     
@@ -984,13 +875,14 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     
     avg_shleps = total_shleps / len(users) if users else 0
     
-    report = f"👥 СТАТИСТИКА ПОЛЬЗОВАТЕЛЕЙ\n\n"
-    report += f"📈 Всего пользователей: {len(users)}\n"
-    report += f"🎯 Активных сегодня: {active_today}\n"
-    report += f"📅 Активных за неделю: {active_week}\n"
-    report += f"👊 Всего шлёпков: {total_shleps}\n"
-    report += f"📊 Среднее на пользователя: {avg_shleps:.1f}\n"
-    report += f"🏆 Рекордсмен: {max_user} ({max_shleps} шлёпков)\n\n"
+    report = ADMIN_TEXTS['user_stats_report']['header']
+    
+    report += ADMIN_TEXTS['user_stats_report']['total_users'].format(count=len(users)) + "\n"
+    report += ADMIN_TEXTS['user_stats_report']['active_today'].format(count=active_today) + "\n"
+    report += ADMIN_TEXTS['user_stats_report']['active_week'].format(count=active_week) + "\n"
+    report += ADMIN_TEXTS['user_stats_report']['total_shleps'].format(count=total_shleps) + "\n"
+    report += ADMIN_TEXTS['user_stats_report']['avg_shleps'].format(avg=avg_shleps) + "\n"
+    report += ADMIN_TEXTS['user_stats_report']['record_user'].format(user=max_user, count=max_shleps) + "\n\n"
     
     level_distribution = {}
     for user_data in users.values():
@@ -999,11 +891,13 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         level_key = f"{min(level, 100)}+" if level > 100 else str(level)
         level_distribution[level_key] = level_distribution.get(level_key, 0) + 1
     
-    report += "🎯 РАСПРЕДЕЛЕНИЕ ПО УРОВНЯМ:\n"
+    report += ADMIN_TEXTS['user_stats_report']['levels_header'] + "\n"
     for level, count in sorted(level_distribution.items(), key=lambda x: int(x[0].replace('+', ''))):
         percentage = (count / len(users)) * 100
         bar = create_progress_bar(percentage)
-        report += f"Уровень {level}: {bar} {percentage:.1f}% ({count} чел.)\n"
+        report += ADMIN_TEXTS['user_stats_report']['level_item'].format(
+            level=level, bar=bar, percent=percentage, count=count
+        ) + "\n"
     
     await msg.edit_text(report, reply_markup=get_admin_keyboard())
 
@@ -1011,13 +905,12 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @admin_only
 async def admin_cleanup(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     await msg.edit_text(
-        "🧹 ОЧИСТКА СИСТЕМЫ\n\n"
-        "Выберите тип очистки:",
+        ADMIN_TEXTS['cleanup'],
         reply_markup=get_cleanup_keyboard()
     )
 
 async def perform_cleanup(message, cleanup_type):
-    await message.edit_text(f"🧹 Очистка {cleanup_type}...")
+    await message.edit_text(ADMIN_TEXTS['cleanup_progress'].format(type=cleanup_type))
     
     import glob
     
@@ -1065,12 +958,7 @@ async def perform_cleanup(message, cleanup_type):
     
     freed_mb = total_freed / (1024 * 1024)
     
-    result_text = (
-        f"✅ ОЧИСТКА ЗАВЕРШЕНА\n\n"
-        f"🗑️ Удалено файлов: {total_cleaned}\n"
-        f"💾 Освобождено: {freed_mb:.2f} MB\n\n"
-        f"Система готова к работе!"
-    )
+    result_text = ADMIN_TEXTS['cleanup_result'].format(count=total_cleaned, mb=freed_mb)
     
     await message.edit_text(result_text, reply_markup=get_admin_keyboard())
 
@@ -1089,7 +977,7 @@ async def cleanup_action(update: Update, context: ContextTypes.DEFAULT_TYPE, act
         await perform_cleanup(query.message, "backups")
     elif action == "back":
         await query.message.edit_text(
-            "⚙️ АДМИН-ПАНЕЛЬ\n\nВыберите действие:",
+            ADMIN_TEXTS['panel'],
             reply_markup=get_admin_keyboard()
         )
 
@@ -1103,7 +991,7 @@ async def admin_backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await backup_cmd_internal(query.message)
 
 async def backup_cmd_internal(message):
-    await message.edit_text("💾 Создание бэкапа...")
+    await message.edit_text(ADMIN_TEXTS['backup'])
     
     success, backup_path = create_safe_backup("admin_panel")
     
@@ -1111,16 +999,16 @@ async def backup_cmd_internal(message):
         size = os.path.getsize(backup_path)
         backups = get_backup_list(3)
         
-        text = "✅ БЭКАП СОЗДАН!\n\n"
-        text += f"📁 Файл: {os.path.basename(backup_path)}\n"
-        text += f"📏 Размер: {format_file_size(size)}\n\n"
-        text += "📦 ПОСЛЕДНИЕ БЭКАПЫ:\n"
+        text = ADMIN_TEXTS['backup_result']['success']
+        text += ADMIN_TEXTS['backup_result']['file'].format(name=os.path.basename(backup_path))
+        text += ADMIN_TEXTS['backup_result']['size'].format(size=format_file_size(size))
+        text += ADMIN_TEXTS['backup_result']['list_header']
         
         for i, backup in enumerate(backups, 1):
             age = backup['age_days']
             text += f"{i}. {backup['name']} ({format_file_size(backup['size'])}), {age} дн. назад\n"
     else:
-        text = f"❌ Ошибка создания бэкапа: {backup_path}"
+        text = ADMIN_TEXTS['backup_result']['error'].format(error=backup_path)
     
     await message.edit_text(text, reply_markup=get_admin_keyboard())
 
@@ -1128,9 +1016,7 @@ async def backup_cmd_internal(message):
 @admin_only
 async def admin_repair_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     await msg.edit_text(
-        "⚠️ ПОДТВЕРЖДЕНИЕ ВОССТАНОВЛЕНИЯ\n\n"
-        "Вы уверены, что хотите восстановить структуру данных?\n"
-        "Перед восстановлением будет создан бэкап.",
+        ADMIN_TEXTS['repair_confirm'],
         reply_markup=get_confirmation_keyboard("восстановить")
     )
 
@@ -1146,26 +1032,28 @@ async def admin_storage_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db_stats = get_database_size()
     
     if "error" in db_stats:
-        text = f"❌ Ошибка получения статистики: {db_stats['error']}"
+        text = ADMIN_TEXTS['storage_stats']['error'].format(error=db_stats['error'])
     else:
-        text = "📊 СТАТИСТИКА ХРАНИЛИЩА\n\n"
+        text = ADMIN_TEXTS['storage_stats']['header']
         
         if db_stats.get('exists'):
-            text += f"🗃️ База данных: {db_stats['size']/1024:.1f} KB\n"
-            text += f"👥 Пользователей: {db_stats['users']}\n"
-            text += f"👊 Шлёпков: {db_stats['total_shleps']}\n"
-            text += f"💬 Чатов: {db_stats['chats']}\n"
+            text += ADMIN_TEXTS['storage_stats']['db_exists'].format(
+                size=db_stats['size']/1024,
+                users=db_stats['users'],
+                shleps=db_stats['total_shleps'],
+                chats=db_stats['chats']
+            )
             if db_stats.get('last_modified'):
-                text += f"📅 Изменена: {db_stats['last_modified'].strftime('%d.%m.%Y %H:%M')}\n"
+                text += f"\n{ADMIN_TEXTS['storage_stats']['db_modified'].format(date=db_stats['last_modified'].strftime('%d.%m.%Y %H:%M'))}"
         else:
-            text += "🗃️ База данных: ❌ Не найдена\n"
+            text += ADMIN_TEXTS['storage_stats']['db_not_exists']
         
         try:
             statvfs = os.statvfs('.')
             free_gb = (statvfs.f_bavail * statvfs.f_frsize) / (1024**3)
-            text += f"\n💾 Свободное место на диске: {free_gb:.1f} GB"
+            text += ADMIN_TEXTS['storage_stats']['disk'].format(gb=free_gb)
         except:
-            text += "\n💾 Информация о диске: доступно"
+            text += ADMIN_TEXTS['storage_stats']['disk_error']
     
     await query.message.edit_text(text, reply_markup=get_admin_keyboard())
 
@@ -1178,7 +1066,7 @@ async def admin_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.delete()
 
 async def perform_repair(message):
-    await message.edit_text("🔧 Восстановление структуры...")
+    await message.edit_text(ADMIN_TEXTS['repair'])
     
     from database import repair_data_structure, create_safe_backup
     
@@ -1194,15 +1082,13 @@ async def perform_repair(message):
         from database import load_data
         data = load_data()
         
-        text = (
-            "✅ СТРУКТУРА ДАННЫХ ВОССТАНОВЛЕНА\n\n"
-            f"👥 Пользователей: {len(data.get('users', {}))}\n"
-            f"💬 Чатов: {len(data.get('chats', {}))}\n"
-            f"👊 Всего шлёпков: {data.get('global_stats', {}).get('total_shleps', 0)}\n\n"
-            "Ошибки должны быть исправлены!"
+        text = ADMIN_TEXTS['repair_result']['success'].format(
+            users=len(data.get('users', {})),
+            chats=len(data.get('chats', {})),
+            shleps=data.get('global_stats', {}).get('total_shleps', 0)
         )
     else:
-        text = "❌ Не удалось восстановить структуру данных"
+        text = ADMIN_TEXTS['repair_result']['error']
     
     await message.edit_text(text, reply_markup=get_admin_keyboard())
 
@@ -1239,7 +1125,7 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_vote(update, context, vote_type)
     
     elif data.startswith("duel_"):
-        await query.answer("❌ Система дуэлей временно отключена", show_alert=True)
+        await query.answer(ERROR_TEXTS['duel_disabled'], show_alert=True)
         try:
             await query.message.edit_reply_markup(reply_markup=None)
         except:
@@ -1273,12 +1159,12 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif data == "cancel_action":
         await query.message.edit_text(
-            "❌ Действие отменено",
+            ADMIN_TEXTS['cancel'],
             reply_markup=get_admin_keyboard()
         )
     
     else:
-        await query.message.reply_text("⚙️ Эта функция в разработке")
+        await query.message.reply_text(ERROR_TEXTS['function'])
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message:
@@ -1302,42 +1188,24 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             logger.warning(f"Неизвестная кнопка: {text}")
             if update.effective_chat.type == "private":
-                await update.message.reply_text(
-                    "Неизвестная команда. Используйте /help для списка команд."
-                )
+                await update.message.reply_text(ERROR_TEXTS['unknown_button'])
     except Exception as e:
         logger.error(f"Ошибка в button_handler: {e}", exc_info=True)
         if update.effective_chat.type == "private":
-            await update.message.reply_text(
-                "⚠️ Произошла ошибка при обработке команды. Попробуйте ещё раз."
-            )
+            await update.message.reply_text(ERROR_TEXTS['command'])
 
 async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message and update.message.new_chat_members:
         for m in update.message.new_chat_members:
             if m.id == context.bot.id:
-                await update.message.reply_text(
-                    "👴 Мишок Лысый в чате!\n\n"
-                    "Теперь можно шлёпать меня по лысине прямо здесь!\n"
-                    "Основные команды:\n"
-                    "/shlep — шлёпнуть Мишка\n"
-                    "/stats — статистика\n"
-                    "/level — уровень\n"
-                    "/my_stats — детальная статистика\n"
-                    "Для чата:\n"
-                    "/chat_stats — статистика чата\n"
-                    "/chat_top — топ игроков\n"
-                    "/vote — голосование\n"
-                    "/vote_end — завершить голосование (создатель/админ)\n"
-                    "Прогресс сохраняется! 💾"
-                )
+                await update.message.reply_text(COMMAND_TEXTS['welcome_group'])
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Ошибка: {context.error}", exc_info=True)
 
 def main():
     if not BOT_TOKEN:
-        logger.error("❌ Нет токена бота! Установите BOT_TOKEN в config.py или .env файле")
+        logger.error(ERROR_TEXTS['no_token'])
         sys.exit(1)
     
     app = Application.builder().token(BOT_TOKEN).build()
@@ -1387,7 +1255,7 @@ def main():
             allowed_updates=Update.ALL_TYPES
         )
     except Exception as e:
-        logger.error(f"❌ Ошибка при запуске бота: {e}")
+        logger.error(ERROR_TEXTS['bot'].format(error=e))
         sys.exit(1)
 
 if __name__ == "__main__":
