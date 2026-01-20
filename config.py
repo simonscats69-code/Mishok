@@ -24,7 +24,6 @@ MAX_CACHE_SIZE = int(os.getenv("MAX_CACHE_SIZE", "1000"))
 LOG_CACHE_STATS = os.getenv("LOG_CACHE_STATS", "true").lower() == "true"
 
 CHAT_VOTE_DURATION = int(os.getenv("CHAT_VOTE_DURATION", "300"))
-CHAT_DUEL_DURATION = int(os.getenv("CHAT_DUEL_DURATION", "300"))
 CHAT_NOTIFICATIONS_ENABLED = os.getenv("CHAT_NOTIFICATIONS_ENABLED", "true").lower() == "true"
 
 BACKUP_ENABLED = os.getenv("BACKUP_ENABLED", "true").lower() == "true"
@@ -138,7 +137,7 @@ MISHOK_REACTIONS = [
     "🏛️ Занесём в анналы: «День, когда лысина выстояла». Опять.",
 ]
 
-MISHOK_INTRO = """👴 *Мишок Лысый* — легендарный персонаж!
+MISHOK_INTRO = """👴 *Мишок Лысый — легендарный персонаж!*
 
 *Немного истории:*
 Я — старый, мудрый и слегка лысый медведь, который любит, когда его шлёпают по лысине! Каждый шлёпок делает меня мудрее и сильнее. 
