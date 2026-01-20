@@ -511,18 +511,47 @@ def get_user_stats(user_id: int) -> Tuple[Optional[str], int, Optional[datetime]
     try:
         data = load_data()
         
-        user_data = data["users"].get(str(user_id))
+        user_id_str = str(user_id)
+        user_data = data["users"].get(user_id_str)
+        
         if not user_data:
             return (None, 0, None)
         
-        last_shlep = user_data.get("last_shlep")
+        # Получаем количество шлёпков
+        shlep_count = user_data.get("total_shleps", 0)
+        
+        # Преобразуем в int, если нужно
+        if isinstance(shlep_count, str):
+            try:
+                shlep_count = int(shlep_count)
+            except:
+                shlep_count = 0
+        elif not isinstance(shlep_count, int):
+            shlep_count = int(shlep_count) if shlep_count else 0
+        
+        # Получаем и преобразуем дату последнего шлёпка
+        last_shlep = None
+        last_shlep_str = user_data.get("last_shlep")
+        
+        if last_shlep_str:
+            try:
+                # Убираем возможный Z и приводим к ISO формату
+                if 'Z' in last_shlep_str:
+                    last_shlep_str = last_shlep_str.replace('Z', '+00:00')
+                
+                # Преобразуем строку в datetime
+                last_shlep = datetime.fromisoformat(last_shlep_str)
+            except Exception as e:
+                logger.warning(f"Не удалось преобразовать дату для user {user_id}: {last_shlep_str}, ошибка: {e}")
+                last_shlep = None
+        
         return (
-            user_data.get("username"),
-            user_data.get("total_shleps", 0),
-            datetime.fromisoformat(last_shlep) if last_shlep else None
+            user_data.get("username", f"User_{user_id}"),
+            shlep_count,
+            last_shlep
         )
     except Exception as e:
-        logger.error(DATABASE_TEXTS['user_stats_error'].format(error=e))
+        logger.error(f"Ошибка в get_user_stats для user_id={user_id}: {e}")
         return (None, 0, None)
 
 def get_chat_stats(chat_id: int) -> Dict[str, Any]:
