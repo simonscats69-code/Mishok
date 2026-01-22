@@ -41,62 +41,6 @@ logger = logging.getLogger(__name__)
 
 _user_queues: Dict[int, Deque] = {}
 _user_processing: Dict[int, bool] = {}
-_user_last_click: Dict[int, float] = {}
-
-async def add_to_queue(user_id: int, callback):
-    if user_id not in _user_queues:
-        _user_queues[user_id] = deque()
-        _user_processing[user_id] = False
-    
-    _user_queues[user_id].append(callback)
-    _user_last_click[user_id] = asyncio.get_event_loop().time()
-    
-    if not _user_processing[user_id]:
-        asyncio.create_task(process_user_queue(user_id))
-
-async def process_user_queue(user_id: int):
-    if user_id not in _user_queues:
-        _user_processing[user_id] = False
-        return
-    
-    _user_processing[user_id] = True
-    
-    try:
-        while _user_queues[user_id]:
-            callback = _user_queues[user_id].popleft()
-            
-            try:
-                await callback()
-            except Exception as e:
-                logger.error(f"Ошибка в обработке клика: {e}")
-            
-            await asyncio.sleep(0.05)
-            
-            if not _user_queues[user_id]:
-                break
-                
-    finally:
-        _user_processing[user_id] = False
-        if user_id in _user_queues and _user_queues[user_id]:
-            asyncio.create_task(process_user_queue(user_id))
-
-async def cleanup_old_queues():
-    current_time = asyncio.get_event_loop().time()
-    
-    users_to_remove = []
-    for user_id, last_click in _user_last_click.items():
-        if current_time - last_click > 300:
-            users_to_remove.append(user_id)
-    
-    for user_id in users_to_remove:
-        _user_queues.pop(user_id, None)
-        _user_processing.pop(user_id, None)
-        _user_last_click.pop(user_id, None)
-
-async def periodic_cleanup():
-    while True:
-        await asyncio.sleep(300)
-        await cleanup_old_queues()
 
 def escape_text(text: str) -> str:
     return escape_markdown(text or "", version=1)
@@ -286,6 +230,32 @@ async def shlep_task(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_me
     except Exception as e:
         logger.error(f"Ошибка в shlep_task: {e}", exc_info=True)
 
+async def process_user_queue(user_id: int):
+    if user_id not in _user_queues:
+        _user_processing[user_id] = False
+        return
+    
+    _user_processing[user_id] = True
+    
+    try:
+        while _user_queues[user_id]:
+            callback = _user_queues[user_id].popleft()
+            
+            try:
+                await callback()
+            except Exception as e:
+                logger.error(f"Ошибка в обработке клика: {e}")
+            
+            await asyncio.sleep(0.05)
+            
+            if not _user_queues[user_id]:
+                break
+                
+    finally:
+        _user_processing[user_id] = False
+        if user_id in _user_queues and _user_queues[user_id]:
+            asyncio.create_task(process_user_queue(user_id))
+
 async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_message=None):
     try:
         msg = get_message(update)
@@ -294,10 +264,17 @@ async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit
         
         user = update.effective_user
         
+        if user.id not in _user_queues:
+            _user_queues[user.id] = deque()
+            _user_processing[user.id] = False
+        
         async def execute_shlep():
             await shlep_task(update, context, edit_message)
         
-        await add_to_queue(user.id, execute_shlep)
+        _user_queues[user.id].append(execute_shlep)
+        
+        if not _user_processing[user.id]:
+            asyncio.create_task(process_user_queue(user.id))
         
         if update.callback_query:
             try:
@@ -1405,8 +1382,6 @@ def main():
     print(f"• Админ-панель: /admin")
     print(f"• Бот готов к работе!")
     print("=" * 50)
-    
-    asyncio.create_task(periodic_cleanup())
     
     try:
         app.run_polling(
