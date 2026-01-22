@@ -155,9 +155,14 @@ async def send_progress(message, text, progress=0):
     status_text = f"🔄 {text}\n[{bar}] {percentage}%"
     
     try:
-        await message.edit_text(status_text)
+        current_text = message.text or ""
+        if status_text != current_text:
+            await message.edit_text(status_text)
     except:
-        await message.reply_text(status_text)
+        try:
+            await message.reply_text(status_text)
+        except:
+            pass
     
     return percentage
 
@@ -209,23 +214,28 @@ async def shlep_task(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_me
         lvl = calc_level(cnt)
         title, _ = level_title(lvl['level'])
         
-        text = f"{get_reaction()}{rec}\n💥 Урон: {total_damage}\n👤 {user_info['name']}: {cnt} шлёпков\n🎯 Уровень {lvl['level']} ({title})"
+        new_text = f"{get_reaction()}{rec}\n💥 Урон: {total_damage}\n👤 {user_info['name']}: {cnt} шлёпков\n🎯 Уровень {lvl['level']} ({title})"
         
         kb = get_shlep_session_keyboard()
         
         if edit_message:
             try:
-                await edit_message.edit_text(text, reply_markup=kb)
+                current_text = edit_message.text or ""
+                if new_text != current_text:
+                    await edit_message.edit_text(new_text, reply_markup=kb)
+                elif update.callback_query:
+                    await update.callback_query.answer("✅")
             except Exception as e:
                 if "Message is not modified" in str(e):
-                    pass
+                    if update.callback_query:
+                        await update.callback_query.answer("✅")
                 elif "Message to edit not found" in str(e):
-                    await msg.reply_text(text, reply_markup=kb)
+                    await msg.reply_text(new_text, reply_markup=kb)
                 else:
                     logger.warning(f"Не удалось отредактировать сообщение: {e}")
-                    await msg.reply_text(text, reply_markup=kb)
+                    await msg.reply_text(new_text, reply_markup=kb)
         else:
-            await msg.reply_text(text, reply_markup=kb)
+            await msg.reply_text(new_text, reply_markup=kb)
         
     except Exception as e:
         logger.error(f"Ошибка в shlep_task: {e}", exc_info=True)
@@ -1169,14 +1179,20 @@ async def admin_close(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.message.delete()
 
 async def perform_repair(message):
-    await message.edit_text(ADMIN_TEXTS['repair'])
+    try:
+        await message.edit_text(ADMIN_TEXTS['repair'])
+    except:
+        pass
     
     from database import repair_data_structure, create_safe_backup
     
     success_backup, backup_path = create_safe_backup("before_repair")
     
     if not success_backup:
-        await message.edit_text("⚠️ Не удалось создать бэкап перед восстановлением")
+        try:
+            await message.edit_text("⚠️ Не удалось создать бэкап перед восстановлением")
+        except:
+            pass
         return
     
     success = repair_data_structure()
@@ -1193,7 +1209,10 @@ async def perform_repair(message):
     else:
         text = ADMIN_TEXTS['repair_result']['error']
     
-    await message.edit_text(text, reply_markup=get_admin_keyboard())
+    try:
+        await message.edit_text(text, reply_markup=get_admin_keyboard())
+    except:
+        pass
 
 @command_handler
 @admin_only
