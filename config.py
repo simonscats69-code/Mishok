@@ -1,6 +1,5 @@
 import os
 from dotenv import load_dotenv
-import random
 
 load_dotenv()
 
@@ -22,35 +21,18 @@ CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "300"))
 MAX_CACHE_SIZE = int(os.getenv("MAX_CACHE_SIZE", "1000"))
 LOG_CACHE_STATS = os.getenv("LOG_CACHE_STATS", "false").lower() == "true"
 
-CHAT_VOTE_DURATION = int(os.getenv("CHAT_VOTE_DURATION", "300"))  # 5 минут
+CHAT_VOTE_DURATION = int(os.getenv("CHAT_VOTE_DURATION", "300"))
 CHAT_NOTIFICATIONS_ENABLED = os.getenv("CHAT_NOTIFICATIONS_ENABLED", "true").lower() == "true"
 
 BACKUP_ENABLED = os.getenv("BACKUP_ENABLED", "true").lower() == "true"
 BACKUP_RETENTION_DAYS = int(os.getenv("BACKUP_RETENTION_DAYS", "7"))
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
-AUTOSAVE_INTERVAL = int(os.getenv("AUTOSAVE_INTERVAL", "30"))  # Сохраняем каждые 30 секунд
+AUTOSAVE_INTERVAL = int(os.getenv("AUTOSAVE_INTERVAL", "30"))
 
 for directory in [os.path.dirname(DATA_FILE), BACKUP_PATH]:
     if directory and not os.path.exists(directory):
         try:
             os.makedirs(directory, exist_ok=True)
-            print(f"📁 Создана директория: {directory}")
-        except:
+        except OSError:
             pass
-
-# Импортируем тексты из texts.py
-from texts import CONFIG_MESSAGES, MISHOK_REACTIONS, MISHOK_INTRO
-
-# Используем тексты из texts.py
-print(CONFIG_MESSAGES['title'])
-print(CONFIG_MESSAGES['bot_token'].format(status='✅ Установлен' if BOT_TOKEN else '❌ НЕТ!'))
-print(CONFIG_MESSAGES['admin_id'].format(admin_id=ADMIN_ID))
-print(CONFIG_MESSAGES['paths_title'])
-print(CONFIG_MESSAGES['data_path'].format(path=DATA_PATH))
-print(CONFIG_MESSAGES['data_file'].format(file=DATA_FILE))
-print(CONFIG_MESSAGES['backup_path'].format(path=BACKUP_PATH))
-print(CONFIG_MESSAGES['log_file'].format(file=LOG_FILE))
-print(CONFIG_MESSAGES['autosave'].format(interval=AUTOSAVE_INTERVAL))
-print(CONFIG_MESSAGES['vote_duration'].format(duration=CHAT_VOTE_DURATION))
-print(CONFIG_MESSAGES['divider'])

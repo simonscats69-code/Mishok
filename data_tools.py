@@ -23,10 +23,8 @@ OLD_DATA_PATHS = [
     "app/mishok_data.json"
 ]
 
-print(DATA_TOOLS_TEXTS['title'])
-print(DATA_TOOLS_TEXTS['divider'])
-
-# ==================== ОБЩИЕ УТИЛИТЫ ====================
+if __name__ == "__main__":
+    # ==================== ОБЩИЕ УТИЛИТЫ ====================
 
 def create_backup(description: str = "") -> tuple:
     """Создать резервную копию данных"""
@@ -101,7 +99,8 @@ def migrate_file(old_paths, new_path, file_type="данные"):
                 else:
                     shutil.copy2(old_path, new_path)
                 
-                backup_name = f"{old_path}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                backup_name = os.path.join(BACKUP_PATH, f"{os.path.basename(old_path)}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+                os.makedirs(BACKUP_PATH, exist_ok=True)
                 shutil.copy2(old_path, backup_name)
                 
                 print(DATA_TOOLS_TEXTS['migrated_file'].format(old=old_path, new=new_path))
@@ -341,6 +340,9 @@ def fix_and_verify():
 # ==================== КОМАНДНАЯ СТРОКА ====================
 
 if __name__ == "__main__":
+    print(DATA_TOOLS_TEXTS['title'])
+    print(DATA_TOOLS_TEXTS['divider'])
+
     import argparse
     
     parser = argparse.ArgumentParser(

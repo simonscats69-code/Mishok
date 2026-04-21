@@ -13,7 +13,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
 
-from config import BOT_TOKEN, DATA_FILE, BACKUP_PATH, LOG_FILE
+from config import BOT_TOKEN, DATA_FILE, BACKUP_PATH, LOG_FILE, ADMIN_ID
 from database import (
     add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats,
     get_chat_top_users, backup_database, check_data_integrity,
@@ -51,6 +51,13 @@ def get_message(update: Update):
         return update.callback_query.message
     return update.message
 
+async def safe_edit_or_reply(msg, text, **kwargs):
+    """Безопасно редактирует сообщение или отвечает на него"""
+    if hasattr(msg, 'edit_text'):
+        await msg.edit_text(text, **kwargs)
+    else:
+        await msg.reply_text(text, **kwargs)
+
 def get_user_info(user: User):
     return {
         'name': escape_text(user.first_name),
@@ -70,7 +77,6 @@ def handler(admin=False, chat_only=False):
                 if chat_only and update.effective_chat.type == "private":
                     await msg.reply_text(ERROR_TEXTS['chat_only'])
                     return
-                from config import ADMIN_ID
                 if admin and update.effective_user.id != ADMIN_ID:
                     await msg.reply_text(ERROR_TEXTS['admin_only'])
                     return
@@ -83,16 +89,6 @@ def handler(admin=False, chat_only=False):
                     pass
         return wrapper
     return decorator
-
-def with_message(func):
-    @wraps(func)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        msg = get_message(update)
-        if not msg:
-            logger.warning(f"Нет сообщения для {func.__name__}")
-            return
-        return await func(update, context, msg)
-    return wrapper
 
 
 def calc_level(cnt):
@@ -586,7 +582,6 @@ async def vote_end(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         await msg.reply_text(ERROR_TEXTS['vote_not_found'])
         return
     
-    from config import ADMIN_ID
     user = update.effective_user
     
     try:
@@ -671,25 +666,8 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 
 @handler()
 async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    try:
-        await msg.reply_text(
-            MISHOK_INTRO,
-            disable_web_page_preview=True
-        )
-        logger.info(f"Команда 'О Мишке' выполнена для пользователя {update.effective_user.id}")
-    except Exception as e:
-        logger.error(f"Ошибка в mishok: {e}", exc_info=True)
-        try:
-            if update.message:
-                await update.message.reply_text(
-                    "ℹ️ Информация о Мишке:\n\nЯ — Мишок Лысый, бот для шлёпок! Используй /help для команд."
-                )
-            elif update.callback_query:
-                await update.callback_query.message.reply_text(
-                    "ℹ️ Информация о Мишке:\n\nЯ — Мишок Лысый, бот для шлёпок!"
-                )
-        except Exception as e2:
-            logger.error(f"Не удалось отправить сообщение об ошибке: {e2}")
+    await msg.reply_text(MISHOK_INTRO, disable_web_page_preview=True)
+    logger.info(f"Команда 'О Мишке' выполнена для пользователя {update.effective_user.id}")
 
 @handler(admin=True)
 async def backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
@@ -868,7 +846,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 
 @handler(admin=True)
 async def admin_health(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    await msg.edit_text(ADMIN_TEXTS['health_check'])
+    await safe_edit_or_reply(msg, ADMIN_TEXTS['health_check'])
     
     try:
         import platform
@@ -912,17 +890,14 @@ async def admin_health(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         else:
             report += ADMIN_TEXTS['health_report']['attention']
         
-        await status_msg.edit_text(report, reply_markup=get_admin_keyboard())
-        
+        await safe_edit_or_reply(status_msg, report, reply_markup=get_admin_keyboard())
+
     except Exception as e:
-        await msg.edit_text(
-            ERROR_TEXTS['health_check'].format(error=str(e)[:200]),
-            reply_markup=get_admin_keyboard()
-        )
+        await safe_edit_or_reply(msg, ERROR_TEXTS['health_check'].format(error=str(e)[:200]), reply_markup=get_admin_keyboard())
 
 @handler(admin=True)
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    await msg.edit_text(ADMIN_TEXTS['user_stats'])
+    await safe_edit_or_reply(msg, ADMIN_TEXTS['user_stats'])
     
     from database import load_data
     
@@ -988,14 +963,11 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
             level=level, bar=bar, percent=percentage, count=count
         ) + "\n"
     
-    await msg.edit_text(report, reply_markup=get_admin_keyboard())
+    await safe_edit_or_reply(msg, report, reply_markup=get_admin_keyboard())
 
 @handler(admin=True)
 async def admin_cleanup(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    await msg.edit_text(
-        ADMIN_TEXTS['cleanup'],
-        reply_markup=get_cleanup_keyboard()
-    )
+    await safe_edit_or_reply(msg, ADMIN_TEXTS['cleanup'], reply_markup=get_cleanup_keyboard())
 
 async def perform_cleanup(message, cleanup_type):
     await message.edit_text(ADMIN_TEXTS['cleanup_progress'].format(type=cleanup_type))
@@ -1102,10 +1074,7 @@ async def backup_cmd_internal(message):
 
 @handler(admin=True)
 async def admin_repair_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    await msg.edit_text(
-        ADMIN_TEXTS['repair_confirm'],
-        reply_markup=get_confirmation_keyboard("восстановить")
-    )
+    await safe_edit_or_reply(msg, ADMIN_TEXTS['repair_confirm'], reply_markup=get_confirmation_keyboard("восстановить"))
 
 async def admin_storage_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1200,6 +1169,23 @@ async def admin_bans(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         text = f"🚫 Забаненные пользователи в этом чате ({len(banned)}):\n\n"
         for uid in banned:
             text += f"• {uid}\n"
+
+    await msg.reply_text(text, reply_markup=get_admin_keyboard())
+
+@handler(admin=True)
+async def admin_banned_words(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
+    # Показать список банвордов в текущем чате
+    chat_id = update.effective_chat.id
+    banned_words = get_banned_words(chat_id)
+
+    if not banned_words:
+        text = "🚫 В этом чате нет запрещенных слов."
+    else:
+        text = f"🚫 Запрещенные слова в этом чате ({len(banned_words)}):\n\n"
+        for word in banned_words:
+            text += f"• {word}\n"
+
+    text += "\n💡 Используйте команду /mishok_banword <слово> для добавления нового банворда"
 
     await msg.reply_text(text, reply_markup=get_admin_keyboard())
 
@@ -1317,17 +1303,17 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "shlep_mishok":
         await perform_shlep(update, context)
     elif data == "stats_inline":
-        await stats(update, context, query.message)
+        await stats(update, context)
     elif data == "level_inline":
-        await level(update, context, query.message)
+        await level(update, context)
     elif data == "chat_top":
-        await chat_top(update, context, query.message)
+        await chat_top(update, context)
     elif data == "my_stats":
-        await my_stats(update, context, query.message)
+        await my_stats(update, context)
     elif data == "help_inline":
-        await help_cmd(update, context, query.message)
+        await help_cmd(update, context)
     elif data == "mishok_info":
-        await mishok(update, context, query.message)
+        await mishok(update, context)
     
     elif data in ["vote_yes", "vote_no"]:
         vote_type = data.replace("vote_", "")
@@ -1354,12 +1340,14 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await admin_storage_cmd(update, context)
     elif data == "admin_bans":
         await admin_bans(update, context)
+    elif data == "admin_banned_words":
+        await admin_banned_words(update, context)
     elif data == "admin_close":
         await admin_close(update, context)
     elif data == "admin_back":
-        await admin_panel(update, context, query.message)
+        await admin_panel(update, context)
     elif data == "debug_user":
-        await debug_user(update, context, query.message)
+        await debug_user(update, context)
     
     elif data.startswith("cleanup_"):
         action = data.replace("cleanup_", "")
@@ -1387,17 +1375,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         if text == "👊 Шлёпнуть Мишка":
-            await shlep(update, context, update.message)
+            await shlep(update, context)
         elif text == "🎯 Уровень":
-            await level(update, context, update.message)
+            await level(update, context)
         elif text == "📊 Статистика":
-            await stats(update, context, update.message)
+            await stats(update, context)
         elif text == "📈 Моя статистика":
-            await my_stats(update, context, update.message)
+            await my_stats(update, context)
         elif text == "❓ Помощь":
-            await help_cmd(update, context, update.message)
+            await help_cmd(update, context)
         elif text in ["👴 О Мишке", "О Мишке"]:
-            await mishok(update, context, update.message)
+            await mishok(update, context)
         else:
             logger.warning(f"Неизвестная кнопка: {text}")
             if update.effective_chat.type == "private":
@@ -1409,9 +1397,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def check_banned_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Проверка и удаление сообщений забаненных пользователей"""
-    logger.info(f"check_banned_messages вызвана для {update.effective_user.id} в {update.effective_chat.id}, тип чата: {update.effective_chat.type}")
+    logger.debug(f"check_banned_messages вызвана для {update.effective_user.id} в {update.effective_chat.id}, тип чата: {update.effective_chat.type}")
     if not update.message or update.effective_chat.type == "private":
-        logger.info("Пропуск: нет сообщения или приватный чат")
         return
 
     user_id = update.effective_user.id
@@ -1419,27 +1406,50 @@ async def check_banned_messages(update: Update, context: ContextTypes.DEFAULT_TY
 
     banned_users = get_banned_users(chat_id)
     banned_words = get_banned_words(chat_id)
-    logger.info(f"Проверка пользователя {user_id} в чате {chat_id}, забаненные: {banned_users}, банворды: {banned_words}")
+    logger.debug(f"Проверка пользователя {user_id} в чате {chat_id}, забанено: {len(banned_users)} пользователей, {len(banned_words)} слов")
 
     message_text = update.message.text.lower() if update.message.text else ""
 
     # Проверка на банворды
-    if any(word in message_text for word in banned_words):
-        if ban_user(chat_id, user_id):
-            logger.info(f"Пользователь {user_id} забанен за использование банворда в чате {chat_id}")
-            try:
-                await update.message.delete()
-                logger.info(f"Удалено сообщение с банвордом от {user_id} в чате {chat_id}")
-            except Exception as e:
-                logger.error(f"Не удалось удалить сообщение от {user_id}: {e}")
-        return
+    logger.debug(f"Проверка банвордов: текст='{message_text}', банворды={banned_words}")
+    for word in banned_words:
+        word_lower = word.lower()
+        if word_lower in message_text:
+            logger.info(f"Найден банворд '{word}' в сообщении от пользователя {user_id} в чате {chat_id}")
+            if ban_user(chat_id, user_id):
+                logger.info(f"Пользователь {user_id} забанен за использование банворда '{word}' в чате {chat_id}")
+                try:
+                    # Проверяем права бота
+                    bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
+                    if not bot_member.can_delete_messages:
+                        logger.warning(f"Бот не имеет прав на удаление сообщений в чате {chat_id}")
+                        return
+
+                    await update.message.delete()
+                    logger.info(f"Удалено сообщение с банвордом от {user_id} в чате {chat_id}")
+                except Exception as e:
+                    logger.error(f"Не удалось удалить сообщение от {user_id}: {e}")
+            return
 
     if user_id in banned_users:
+        logger.info(f"Попытка удалить сообщение от забаненного пользователя {user_id} в чате {chat_id}")
         try:
+            # Проверяем права бота
+            bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
+            if not bot_member.can_delete_messages:
+                logger.warning(f"Бот не имеет прав на удаление сообщений в чате {chat_id}")
+                return
+
             await update.message.delete()
             logger.info(f"Удалено сообщение от забаненного пользователя {user_id} в чате {chat_id}")
         except Exception as e:
             logger.error(f"Не удалось удалить сообщение от {user_id}: {e}")
+
+    # Проверка на фиксацию обращений
+    if update.message.text and "наталья зафиксируйте" in update.message.text.lower():
+        if update.message.reply_to_message:
+            await update.message.reply_text("🔏 Обращение зафиксировано и заверено у Нотариуса!")
+            logger.info(f"Зафиксировано обращение от {user_id} в чате {chat_id}")
 
 async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message and update.message.new_chat_members:
@@ -1482,8 +1492,8 @@ def main():
         ("MishokBanWord", mishok_banword),
     ]
     
-    for name, handler in commands:
-        app.add_handler(CommandHandler(name, handler))
+    for name, func in commands:
+        app.add_handler(CommandHandler(name, func))
     
     app.add_handler(CallbackQueryHandler(inline_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
