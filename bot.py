@@ -1502,9 +1502,9 @@ def main():
         app.add_handler(CommandHandler(name, func))
     
     app.add_handler(CallbackQueryHandler(inline_handler))
+    app.add_handler(MessageHandler(filters.ChatType.GROUPS & ~filters.COMMAND, check_banned_messages))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, group_welcome))
-    app.add_handler(MessageHandler(filters.ChatType.GROUPS & ~filters.COMMAND, check_banned_messages))
     app.add_error_handler(error_handler)
     
     logger.info("=" * 50)
