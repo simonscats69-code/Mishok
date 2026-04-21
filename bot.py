@@ -32,9 +32,10 @@ from keyboard import (
 )
 
 from texts import (
-    MISHOK_REACTIONS, MISHOK_INTRO, COMMAND_TEXTS, VOTE_TEXTS, 
+    MISHOK_REACTIONS, MISHOK_INTRO, COMMAND_TEXTS, VOTE_TEXTS,
     ADMIN_TEXTS, ERROR_TEXTS, LEVEL_TITLES,
-    format_stats_text, format_level_text, format_vote_text, format_vote_results
+    format_stats_text, format_level_text, format_vote_text, format_vote_results,
+    MISHOK_JOKES, FUN_COMMANDS
 )
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -134,8 +135,35 @@ def level_title(lvl):
             return title, advice
     return "🌱 ПОЛНЫЙ ДОХЛЯК", "Ты только начал... очень слабо!"
 
-def get_reaction(): 
+def get_reaction():
     return random.choice(MISHOK_REACTIONS)
+
+async def perform_shlep_action(user_id: int, username: str, chat_id: Optional[int]) -> tuple:
+    """Выполнить действие шлепка и вернуть результаты"""
+    _, cnt, _ = get_user_stats(user_id)
+    lvl = calc_level(cnt)
+
+    base_dmg = random.randint(lvl['min'], lvl['max'])
+
+    data = load_data()
+    user_data = data["users"].get(str(user_id), {})
+    bonus_damage = user_data.get("bonus_damage", 0)
+
+    total_damage = base_dmg + bonus_damage
+
+    try:
+        total, cnt, max_dmg = add_shlep(user_id, username, total_damage, chat_id)
+    except KeyError as e:
+        logger.error(f"Ошибка KeyError при добавлении шлёпка: {e}")
+        repair_data_structure()
+        total, cnt, max_dmg = add_shlep(user_id, username, total_damage, chat_id)
+
+    await cache.delete("global_stats")
+    await cache.delete(f"user_stats_{user_id}")
+    if chat_id:
+        await cache.delete(f"chat_stats_{chat_id}")
+
+    return total_damage, cnt, max_dmg, lvl
 
 async def send_progress(message, text, progress=0):
     bar = create_progress_bar(progress)
@@ -163,40 +191,11 @@ async def shlep_task(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_me
         user = update.effective_user
         chat = update.effective_chat
         user_info = get_user_info(user)
-        
-        _, cnt, _ = get_user_stats(user.id)
-        lvl = calc_level(cnt)
-        
-        base_dmg = random.randint(lvl['min'], lvl['max'])
-        
-        from database import load_data
-        data = load_data()
-        user_data = data["users"].get(str(user.id), {})
-        bonus_damage = user_data.get("bonus_damage", 0)
-        
-        total_damage = base_dmg + bonus_damage
-        
-        try:
-            total, cnt, max_dmg = add_shlep(
-                user.id, 
-                user_info['username'], 
-                total_damage, 
-                chat.id if chat.type != "private" else None
-            )
-        except KeyError as e:
-            logger.error(f"Ошибка KeyError при добавлении шлёпка: {e}")
-            repair_data_structure()
-            total, cnt, max_dmg = add_shlep(
-                user.id, 
-                user_info['username'], 
-                total_damage, 
-                chat.id if chat.type != "private" else None
-            )
-        
-        await cache.delete("global_stats")
-        await cache.delete(f"user_stats_{user.id}")
-        if chat.type != "private":
-            await cache.delete(f"chat_stats_{chat.id}")
+
+        chat_id = chat.id if chat and chat.type != "private" else None
+        total_damage, cnt, max_dmg, lvl = await perform_shlep_action(
+            user.id, user_info['username'], chat_id
+        )
         
         rec = "\n🏆 НОВЫЙ РЕКОРД!\n" if total_damage > max_dmg else ""
         lvl = calc_level(cnt)
@@ -259,8 +258,11 @@ async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit
         msg = get_message(update)
         if not msg:
             return
-        
+
         user = update.effective_user
+        if not user:
+            logger.warning("perform_shlep: пользователь не найден")
+            return
         
         if user.id not in _user_queues:
             _user_queues[user.id] = deque()
@@ -667,6 +669,11 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 @handler()
 async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     await msg.reply_text(MISHOK_INTRO, disable_web_page_preview=True)
+
+@handler()
+async def mishok_joke(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
+    joke = random.choice(MISHOK_JOKES)
+    await msg.reply_text(f"{FUN_COMMANDS['joke']['response']}\n\n{joke}")
     logger.info(f"Команда 'О Мишке' выполнена для пользователя {update.effective_user.id}")
 
 @handler(admin=True)
@@ -1191,7 +1198,6 @@ async def admin_banned_words(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
 @handler(admin=True)
 async def debug_user(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-    from database import load_data
     user = update.effective_user
 
     data = load_data()
@@ -1482,6 +1488,7 @@ def main():
         ("my_stats", my_stats),
         ("help", help_cmd),
         ("mishok", mishok),
+        ("mishok_joke", mishok_joke),
         ("chat_stats", chat_stats),
         ("chat_top", chat_top),
         ("vote", vote),
