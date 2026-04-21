@@ -1387,9 +1387,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif text in ["👴 О Мишке", "О Мишке"]:
             await mishok(update, context)
         else:
-            logger.warning(f"Неизвестная кнопка: {text}")
-            if update.effective_chat.type == "private":
-                await update.message.reply_text(ERROR_TEXTS['unknown_button'])
+            # Проверка на фиксацию обращений
+            if "наталья зафиксируйте" in text.lower() and update.message.reply_to_message:
+                await update.message.reply_text("🔏 Обращение зафиксировано и заверено у Нотариуса!")
+                logger.info(f"Зафиксировано обращение от {update.effective_user.id} в чате {update.effective_chat.id}")
+            else:
+                logger.warning(f"Неизвестная кнопка: {text}")
+                if update.effective_chat.type == "private":
+                    await update.message.reply_text(ERROR_TEXTS['unknown_button'])
     except Exception as e:
         logger.error(f"Ошибка в button_handler: {e}", exc_info=True)
         if update.effective_chat.type == "private":
