@@ -813,5 +813,56 @@ def get_banned_users(chat_id: int) -> list:
         logger.error(f"Ошибка получения забаненных пользователей для чата {chat_id}: {e}")
         return []
 
+def get_banned_words(chat_id: int) -> list:
+    """Получить список забаненных слов в чате"""
+    try:
+        data = load_data()
+        chat_id_str = str(chat_id)
+        chat_data = data["chats"].get(chat_id_str, {})
+        return chat_data.get("banned_words", [])
+    except Exception as e:
+        logger.error(f"Ошибка получения забаненных слов для чата {chat_id}: {e}")
+        return []
+
+def add_banned_word(chat_id: int, word: str) -> bool:
+    """Добавить забаненное слово в чате"""
+    try:
+        data = load_data()
+        chat_id_str = str(chat_id)
+
+        if chat_id_str not in data["chats"]:
+            data["chats"][chat_id_str] = {"total_shleps": 0, "banned_users": [], "banned_words": []}
+
+        chat_data = data["chats"][chat_id_str]
+        chat_data.setdefault("banned_words", [])
+
+        if word not in chat_data["banned_words"]:
+            chat_data["banned_words"].append(word.lower())
+            save_data(data)
+            logger.info(f"Слово '{word}' добавлено в банворды чата {chat_id}")
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Ошибка добавления банворда '{word}' в чате {chat_id}: {e}")
+        return False
+
+def remove_banned_word(chat_id: int, word: str) -> bool:
+    """Удалить забаненное слово из чата"""
+    try:
+        data = load_data()
+        chat_id_str = str(chat_id)
+        chat_data = data["chats"].get(chat_id_str, {})
+        banned_words = chat_data.get("banned_words", [])
+
+        if word.lower() in banned_words:
+            banned_words.remove(word.lower())
+            save_data(data)
+            logger.info(f"Слово '{word}' удалено из банвордов чата {chat_id}")
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Ошибка удаления банворда '{word}' из чата {chat_id}: {e}")
+        return False
+
 cleanup_old_votes()
 logger.info(DATABASE_TEXTS['ready'])

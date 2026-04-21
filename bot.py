@@ -20,7 +20,7 @@ from database import (
     repair_data_structure, create_safe_backup, get_backup_list,
     get_database_size, create_vote, get_vote, get_active_chat_vote,
     add_user_vote, finish_vote, update_vote_message_id,
-    ban_user, unban_user, get_banned_users
+    ban_user, unban_user, get_banned_users, add_banned_word, get_banned_words
 )
 
 from utils import cache, get_comparison_stats, format_file_size, format_number, create_progress_bar
@@ -1280,6 +1280,27 @@ async def mishok_unban(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     else:
         await msg.reply_text("❌ Не удалось разбанить пользователя или он не был забанен.")
 
+@handler(admin=True, chat_only=True)
+async def mishok_banword(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
+    chat_id = update.effective_chat.id
+    text = msg.text.strip()
+
+    # Ожидаем /MishokBanWord слово
+    parts = text.split()
+    if len(parts) < 2:
+        await msg.reply_text("❌ Укажите слово для бана: /MishokBanWord <слово>")
+        return
+
+    word = " ".join(parts[1:]).strip()
+    if not word:
+        await msg.reply_text("❌ Слово не может быть пустым.")
+        return
+
+    if add_banned_word(chat_id, word):
+        await msg.reply_text(f"✅ Слово '{word}' добавлено в банворды.")
+    else:
+        await msg.reply_text(f"❌ Слово '{word}' уже в банвордах.")
+
 async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
@@ -1388,6 +1409,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def check_banned_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Проверка и удаление сообщений забаненных пользователей"""
+    logger.info(f"check_banned_messages вызвана для {update.effective_user.id} в {update.effective_chat.id}")
     if not update.message or update.effective_chat.type == "private":
         return
 
@@ -1395,7 +1417,22 @@ async def check_banned_messages(update: Update, context: ContextTypes.DEFAULT_TY
     chat_id = update.effective_chat.id
 
     banned_users = get_banned_users(chat_id)
-    logger.debug(f"Проверка пользователя {user_id} в чате {chat_id}, забаненные: {banned_users}")
+    banned_words = get_banned_words(chat_id)
+    logger.info(f"Проверка пользователя {user_id} в чате {chat_id}, забаненные: {banned_users}, банворды: {banned_words}")
+
+    message_text = update.message.text.lower() if update.message.text else ""
+
+    # Проверка на банворды
+    if any(word in message_text for word in banned_words):
+        if ban_user(chat_id, user_id):
+            logger.info(f"Пользователь {user_id} забанен за использование банворда в чате {chat_id}")
+            try:
+                await update.message.delete()
+                logger.info(f"Удалено сообщение с банвордом от {user_id} в чате {chat_id}")
+            except Exception as e:
+                logger.error(f"Не удалось удалить сообщение от {user_id}: {e}")
+        return
+
     if user_id in banned_users:
         try:
             await update.message.delete()
@@ -1438,6 +1475,7 @@ def main():
         ("debug_user", debug_user),
         ("MishokBan", mishok_ban),
         ("MishokUnban", mishok_unban),
+        ("MishokBanWord", mishok_banword),
     ]
     
     for name, handler in commands:
