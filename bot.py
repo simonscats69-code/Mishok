@@ -1320,19 +1320,19 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
     
     elif data == "admin_cleanup":
-        await admin_cleanup(update, context, query.message)
+        await admin_cleanup(update, context)
     elif data == "admin_health":
-        await admin_health(update, context, query.message)
+        await admin_health(update, context)
     elif data == "admin_stats":
-        await admin_stats(update, context, query.message)
+        await admin_stats(update, context)
     elif data == "admin_backup":
         await admin_backup_cmd(update, context)
     elif data == "admin_repair":
-        await admin_repair_cmd(update, context, query.message)
+        await admin_repair_cmd(update, context)
     elif data == "admin_storage":
         await admin_storage_cmd(update, context)
     elif data == "admin_bans":
-        await admin_bans(update, context, query.message)
+        await admin_bans(update, context)
     elif data == "admin_close":
         await admin_close(update, context)
     elif data == "admin_back":
