@@ -1422,19 +1422,17 @@ async def check_banned_messages(update: Update, context: ContextTypes.DEFAULT_TY
         word_lower = word.lower()
         if word_lower in message_text:
             logger.info(f"Найден банворд '{word}' в сообщении от пользователя {user_id} в чате {chat_id}")
-            if ban_user(chat_id, user_id):
-                logger.info(f"Пользователь {user_id} забанен за использование банворда '{word}' в чате {chat_id}")
-                try:
-                    # Проверяем права бота
-                    bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
-                    if not bot_member.can_delete_messages:
-                        logger.warning(f"Бот не имеет прав на удаление сообщений в чате {chat_id}")
-                        return
+            try:
+                # Проверяем права бота
+                bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
+                if not bot_member.can_delete_messages:
+                    logger.warning(f"Бот не имеет прав на удаление сообщений в чате {chat_id}")
+                    return
 
-                    await update.message.delete()
-                    logger.info(f"Удалено сообщение с банвордом от {user_id} в чате {chat_id}")
-                except Exception as e:
-                    logger.error(f"Не удалось удалить сообщение от {user_id}: {e}")
+                await update.message.delete()
+                logger.info(f"Удалено сообщение с банвордом '{word}' от {user_id} в чате {chat_id}")
+            except Exception as e:
+                logger.error(f"Не удалось удалить сообщение от {user_id}: {e}")
             return
 
     if user_id in banned_users:
