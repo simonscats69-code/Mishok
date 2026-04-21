@@ -44,10 +44,8 @@ def get_main_inline_keyboard():
             InlineKeyboardButton("📈 Моя статистика", callback_data="my_stats")
         ],
         [
-            InlineKeyboardButton("👴 О Мишке", callback_data="mishok_info")
-        ],
-        [
-            InlineKeyboardButton("❓ Помощь", callback_data="help_inline")
+            InlineKeyboardButton("👴 О Мишке", callback_data="mishok_info"),
+            InlineKeyboardButton("📋 Команды", callback_data="help_inline")
         ]
     ])
 
@@ -56,7 +54,8 @@ def get_main_reply_keyboard():
         [KeyboardButton("👊 Шлёпнуть Мишка")],
         [KeyboardButton("🎯 Уровень"), KeyboardButton("📊 Статистика")],
         [KeyboardButton("📈 Моя статистика")],
-        [KeyboardButton("❓ Помощь"), KeyboardButton("👴 О Мишке")]
+        [KeyboardButton("❓ Помощь"), KeyboardButton("📋 Команды")],
+        [KeyboardButton(" О Мишке")]
     ], resize_keyboard=True, one_time_keyboard=False, selective=True)
 
 def get_admin_keyboard():

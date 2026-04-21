@@ -1351,7 +1351,11 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "admin_close":
         await admin_close(update, context)
     elif data == "admin_back":
-        await admin_panel(update, context)
+        query = update.callback_query
+        await query.message.edit_text(
+            ADMIN_TEXTS['panel'],
+            reply_markup=get_admin_keyboard()
+        )
     elif data == "debug_user":
         await debug_user(update, context)
     
@@ -1388,7 +1392,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await stats(update, context)
         elif text == "📈 Моя статистика":
             await my_stats(update, context)
-        elif text == "❓ Помощь":
+        elif text in ["❓ Помощь", "📋 Команды"]:
             await help_cmd(update, context)
         elif text in ["👴 О Мишке", "О Мишке"]:
             await mishok(update, context)
@@ -1488,7 +1492,7 @@ def main():
         ("my_stats", my_stats),
         ("help", help_cmd),
         ("mishok", mishok),
-        ("mishok_joke", mishok_joke),
+        ("mishokjoke", mishok_joke),
         ("chat_stats", chat_stats),
         ("chat_top", chat_top),
         ("vote", vote),
