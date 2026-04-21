@@ -1402,8 +1402,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def check_banned_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Проверка и удаление сообщений забаненных пользователей"""
-    logger.debug(f"check_banned_messages вызвана для {update.effective_user.id} в {update.effective_chat.id}, тип чата: {update.effective_chat.type}")
+    logger.info(f"check_banned_messages вызвана для {update.effective_user.id} в {update.effective_chat.id}, тип чата: {update.effective_chat.type}")
     if not update.message or update.effective_chat.type == "private":
+        logger.debug("Сообщение из приватного чата или нет сообщения - пропускаем")
         return
 
     user_id = update.effective_user.id
