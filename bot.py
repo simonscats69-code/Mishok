@@ -1409,8 +1409,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def check_banned_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Проверка и удаление сообщений забаненных пользователей"""
-    logger.info(f"check_banned_messages вызвана для {update.effective_user.id} в {update.effective_chat.id}")
+    logger.info(f"check_banned_messages вызвана для {update.effective_user.id} в {update.effective_chat.id}, тип чата: {update.effective_chat.type}")
     if not update.message or update.effective_chat.type == "private":
+        logger.info("Пропуск: нет сообщения или приватный чат")
         return
 
     user_id = update.effective_user.id
@@ -1453,7 +1454,10 @@ def main():
     if not BOT_TOKEN:
         logger.error(ERROR_TEXTS['no_token'])
         sys.exit(1)
-    
+
+    logger.info("Запуск бота с токеном: {}...".format(BOT_TOKEN[:10]))
+    logger.info("Используется polling для получения обновлений")
+
     app = Application.builder().token(BOT_TOKEN).build()
     
     commands = [
