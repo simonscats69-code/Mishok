@@ -1231,7 +1231,11 @@ async def debug_user(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     await msg.reply_text(f"<pre>{text}</pre>", parse_mode=ParseMode.HTML)
 
 async def get_mentioned_user_id(msg, context, chat_id) -> Optional[int]:
-    """Получить user_id из упоминания @username в сообщении"""
+    """Получить user_id из упоминания @username в сообщении или reply"""
+    # Сначала проверить reply
+    if msg.reply_to_message:
+        return msg.reply_to_message.from_user.id
+
     if not msg.entities:
         return None
     for entity in msg.entities:
@@ -1254,7 +1258,7 @@ async def mishok_ban(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     mentioned_user_id = await get_mentioned_user_id(msg, context, chat_id)
 
     if not mentioned_user_id:
-        await msg.reply_text("❌ Укажите пользователя для бана с помощью @username")
+        await msg.reply_text("❌ Укажите пользователя для бана с помощью @username или ответьте на его сообщение")
         return
 
     if ban_user(chat_id, mentioned_user_id):
@@ -1268,7 +1272,7 @@ async def mishok_unban(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     mentioned_user_id = await get_mentioned_user_id(msg, context, chat_id)
 
     if not mentioned_user_id:
-        await msg.reply_text("❌ Укажите пользователя для разбана с помощью @username")
+        await msg.reply_text("❌ Укажите пользователя для разбана с помощью @username или ответьте на его сообщение")
         return
 
     if unban_user(chat_id, mentioned_user_id):
