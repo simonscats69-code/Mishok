@@ -62,7 +62,8 @@ def command_handler(func):
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
-            return await func(update, context)
+            msg = get_message(update)
+            return await func(update, context, msg)
         except Exception as e:
             logger.error(f"Ошибка в {func.__name__}: {e}", exc_info=True)
             try:
@@ -311,7 +312,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     await msg.reply_text(text, reply_markup=kb)
 
 @command_handler
-async def shlep(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     await perform_shlep(update, context)
 
 @command_handler 
@@ -1325,17 +1326,17 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "shlep_mishok":
         await perform_shlep(update, context)
     elif data == "stats_inline":
-        await stats(update, context)
+        await stats(update, context, query.message)
     elif data == "level_inline":
-        await level(update, context)
+        await level(update, context, query.message)
     elif data == "chat_top":
-        await chat_top(update, context)
+        await chat_top(update, context, query.message)
     elif data == "my_stats":
-        await my_stats(update, context)
+        await my_stats(update, context, query.message)
     elif data == "help_inline":
-        await help_cmd(update, context)
+        await help_cmd(update, context, query.message)
     elif data == "mishok_info":
-        await mishok(update, context)
+        await mishok(update, context, query.message)
     
     elif data in ["vote_yes", "vote_no"]:
         vote_type = data.replace("vote_", "")
@@ -1349,25 +1350,25 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
     
     elif data == "admin_cleanup":
-        await admin_cleanup(update, context)
+        await admin_cleanup(update, context, query.message)
     elif data == "admin_health":
-        await admin_health(update, context)
+        await admin_health(update, context, query.message)
     elif data == "admin_stats":
-        await admin_stats(update, context)
+        await admin_stats(update, context, query.message)
     elif data == "admin_backup":
         await admin_backup_cmd(update, context)
     elif data == "admin_repair":
-        await admin_repair_cmd(update, context)
+        await admin_repair_cmd(update, context, query.message)
     elif data == "admin_storage":
         await admin_storage_cmd(update, context)
     elif data == "admin_bans":
-        await admin_bans(update, context)
+        await admin_bans(update, context, query.message)
     elif data == "admin_close":
         await admin_close(update, context)
     elif data == "admin_back":
-        await admin_panel(update, context)
+        await admin_panel(update, context, query.message)
     elif data == "debug_user":
-        await debug_user(update, context)
+        await debug_user(update, context, query.message)
     
     elif data.startswith("cleanup_"):
         action = data.replace("cleanup_", "")
@@ -1395,17 +1396,17 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         if text == "👊 Шлёпнуть Мишка":
-            await shlep(update, context)
+            await shlep(update, context, update.message)
         elif text == "🎯 Уровень":
-            await level(update, context)
+            await level(update, context, update.message)
         elif text == "📊 Статистика":
-            await stats(update, context)
+            await stats(update, context, update.message)
         elif text == "📈 Моя статистика":
-            await my_stats(update, context)
+            await my_stats(update, context, update.message)
         elif text == "❓ Помощь":
-            await help_cmd(update, context)
+            await help_cmd(update, context, update.message)
         elif text in ["👴 О Мишке", "О Мишке"]:
-            await mishok(update, context)
+            await mishok(update, context, update.message)
         else:
             logger.warning(f"Неизвестная кнопка: {text}")
             if update.effective_chat.type == "private":
