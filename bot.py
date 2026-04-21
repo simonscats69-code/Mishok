@@ -1395,6 +1395,7 @@ async def check_banned_messages(update: Update, context: ContextTypes.DEFAULT_TY
     chat_id = update.effective_chat.id
 
     banned_users = get_banned_users(chat_id)
+    logger.debug(f"Проверка пользователя {user_id} в чате {chat_id}, забаненные: {banned_users}")
     if user_id in banned_users:
         try:
             await update.message.delete()
