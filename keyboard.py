@@ -67,7 +67,8 @@ def get_admin_keyboard():
          InlineKeyboardButton("💾 Бэкап", callback_data="admin_backup")],
         [InlineKeyboardButton("🔧 Исправление", callback_data="admin_repair"),
          InlineKeyboardButton("🗃️ Хранилище", callback_data="admin_storage")],
-        [InlineKeyboardButton("❌ Закрыть", callback_data="admin_close")]
+        [InlineKeyboardButton("🚫 Баны", callback_data="admin_bans"),
+         InlineKeyboardButton("❌ Закрыть", callback_data="admin_close")]
     ])
 
 def get_cleanup_keyboard():

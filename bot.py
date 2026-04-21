@@ -6,7 +6,7 @@ import asyncio
 from datetime import datetime, timedelta
 from functools import wraps
 from collections import deque
-from typing import Dict, Deque
+from typing import Dict, Deque, Optional
 
 from telegram import Update, User
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
@@ -15,11 +15,12 @@ from telegram.helpers import escape_markdown
 
 from config import BOT_TOKEN, DATA_FILE, BACKUP_PATH, LOG_FILE
 from database import (
-    add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats, 
-    get_chat_top_users, backup_database, check_data_integrity, 
-    repair_data_structure, create_safe_backup, get_backup_list, 
-    get_database_size, create_vote, get_vote, get_active_chat_vote, 
-    add_user_vote, finish_vote, update_vote_message_id
+    add_shlep, get_stats, get_top_users, get_user_stats, get_chat_stats,
+    get_chat_top_users, backup_database, check_data_integrity,
+    repair_data_structure, create_safe_backup, get_backup_list,
+    get_database_size, create_vote, get_vote, get_active_chat_vote,
+    add_user_vote, finish_vote, update_vote_message_id,
+    ban_user, unban_user, get_banned_users
 )
 
 from utils import cache, get_comparison_stats, format_file_size, format_number, create_progress_bar
@@ -1216,31 +1217,97 @@ async def perform_repair(message):
 
 @command_handler
 @admin_only
+async def admin_bans(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
+    # Показать список забаненных в текущем чате
+    chat_id = update.effective_chat.id
+    banned = get_banned_users(chat_id)
+
+    if not banned:
+        text = "🚫 В этом чате нет забаненных пользователей."
+    else:
+        text = f"🚫 Забаненные пользователи в этом чате ({len(banned)}):\n\n"
+        for uid in banned:
+            text += f"• {uid}\n"
+
+    await msg.reply_text(text, reply_markup=get_admin_keyboard())
+
+@command_handler
+@admin_only
 async def debug_user(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     from database import load_data
     user = update.effective_user
-    
+
     data = load_data()
     user_data = data["users"].get(str(user.id), {})
-    
+
     text = f"🔍 ДЕБАГ ДАННЫХ ДЛЯ user_id={user.id}\n\n"
     text += f"📊 Сырые данные:\n"
-    
+
     for key, value in user_data.items():
         text += f"  {key}: {value} (тип: {type(value).__name__})\n"
-    
+
     text += f"\n🧪 Результат get_user_stats:\n"
     username, cnt, last_shlep = get_user_stats(user.id)
     text += f"  username: {username}\n"
     text += f"  cnt: {cnt} (тип: {type(cnt).__name__})\n"
     text += f"  last_shlep: {last_shlep} (тип: {type(last_shlep).__name__})\n"
-    
+
     text += f"\n🎯 Результат calc_level({cnt}):\n"
     lvl = calc_level(cnt)
     for key, value in lvl.items():
         text += f"  {key}: {value}\n"
-    
+
     await msg.reply_text(f"<pre>{text}</pre>", parse_mode=ParseMode.HTML)
+
+async def get_mentioned_user_id(msg, context, chat_id) -> Optional[int]:
+    """Получить user_id из упоминания @username в сообщении"""
+    if not msg.entities:
+        return None
+    for entity in msg.entities:
+        if entity.type == "mention":
+            username = msg.text[entity.offset + 1:entity.offset + entity.length]  # без @
+            if hasattr(entity, 'user') and entity.user:
+                return entity.user.id
+            else:
+                # Попробовать получить по username
+                try:
+                    member = await context.bot.get_chat_member(chat_id, username)
+                    return member.user.id
+                except:
+                    return None
+    return None
+
+@command_handler
+@admin_only
+@chat_only
+async def mishok_ban(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
+    chat_id = update.effective_chat.id
+    mentioned_user_id = await get_mentioned_user_id(msg, context, chat_id)
+
+    if not mentioned_user_id:
+        await msg.reply_text("❌ Укажите пользователя для бана с помощью @username")
+        return
+
+    if ban_user(chat_id, mentioned_user_id):
+        await msg.reply_text(f"✅ Пользователь забанен. Все его сообщения будут автоматически удаляться.")
+    else:
+        await msg.reply_text("❌ Не удалось забанить пользователя или он уже забанен.")
+
+@command_handler
+@admin_only
+@chat_only
+async def mishok_unban(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
+    chat_id = update.effective_chat.id
+    mentioned_user_id = await get_mentioned_user_id(msg, context, chat_id)
+
+    if not mentioned_user_id:
+        await msg.reply_text("❌ Укажите пользователя для разбана с помощью @username")
+        return
+
+    if unban_user(chat_id, mentioned_user_id):
+        await msg.reply_text(f"✅ Пользователь разбанен.")
+    else:
+        await msg.reply_text("❌ Не удалось разбанить пользователя или он не был забанен.")
 
 async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1293,6 +1360,8 @@ async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await admin_repair_cmd(update, context)
     elif data == "admin_storage":
         await admin_storage_cmd(update, context)
+    elif data == "admin_bans":
+        await admin_bans(update, context)
     elif data == "admin_close":
         await admin_close(update, context)
     elif data == "admin_back":
@@ -1346,6 +1415,22 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update.effective_chat.type == "private":
             await update.message.reply_text(ERROR_TEXTS['command'])
 
+async def check_banned_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Проверка и удаление сообщений забаненных пользователей"""
+    if not update.message or update.effective_chat.type == "private":
+        return
+
+    user_id = update.effective_user.id
+    chat_id = update.effective_chat.id
+
+    banned_users = get_banned_users(chat_id)
+    if user_id in banned_users:
+        try:
+            await update.message.delete()
+            logger.info(f"Удалено сообщение от забаненного пользователя {user_id} в чате {chat_id}")
+        except Exception as e:
+            logger.error(f"Не удалось удалить сообщение от {user_id}: {e}")
+
 async def group_welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message and update.message.new_chat_members:
         for m in update.message.new_chat_members:
@@ -1379,6 +1464,8 @@ def main():
         ("repair", repair_cmd),
         ("admin", admin_panel),
         ("debug_user", debug_user),
+        ("MishokBan", mishok_ban),
+        ("MishokUnban", mishok_unban),
     ]
     
     for name, handler in commands:
@@ -1387,6 +1474,7 @@ def main():
     app.add_handler(CallbackQueryHandler(inline_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, group_welcome))
+    app.add_handler(MessageHandler(filters.ChatType.GROUPS & ~filters.COMMAND, check_banned_messages))
     app.add_error_handler(error_handler)
     
     logger.info("=" * 50)

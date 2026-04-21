@@ -753,7 +753,7 @@ def update_vote_message_id(vote_id: str, message_id: int):
     try:
         data = load_data()
         vote = data["votes"].get(vote_id)
-        
+
         if vote:
             vote["message_id"] = message_id
             save_data(data)
@@ -761,6 +761,57 @@ def update_vote_message_id(vote_id: str, message_id: int):
         return False
     except:
         return False
+
+def ban_user(chat_id: int, user_id: int):
+    """Забанить пользователя в чате"""
+    try:
+        data = load_data()
+        chat_id_str = str(chat_id)
+
+        if chat_id_str not in data["chats"]:
+            data["chats"][chat_id_str] = {"total_shleps": 0, "banned_users": []}
+
+        chat_data = data["chats"][chat_id_str]
+        chat_data.setdefault("banned_users", [])
+
+        if user_id not in chat_data["banned_users"]:
+            chat_data["banned_users"].append(user_id)
+            save_data(data)
+            logger.info(f"Пользователь {user_id} забанен в чате {chat_id}")
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Ошибка бана пользователя {user_id} в чате {chat_id}: {e}")
+        return False
+
+def unban_user(chat_id: int, user_id: int):
+    """Разбанить пользователя в чате"""
+    try:
+        data = load_data()
+        chat_id_str = str(chat_id)
+
+        chat_data = data["chats"].get(chat_id_str)
+        if chat_data and "banned_users" in chat_data:
+            if user_id in chat_data["banned_users"]:
+                chat_data["banned_users"].remove(user_id)
+                save_data(data)
+                logger.info(f"Пользователь {user_id} разбанен в чате {chat_id}")
+                return True
+        return False
+    except Exception as e:
+        logger.error(f"Ошибка разбана пользователя {user_id} в чате {chat_id}: {e}")
+        return False
+
+def get_banned_users(chat_id: int) -> list:
+    """Получить список забаненных пользователей в чате"""
+    try:
+        data = load_data()
+        chat_id_str = str(chat_id)
+        chat_data = data["chats"].get(chat_id_str, {})
+        return chat_data.get("banned_users", [])
+    except Exception as e:
+        logger.error(f"Ошибка получения забаненных пользователей для чата {chat_id}: {e}")
+        return []
 
 cleanup_old_votes()
 logger.info(DATABASE_TEXTS['ready'])
