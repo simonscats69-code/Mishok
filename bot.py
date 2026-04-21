@@ -58,21 +58,31 @@ def get_user_info(user: User):
         'full_name': escape_text(user.full_name)
     }
 
-def command_handler(func):
-    @wraps(func)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        try:
+def handler(admin=False, chat_only=False):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg = get_message(update)
-            return await func(update, context, msg)
-        except Exception as e:
-            logger.error(f"Ошибка в {func.__name__}: {e}", exc_info=True)
+            if not msg:
+                logger.warning(f"Нет сообщения для {func.__name__}")
+                return
             try:
-                msg = get_message(update)
-                if msg:
+                if chat_only and update.effective_chat.type == "private":
+                    await msg.reply_text(ERROR_TEXTS['chat_only'])
+                    return
+                from config import ADMIN_ID
+                if admin and update.effective_user.id != ADMIN_ID:
+                    await msg.reply_text(ERROR_TEXTS['admin_only'])
+                    return
+                return await func(update, context, msg)
+            except Exception as e:
+                logger.error(f"Ошибка в {func.__name__}: {e}", exc_info=True)
+                try:
                     await msg.reply_text(ERROR_TEXTS['generic'])
-            except:
-                pass
-    return wrapper
+                except:
+                    pass
+        return wrapper
+    return decorator
 
 def with_message(func):
     @wraps(func)
@@ -84,26 +94,6 @@ def with_message(func):
         return await func(update, context, msg)
     return wrapper
 
-def chat_only(func):
-    @wraps(func)
-    @with_message
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-        if update.effective_chat.type == "private":
-            await msg.reply_text(ERROR_TEXTS['chat_only'])
-            return
-        return await func(update, context, msg)
-    return wrapper
-
-def admin_only(func):
-    @wraps(func)
-    @with_message
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
-        from config import ADMIN_ID
-        if update.effective_user.id != ADMIN_ID:
-            await msg.reply_text(ERROR_TEXTS['admin_only'])
-            return
-        return await func(update, context, msg)
-    return wrapper
 
 def calc_level(cnt):
     if cnt is None or cnt < 0:
@@ -297,8 +287,7 @@ async def perform_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, edit
     except Exception as e:
         logger.error(f"Ошибка в perform_shlep: {e}", exc_info=True)
 
-@command_handler
-@with_message
+@handler()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     user_info = get_user_info(update.effective_user)
     
@@ -311,12 +300,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     
     await msg.reply_text(text, reply_markup=kb)
 
-@command_handler
+@handler()
 async def shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     await perform_shlep(update, context)
 
-@command_handler 
-@with_message
+@handler()
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     cached = await cache.get("global_stats")
     if cached:
@@ -343,8 +331,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     
     await msg.reply_text(text)
 
-@command_handler 
-@with_message
+@handler()
 async def level(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     try:
         user = update.effective_user
@@ -395,8 +382,7 @@ async def level(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         logger.error(f"Ошибка в команде level: {e}", exc_info=True)
         await msg.reply_text("⚠️ Произошла ошибка при получении уровня. Попробуйте позже.")
 
-@command_handler
-@with_message
+@handler()
 async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     user = update.effective_user
     
@@ -424,8 +410,7 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     
     await msg.reply_text(text)
 
-@command_handler
-@chat_only
+@handler(chat_only=True)
 async def chat_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     chat = update.effective_chat
     
@@ -448,8 +433,7 @@ async def chat_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     
     await msg.reply_text(text)
 
-@command_handler
-@chat_only
+@handler(chat_only=True)
 async def chat_top(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     chat = update.effective_chat
     top = get_chat_top_users(chat.id, 10)
@@ -551,8 +535,7 @@ async def finish_vote_task(vote_id: str, chat_id: int, message_id: int, context:
     except Exception as e:
         logger.error(f"Ошибка завершения голосования: {e}")
 
-@command_handler
-@chat_only
+@handler(chat_only=True)
 async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     active_vote = get_active_chat_vote(msg.chat_id)
     if active_vote:
@@ -595,8 +578,7 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     
     logger.info(f"Создано голосование: {question} в чате {msg.chat_id}")
 
-@command_handler
-@chat_only  
+@handler(chat_only=True)
 async def vote_end(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     active_vote = get_active_chat_vote(msg.chat_id)
     
@@ -683,13 +665,11 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
         except:
             pass
 
-@command_handler
-@with_message
+@handler()
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     await msg.reply_text(COMMAND_TEXTS['help'])
 
-@command_handler
-@with_message
+@handler()
 async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     try:
         await msg.reply_text(
@@ -711,8 +691,7 @@ async def mishok(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
         except Exception as e2:
             logger.error(f"Не удалось отправить сообщение об ошибке: {e2}")
 
-@command_handler
-@admin_only
+@handler(admin=True)
 async def backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     status_msg = await msg.reply_text(ADMIN_TEXTS['backup'])
     
@@ -738,8 +717,7 @@ async def backup_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     else:
         await status_msg.edit_text(ADMIN_TEXTS['backup_result']['error'].format(error=backup_path))
 
-@command_handler
-@with_message
+@handler()
 async def check_data(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     try:
         result = check_data_integrity()
@@ -770,8 +748,7 @@ async def check_data(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     except Exception as e:
         await msg.reply_text(ERROR_TEXTS['data_check'].format(error=str(e)))
 
-@command_handler
-@admin_only
+@handler(admin=True)
 async def repair_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     status_msg = await msg.reply_text("🔄 Восстановление структуры данных...")
     
@@ -882,16 +859,14 @@ async def handle_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYP
         text = f"👋 Привет, {user_info['name']}!\nЯ — Мишок Лысый 👴✨\n\nНачни шlёпать прямо сейчас!"
         await query.message.edit_text(text, reply_markup=get_shlep_start_keyboard())
 
-@command_handler
-@admin_only
+@handler(admin=True)
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     await msg.reply_text(
         ADMIN_TEXTS['panel'],
         reply_markup=get_admin_keyboard()
     )
 
-@command_handler
-@admin_only
+@handler(admin=True)
 async def admin_health(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     await msg.edit_text(ADMIN_TEXTS['health_check'])
     
@@ -945,8 +920,7 @@ async def admin_health(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
             reply_markup=get_admin_keyboard()
         )
 
-@command_handler
-@admin_only
+@handler(admin=True)
 async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     await msg.edit_text(ADMIN_TEXTS['user_stats'])
     
@@ -1016,8 +990,7 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     
     await msg.edit_text(report, reply_markup=get_admin_keyboard())
 
-@command_handler
-@admin_only
+@handler(admin=True)
 async def admin_cleanup(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     await msg.edit_text(
         ADMIN_TEXTS['cleanup'],
@@ -1127,8 +1100,7 @@ async def backup_cmd_internal(message):
     
     await message.edit_text(text, reply_markup=get_admin_keyboard())
 
-@command_handler
-@admin_only
+@handler(admin=True)
 async def admin_repair_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     await msg.edit_text(
         ADMIN_TEXTS['repair_confirm'],
@@ -1216,8 +1188,7 @@ async def perform_repair(message):
     except:
         pass
 
-@command_handler
-@admin_only
+@handler(admin=True)
 async def admin_bans(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     # Показать список забаненных в текущем чате
     chat_id = update.effective_chat.id
@@ -1232,8 +1203,7 @@ async def admin_bans(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 
     await msg.reply_text(text, reply_markup=get_admin_keyboard())
 
-@command_handler
-@admin_only
+@handler(admin=True)
 async def debug_user(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     from database import load_data
     user = update.effective_user
@@ -1278,9 +1248,7 @@ async def get_mentioned_user_id(msg, context, chat_id) -> Optional[int]:
                     return None
     return None
 
-@command_handler
-@admin_only
-@chat_only
+@handler(admin=True, chat_only=True)
 async def mishok_ban(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     chat_id = update.effective_chat.id
     mentioned_user_id = await get_mentioned_user_id(msg, context, chat_id)
@@ -1294,9 +1262,7 @@ async def mishok_ban(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     else:
         await msg.reply_text("❌ Не удалось забанить пользователя или он уже забанен.")
 
-@command_handler
-@admin_only
-@chat_only
+@handler(admin=True, chat_only=True)
 async def mishok_unban(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     chat_id = update.effective_chat.id
     mentioned_user_id = await get_mentioned_user_id(msg, context, chat_id)
