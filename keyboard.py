@@ -55,7 +55,7 @@ def get_main_reply_keyboard():
         [KeyboardButton("🎯 Уровень"), KeyboardButton("📊 Статистика")],
         [KeyboardButton("📈 Моя статистика")],
         [KeyboardButton("❓ Помощь"), KeyboardButton("📋 Команды")],
-        [KeyboardButton(" О Мишке")]
+        [KeyboardButton("👴 О Мишке")]
     ], resize_keyboard=True, one_time_keyboard=False, selective=True)
 
 def get_admin_keyboard():

@@ -12,6 +12,7 @@ from telegram import Update, User
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram.constants import ParseMode
 from telegram.helpers import escape_markdown
+from telegram.error import RetryAfter
 
 from config import BOT_TOKEN, DATA_FILE, BACKUP_PATH, LOG_FILE, ADMIN_ID
 from database import (
@@ -20,7 +21,8 @@ from database import (
     repair_data_structure, create_safe_backup, get_backup_list,
     get_database_size, create_vote, get_vote, get_active_chat_vote,
     add_user_vote, finish_vote, update_vote_message_id,
-    ban_user, unban_user, get_banned_users, add_banned_word, get_banned_words
+    ban_user, unban_user, get_banned_users, add_banned_word, get_banned_words,
+    add_auto_shlep_user, remove_auto_shlep_user, get_auto_shlep_users
 )
 
 from utils import cache, get_comparison_stats, format_file_size, format_number, create_progress_bar
@@ -35,7 +37,7 @@ from texts import (
     MISHOK_REACTIONS, MISHOK_INTRO, COMMAND_TEXTS, VOTE_TEXTS,
     ADMIN_TEXTS, ERROR_TEXTS, LEVEL_TITLES,
     format_stats_text, format_level_text, format_vote_text, format_vote_results,
-    MISHOK_JOKES, FUN_COMMANDS
+    MISHOK_JOKES, FUN_COMMANDS, AUTO_SHLEP_TEXTS
 )
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -78,10 +80,17 @@ def handler(admin=False, chat_only=False):
                 if chat_only and update.effective_chat.type == "private":
                     await msg.reply_text(ERROR_TEXTS['chat_only'])
                     return
-                if admin and update.effective_user.id != ADMIN_ID:
+                user = update.effective_user
+                if not user:
+                    await msg.reply_text(ERROR_TEXTS['generic'])
+                    return
+                if admin and user.id != ADMIN_ID:
                     await msg.reply_text(ERROR_TEXTS['admin_only'])
                     return
                 return await func(update, context, msg)
+            except RetryAfter as e:
+                logger.warning(f"Flood limit в {func.__name__}: ждём {e.retry_after} сек")
+                await asyncio.sleep(e.retry_after)
             except Exception as e:
                 logger.error(f"Ошибка в {func.__name__}: {e}", exc_info=True)
                 try:
@@ -119,7 +128,7 @@ def calc_level(cnt):
     if max_dmg <= min_dmg:
         max_dmg = min_dmg + 10
     
-    next_shleps = 10 - (cnt % 10) if cnt % 10 != 0 else 0
+    next_shleps = 10 - (cnt % 10) if cnt % 10 != 0 else 10
     
     return {
         'level': level,
@@ -538,7 +547,7 @@ async def vote(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
     active_vote = get_active_chat_vote(msg.chat_id)
     if active_vote:
         ends_at = datetime.fromisoformat(active_vote["ends_at"])
-        time_left = (ends_at - datetime.now()).seconds
+        time_left = int((ends_at - datetime.now()).total_seconds())
         minutes = time_left // 60
         seconds = time_left % 60
         
@@ -599,7 +608,7 @@ async def vote_end(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
 
 def get_vote_message_text(vote_data):
     ends_at = datetime.fromisoformat(vote_data["ends_at"])
-    time_left = (ends_at - datetime.now()).seconds
+    time_left = int((ends_at - datetime.now()).total_seconds())
     minutes = time_left // 60
     seconds = time_left % 60
     
@@ -649,11 +658,6 @@ async def handle_vote(update: Update, context: ContextTypes.DEFAULT_TYPE, vote_t
             )
         except Exception as e:
             logger.error(f"Ошибка обновления сообщения: {e}")
-        
-        if vote_type == "yes":
-            await query.answer(ERROR_TEXTS['vote_counted_yes'])
-        else:
-            await query.answer(ERROR_TEXTS['vote_counted_no'])
         
     except Exception as e:
         logger.error(f"Ошибка обработки голоса: {e}", exc_info=True)
@@ -841,7 +845,7 @@ async def handle_shlep_session(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.message.edit_text(text, reply_markup=get_shlep_session_keyboard())
     elif action == "shlep_menu":
         user_info = get_user_info(update.effective_user)
-        text = f"👋 Привет, {user_info['name']}!\nЯ — Мишок Лысый 👴✨\n\nНачни шlёпать прямо сейчас!"
+        text = f"👋 Привет, {user_info['name']}!\nЯ — Мишок Лысый 👴✨\n\nНачни шлёпать прямо сейчас!"
         await query.message.edit_text(text, reply_markup=get_shlep_start_keyboard())
 
 @handler(admin=True)
@@ -1293,6 +1297,62 @@ async def mishok_banword(update: Update, context: ContextTypes.DEFAULT_TYPE, msg
     else:
         await msg.reply_text(f"❌ Слово '{word}' уже в банвордах.")
 
+@handler(admin=True, chat_only=True)
+async def mishok_shlep(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
+    chat_id = update.effective_chat.id
+    mentioned_user_id = await get_mentioned_user_id(msg, context, chat_id)
+
+    if not mentioned_user_id:
+        await msg.reply_text("❌ Укажите пользователя для авто-шлёпа с помощью @username или ответьте на его сообщение")
+        return
+
+    auto_users = get_auto_shlep_users(chat_id)
+    if mentioned_user_id in auto_users:
+        await msg.reply_text(ERROR_TEXTS['auto_shlep_already'])
+        return
+
+    if add_auto_shlep_user(chat_id, mentioned_user_id):
+        await msg.reply_text(ERROR_TEXTS['auto_shlep_added'])
+    else:
+        await msg.reply_text("❌ Не удалось добавить пользователя в авто-шлёп.")
+
+@handler(admin=True, chat_only=True)
+async def mishok_unshlep(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
+    chat_id = update.effective_chat.id
+    mentioned_user_id = await get_mentioned_user_id(msg, context, chat_id)
+
+    if not mentioned_user_id:
+        await msg.reply_text("❌ Укажите пользователя для удаления из авто-шлёпа с помощью @username или ответьте на его сообщение")
+        return
+
+    auto_users = get_auto_shlep_users(chat_id)
+    if mentioned_user_id not in auto_users:
+        await msg.reply_text(ERROR_TEXTS['auto_shlep_not_found'])
+        return
+
+    if remove_auto_shlep_user(chat_id, mentioned_user_id):
+        await msg.reply_text(ERROR_TEXTS['auto_shlep_removed'])
+    else:
+        await msg.reply_text("❌ Не удалось убрать пользователя из авто-шлёпа.")
+
+@handler(chat_only=True)
+async def mishok_shlep_list(update: Update, context: ContextTypes.DEFAULT_TYPE, msg):
+    """Показать список авто-шлёпаемых в чате (доступно всем)"""
+    chat_id = update.effective_chat.id
+    auto_users = get_auto_shlep_users(chat_id)
+
+    if not auto_users:
+        await msg.reply_text(ERROR_TEXTS['auto_shlep_empty'])
+        return
+
+    text = ERROR_TEXTS['auto_shlep_list']
+    for uid in auto_users:
+        user_info = get_user_stats(uid)
+        name = user_info[0] if user_info[0] else f"ID: {uid}"
+        text += f"• {escape_text(name)} (ID: {uid})\n"
+
+    await msg.reply_text(text)
+
 async def inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query:
@@ -1412,7 +1472,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def check_banned_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Проверка и удаление сообщений забаненных пользователей"""
-    logger.info(f"check_banned_messages вызвана для {update.effective_user.id} в {update.effective_chat.id}, тип чата: {update.effective_chat.type}")
+    logger.debug(f"check_banned_messages вызвана для {update.effective_user.id} в {update.effective_chat.id}, тип чата: {update.effective_chat.type}")
     if not update.message or update.effective_chat.type == "private":
         logger.debug("Сообщение из приватного чата или нет сообщения - пропускаем")
         return
@@ -1448,7 +1508,6 @@ async def check_banned_messages(update: Update, context: ContextTypes.DEFAULT_TY
     if user_id in banned_users:
         logger.info(f"Попытка удалить сообщение от забаненного пользователя {user_id} в чате {chat_id}")
         try:
-            # Проверяем права бота
             bot_member = await context.bot.get_chat_member(chat_id, context.bot.id)
             if not bot_member.can_delete_messages:
                 logger.warning(f"Бот не имеет прав на удаление сообщений в чате {chat_id}")
@@ -1458,6 +1517,16 @@ async def check_banned_messages(update: Update, context: ContextTypes.DEFAULT_TY
             logger.info(f"Удалено сообщение от забаненного пользователя {user_id} в чате {chat_id}")
         except Exception as e:
             logger.error(f"Не удалось удалить сообщение от {user_id}: {e}")
+
+    # Проверка авто-шлёпа
+    auto_shlep_users = get_auto_shlep_users(chat_id)
+    if user_id in auto_shlep_users:
+        try:
+            shlep_text = random.choice(AUTO_SHLEP_TEXTS)
+            await update.message.reply_text(shlep_text)
+            logger.info(f"Авто-шлёп отправлен пользователю {user_id} в чате {chat_id}")
+        except Exception as e:
+            logger.error(f"Ошибка отправки авто-шлёпа: {e}")
 
     # Проверка на фиксацию обращений
     if update.message.text and "наталья зафиксируйте" in update.message.text.lower():
@@ -1482,6 +1551,18 @@ def main():
     logger.info("Запуск бота с токеном: {}...".format(BOT_TOKEN[:10]))
     logger.info("Используется polling для получения обновлений")
 
+    # Graceful shutdown: сохраняем данные при SIGINT/SIGTERM
+    import signal
+    def shutdown_signal_handler(signum, frame):
+        logger.info("Получен сигнал завершения, сохраняю данные...")
+        from database import save_data_to_disk, _in_memory_data
+        if _in_memory_data is not None:
+            save_data_to_disk(_in_memory_data)
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, shutdown_signal_handler)
+    signal.signal(signal.SIGTERM, shutdown_signal_handler)
+
     app = Application.builder().token(BOT_TOKEN).build()
     
     commands = [
@@ -1505,6 +1586,9 @@ def main():
         ("MishokBan", mishok_ban),
         ("MishokUnban", mishok_unban),
         ("MishokBanWord", mishok_banword),
+        ("mishokshlep", mishok_shlep),
+        ("mishokunshlep", mishok_unshlep),
+        ("mishokshleplist", mishok_shlep_list),
     ]
     
     for name, func in commands:
@@ -1512,7 +1596,7 @@ def main():
     
     app.add_handler(CallbackQueryHandler(inline_handler))
     app.add_handler(MessageHandler(filters.ChatType.GROUPS & ~filters.COMMAND, check_banned_messages))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
+    app.add_handler(MessageHandler(filters.ChatType.PRIVATE & filters.TEXT & ~filters.COMMAND, button_handler))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, group_welcome))
     app.add_error_handler(error_handler)
     

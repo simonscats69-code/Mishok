@@ -6,6 +6,7 @@ from typing import Optional, Tuple, List, Any, Dict
 import shutil
 import threading
 import time
+import copy
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +131,9 @@ def repair_data_structure():
         for chat_id, chat_data in data["chats"].items():
             chat_data.setdefault("total_shleps", 0)
             chat_data.setdefault("users", {})
+            chat_data.setdefault("banned_users", [])
+            chat_data.setdefault("banned_words", [])
+            chat_data.setdefault("auto_shlep_users", [])
             
             for user_id, user_data in chat_data["users"].items():
                 user_data.setdefault("username", f"User_{user_id}")
@@ -277,7 +281,7 @@ def save_data(data):
     global _in_memory_data, _data_modified
     
     with _data_lock:
-        _in_memory_data = data
+        _in_memory_data = copy.deepcopy(data)
         _data_modified = True
     
     schedule_save()
@@ -406,6 +410,7 @@ def add_shlep(user_id: int, username: str, damage: int, chat_id: Optional[int] =
                 data["global_stats"]["total_users"] = len(data["users"])
             
             user = data["users"][user_id_str]
+            old_max_damage = user["max_damage"]
             user["username"] = username
             user["total_shleps"] += 1
             user["last_shlep"] = now
@@ -466,7 +471,7 @@ def add_shlep(user_id: int, username: str, damage: int, chat_id: Optional[int] =
             return (
                 data["global_stats"]["total_shleps"],
                 user["total_shleps"],
-                user["max_damage"]
+                old_max_damage
             )
             
     except Exception as e:
@@ -521,13 +526,13 @@ def get_user_stats(user_id: int) -> Tuple[Optional[str], int, Optional[datetime]
         shlep_count = user_data.get("total_shleps", 0)
         
         # Преобразуем в int, если нужно
-        if isinstance(shlep_count, str):
-            try:
+        try:
+            if isinstance(shlep_count, str):
                 shlep_count = int(shlep_count)
-            except:
-                shlep_count = 0
-        elif not isinstance(shlep_count, int):
-            shlep_count = int(shlep_count) if shlep_count else 0
+            elif not isinstance(shlep_count, int):
+                shlep_count = int(shlep_count) if shlep_count is not None else 0
+        except (ValueError, TypeError):
+            shlep_count = 0
         
         # Получаем и преобразуем дату последнего шлёпка
         last_shlep = None
@@ -864,5 +869,61 @@ def remove_banned_word(chat_id: int, word: str) -> bool:
         logger.error(f"Ошибка удаления банворда '{word}' из чата {chat_id}: {e}")
         return False
 
-cleanup_old_votes()
-logger.info(DATABASE_TEXTS['ready'])
+def add_auto_shlep_user(chat_id: int, user_id: int) -> bool:
+    """Добавить пользователя в список авто-шлёпаемых в чате"""
+    try:
+        data = load_data()
+        chat_id_str = str(chat_id)
+
+        if chat_id_str not in data["chats"]:
+            data["chats"][chat_id_str] = {
+                "total_shleps": 0,
+                "banned_users": [],
+                "banned_words": [],
+                "auto_shlep_users": []
+            }
+
+        chat_data = data["chats"][chat_id_str]
+        chat_data.setdefault("auto_shlep_users", [])
+
+        if user_id not in chat_data["auto_shlep_users"]:
+            chat_data["auto_shlep_users"].append(user_id)
+            save_data(data)
+            logger.info(f"Пользователь {user_id} добавлен в авто-шлёп в чате {chat_id}")
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Ошибка добавления авто-шлёпа пользователя {user_id} в чате {chat_id}: {e}")
+        return False
+
+def remove_auto_shlep_user(chat_id: int, user_id: int) -> bool:
+    """Убрать пользователя из списка авто-шлёпаемых в чате"""
+    try:
+        data = load_data()
+        chat_id_str = str(chat_id)
+        chat_data = data["chats"].get(chat_id_str, {})
+        auto_shlep_users = chat_data.get("auto_shlep_users", [])
+
+        if user_id in auto_shlep_users:
+            auto_shlep_users.remove(user_id)
+            save_data(data)
+            logger.info(f"Пользователь {user_id} убран из авто-шлёпа в чате {chat_id}")
+            return True
+        return False
+    except Exception as e:
+        logger.error(f"Ошибка удаления авто-шлёпа пользователя {user_id} в чате {chat_id}: {e}")
+        return False
+
+def get_auto_shlep_users(chat_id: int) -> list:
+    """Получить список авто-шлёпаемых пользователей в чате"""
+    try:
+        data = load_data()
+        chat_id_str = str(chat_id)
+        chat_data = data["chats"].get(chat_id_str, {})
+        return chat_data.get("auto_shlep_users", [])
+    except Exception as e:
+        logger.error(f"Ошибка получения авто-шлёп списка для чата {chat_id}: {e}")
+        return []
+
+# cleanup_old_votes()  # Moved to app.py startup to avoid side-effects on import
+# logger.info(DATABASE_TEXTS['ready'])

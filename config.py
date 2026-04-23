@@ -7,7 +7,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
     raise ValueError("❌ BOT_TOKEN не найден! Создайте .env файл с BOT_TOKEN=ваш_токен")
 
-ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
+ADMIN_ID = int(os.getenv("ADMIN_ID") or "0")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 

@@ -59,6 +59,7 @@ def main():
         create_initial_backup()
         
         # Очищаем старые голосования при старте
+        from database import cleanup_old_votes
         cleanup_old_votes()
         
         result = check_data_integrity()

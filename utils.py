@@ -117,7 +117,7 @@ def format_file_size(bytes_size: int) -> str:
     elif bytes_size < 1024 * 1024 * 1024:
         return f"{bytes_size/(1024*1024):.1f} MB"
     else:
-        return f"{bytes_size/(1024*1024*1024):1f} GB"
+        return f"{bytes_size/(1024*1024*1024):.1f} GB"
 
 def format_number(num: int) -> str:
     """Форматирует число с разделителями тысяч"""
